@@ -122,6 +122,8 @@ std::shared_ptr<Tile> Core::pop_finished_tile() {
 std::queue<std::shared_ptr<Instruction>>& Core::get_compute_pipeline(int compute_type) {
   if (compute_type == VECTOR_UNIT)
     return _vu_compute_pipeline;
+  else if (compute_type == CROSS_LANE)
+    return _xlu_compute_pipeline;
   else if (compute_type == MATMUL || compute_type == PRELOAD) {
     uint32_t sa_idx = _systolic_array_rr;
     _systolic_array_rr = (_systolic_array_rr + 1) % _num_systolic_array_per_core;
@@ -154,6 +156,27 @@ void Core::vu_cycle() {
   }
 }
 
+void Core::xlu_cycle() {
+  bool retry = true;
+  while (retry) {
+    if (!_xlu_compute_pipeline.empty()) {
+      _stat_xlu_compute_cycle++;
+      if(_xlu_compute_pipeline.front()->finish_cycle <= _core_cycle) {
+        cycle_type bubble = _xlu_compute_pipeline.front()->bubble_cycle;
+        _stat_xlu_compute_idle_cycle += bubble;
+        _stat_xlu_compute_cycle = (bubble < _stat_xlu_compute_cycle) ? (_stat_xlu_compute_cycle - bubble) : 0;
+        finish_instruction(_xlu_compute_pipeline.front());
+        _xlu_compute_pipeline.pop();
+      } else {
+        retry = false;
+      }
+    } else {
+      _stat_xlu_compute_idle_cycle++;
+      retry = false;
+    }
+  }
+}
+
 void Core::sa_cycle() {
   for (int i=0; i<_num_systolic_array_per_core; i++) {
     bool retry = true;
@@ -181,6 +204,7 @@ void Core::sa_cycle() {
 void Core::compute_cycle() {
   vu_cycle();
   sa_cycle();
+  xlu_cycle();
 }
 
 void Core::dma_cycle() {
@@ -383,8 +407,8 @@ void Core::cycle() {
               }
               inst->set_assigned_sa(sa_idx);         // record the SA actually used (for the trace)
             }
-            auto& target_pipeline = (ct == VECTOR_UNIT) ? _vu_compute_pipeline
-                                                        : _sa_compute_pipeline.at(sa_idx);
+            auto& target_pipeline = (sa_idx >= 0) ? _sa_compute_pipeline.at(sa_idx)
+                                                  : get_compute_pipeline(ct);
             if (target_pipeline.empty()) {
               inst->finish_cycle = _core_cycle + inst->get_compute_cycle();
               inst->bubble_cycle = inst->get_overlapping_cycle();
@@ -425,9 +449,10 @@ void Core::cycle() {
                                                            *inst));
               target_pipeline.push(inst);
               issued = true;
-              if (inst->get_compute_type()) {
+              if (inst->get_compute_type() == MATMUL || inst->get_compute_type() == PRELOAD)
                 _stat_gemm_inst++;
-              }
+              else if (inst->get_compute_type() == CROSS_LANE)
+                _stat_xlu_inst++;
             }
           }
           break;
@@ -606,13 +631,14 @@ void Core::print_stats() {
 
     if (opcode == Opcode::COMP) {
       auto gemm   = _stat_gemm_inst;
-      auto vector = inst - gemm;
+      auto xlu    = _stat_xlu_inst;
+      auto vector = inst - gemm - xlu;
       if (skipped)
-        spdlog::info("Core [{}] : {:8} inst_count: {} (GEMM: {}, Vector: {}), skipped inst_count {}",
-            _id, name, inst, gemm, vector, skipped);
+        spdlog::info("Core [{}] : {:8} inst_count: {} (GEMM: {}, Vector: {}, XLU: {}), skipped inst_count {}",
+            _id, name, inst, gemm, vector, xlu, skipped);
       else
-        spdlog::info("Core [{}] : {:8} inst_count: {} (GEMM: {}, Vector: {})",
-            _id, name, inst, gemm, vector);
+        spdlog::info("Core [{}] : {:8} inst_count: {} (GEMM: {}, Vector: {}, XLU: {})",
+            _id, name, inst, gemm, vector, xlu);
     }
     else {
       if (skipped)
@@ -633,6 +659,8 @@ void Core::print_stats() {
   spdlog::info("Core [{}] : DMA active_cycles: {}, DMA idle_cycles: {}, DRAM BW: {:.3f} GB/s ({} responses)", _id, _stat_tot_dma_cycle, _stat_tot_dma_idle_cycle, dram_bw, _stat_tot_mem_response);
   spdlog::info("Core [{}] : Vector unit utilization(%): {:.2f}, active cycle: {}, idle_cycle: {}", _id,
     static_cast<float>(_stat_tot_vu_compute_cycle * 100) / _core_cycle, _stat_tot_vu_compute_cycle, _stat_tot_vu_compute_idle_cycle);
+  spdlog::info("Core [{}] : Cross-lane unit utilization(%): {:.2f}, active cycle: {}, idle_cycle: {}", _id,
+    static_cast<float>(_stat_tot_xlu_compute_cycle * 100) / _core_cycle, _stat_tot_xlu_compute_cycle, _stat_tot_xlu_compute_idle_cycle);
   spdlog::info("Core [{}] : NUMA local memory: {} requests, remote memory: {} requests", _id, _stat_numa_local_access, _stat_numa_remote_access);
   spdlog::info("Core [{}] : Total_cycles: {}", _id, _core_cycle);
 }
@@ -653,6 +681,8 @@ void Core::print_current_stats() {
   spdlog::info("Core [{}] : DMA active_cycles: {}, DMA idle_cycles: {}, DRAM BW: {:.3f} GB/s ({} responses)", _id, _stat_dma_cycle, _stat_dma_idle_cycle, dram_bw, _stat_mem_response);
   spdlog::info("Core [{}] : Vector unit Utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id,
     static_cast<float>(_stat_vu_compute_cycle * 100) / _config.core_print_interval, _stat_vu_compute_cycle, _stat_vu_compute_idle_cycle);
+  spdlog::info("Core [{}] : Cross-lane unit Utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id,
+    static_cast<float>(_stat_xlu_compute_cycle * 100) / _config.core_print_interval, _stat_xlu_compute_cycle, _stat_xlu_compute_idle_cycle);
   spdlog::info("Core [{}] : Total_cycles: {}", _id, _core_cycle);
   update_stats();
 }
@@ -666,6 +696,8 @@ void Core::update_stats() {
   }
 
   _stat_tot_vu_compute_cycle += _stat_vu_compute_cycle;
+  _stat_tot_xlu_compute_cycle += _stat_xlu_compute_cycle;
+  _stat_tot_xlu_compute_idle_cycle += _stat_xlu_compute_idle_cycle;
   _stat_tot_dma_cycle += _stat_dma_cycle;
   _stat_tot_dma_idle_cycle += _stat_dma_idle_cycle;
   _stat_tot_mem_response += +_stat_mem_response;
@@ -674,5 +706,7 @@ void Core::update_stats() {
   _stat_dma_cycle = 0;
   _stat_dma_idle_cycle = 0;
   _stat_vu_compute_idle_cycle = 0;
+  _stat_xlu_compute_cycle = 0;
+  _stat_xlu_compute_idle_cycle = 0;
   _stat_mem_response = 0;
 }
