@@ -2,6 +2,7 @@
 #include "CoreTraceLog.h"
 #include <spdlog/spdlog.h>
 #include <algorithm>
+#include <cmath>
 
 Core::Core(uint32_t id, SimulationConfig config)
     : _id(id),
@@ -418,6 +419,7 @@ void Core::cycle() {
               inst->finish_cycle = target_pipeline.back()->finish_cycle + inst->get_compute_cycle() - overlapped_cycle;
               inst->bubble_cycle = bubble_cycle;
             }
+            record_unit_window(inst);
             // release the occupancy (ISSUE) dependents so a successor overlaps this op.
             inst->fire(DepEvent::ISSUE);
 
@@ -433,6 +435,7 @@ void Core::cycle() {
             release_sram(inst);   // free the tiles it read (before the skip path)
             if (inst->get_compute_cycle() == 0) {
               inst->finish_instruction();
+              count_unit_admitted(inst);
               static_cast<Tile*>(inst->get_owner())->inc_finished_inst();
               _stat_tot_skipped_inst.at(static_cast<size_t>(inst->get_opcode()))++;
               if (_tiles[i]->is_scan_cursor(it)) _tiles[i]->drop_scan_cursor();
@@ -544,6 +547,7 @@ void Core::finish_instruction(std::shared_ptr<Instruction>& inst, InstFinishTrac
     exit(EXIT_FAILURE);
   }
   inst->finish_instruction();
+  count_unit_admitted(inst);
   static_cast<Tile*>(inst->get_owner())->inc_finished_inst();
   const char* trace_tag = (tag == InstFinishTraceTag::DmaIssueComplete)
                               ? TraceLogTag::kAsyncDmaAllRequestsIssued
@@ -652,17 +656,66 @@ void Core::print_stats() {
   spdlog::info("========= Core stat =========");
   for (int i=0; i<_num_systolic_array_per_core; i++)
     sa_utilization.push_back(static_cast<float>(_stat_tot_sa_compute_cycle.at(i) * 100) / _core_cycle);
-  for (int i=0; i<_num_systolic_array_per_core; i++)
-    spdlog::info("Core [{}] : Systolic array [{}] utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id, i, sa_utilization.at(i),
-      _stat_tot_sa_compute_cycle.at(i), _stat_tot_sa_compute_idle_cycle.at(i));
+  bool units_ok = true;
+  if (_unit_table) {
+    for (size_t u = 0; u < _unit_table->num_units(); u++)
+      units_ok = _unit_table->print(fmt::format("Core [{}]", _id), u, _stat_tot_unit_admitted.at(u), _core_cycle, true) && units_ok;
+  } else {
+    for (int i=0; i<_num_systolic_array_per_core; i++)
+      spdlog::info("Core [{}] : Systolic array [{}] utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id, i, sa_utilization.at(i),
+        _stat_tot_sa_compute_cycle.at(i), _stat_tot_sa_compute_idle_cycle.at(i));
+  }
   float dram_bw = _config.dram_req_size * _stat_tot_mem_response * _config.core_freq_mhz / (_core_cycle * 1000); // B/cycle
   spdlog::info("Core [{}] : DMA active_cycles: {}, DMA idle_cycles: {}, DRAM BW: {:.3f} GB/s ({} responses)", _id, _stat_tot_dma_cycle, _stat_tot_dma_idle_cycle, dram_bw, _stat_tot_mem_response);
-  spdlog::info("Core [{}] : Vector unit utilization(%): {:.2f}, active cycle: {}, idle_cycle: {}", _id,
-    static_cast<float>(_stat_tot_vu_compute_cycle * 100) / _core_cycle, _stat_tot_vu_compute_cycle, _stat_tot_vu_compute_idle_cycle);
-  spdlog::info("Core [{}] : Cross-lane unit utilization(%): {:.2f}, active cycle: {}, idle_cycle: {}", _id,
-    static_cast<float>(_stat_tot_xlu_compute_cycle * 100) / _core_cycle, _stat_tot_xlu_compute_cycle, _stat_tot_xlu_compute_idle_cycle);
+  if (!_unit_table) {
+    spdlog::info("Core [{}] : Vector unit utilization(%): {:.2f}, active cycle: {}, idle_cycle: {}", _id,
+      static_cast<float>(_stat_tot_vu_compute_cycle * 100) / _core_cycle, _stat_tot_vu_compute_cycle, _stat_tot_vu_compute_idle_cycle);
+    spdlog::info("Core [{}] : Cross-lane unit utilization(%): {:.2f}, active cycle: {}, idle_cycle: {}", _id,
+      static_cast<float>(_stat_tot_xlu_compute_cycle * 100) / _core_cycle, _stat_tot_xlu_compute_cycle, _stat_tot_xlu_compute_idle_cycle);
+  }
   spdlog::info("Core [{}] : NUMA local memory: {} requests, remote memory: {} requests", _id, _stat_numa_local_access, _stat_numa_remote_access);
   spdlog::info("Core [{}] : Total_cycles: {}", _id, _core_cycle);
+  if (!units_ok) {
+    spdlog::error("[TOGSim] --unit_table: a unit admitted more than its capacity allows");
+    exit(EXIT_FAILURE);
+  }
+  if (_unit_table && _config.core_print_interval) {
+    credit_unit_windows(_unit_spread_from, _core_cycle);
+    bool spread_ok = _unit_windows.empty();
+    if (!spread_ok)
+      spdlog::error("Core [{}] : {} compute windows end after the run's {} cycles", _id, _unit_windows.size(), _core_cycle);
+    for (size_t u = 0; u < _unit_table->num_units(); u++) {
+      const double spread = _stat_tot_unit_spread.at(u) + _stat_unit_spread.at(u);
+      const double admitted = (double)_stat_tot_unit_admitted.at(u);
+      if (std::fabs(spread - admitted) <= 1e-6 * std::max(1.0, admitted)) continue;
+      spdlog::error("Core [{}] : {} periodic credit sums to {} but the run admitted {}", _id, _unit_table->unit_name(u), spread, admitted);
+      spread_ok = false;
+    }
+    if (!spread_ok) {
+      spdlog::error("[TOGSim] --unit_table: periodic unit credit does not add up to the run's admissions");
+      exit(EXIT_FAILURE);
+    }
+  }
+}
+
+void Core::record_unit_window(const std::shared_ptr<Instruction>& inst) {
+  if (!_unit_table || !_config.core_print_interval || !_unit_table->has_rows(inst->get_tile_id())) return;
+  const cycle_type cc = inst->get_compute_cycle();
+  if (cc == 0) {
+    _unit_table->accumulate(inst->get_tile_id(), 1.0, _stat_unit_spread);
+    return;
+  }
+  _unit_windows.push_back({inst->finish_cycle - cc, inst->finish_cycle, inst->get_tile_id()});
+}
+
+void Core::credit_unit_windows(cycle_type lo, cycle_type hi) {
+  for (const auto& w : _unit_windows) {
+    const cycle_type a = std::max(w.start, lo), b = std::min(w.end, hi);
+    if (b > a) _unit_table->accumulate(w.tile_id, (double)(b - a) / (double)(w.end - w.start), _stat_unit_spread);
+  }
+  _unit_windows.erase(std::remove_if(_unit_windows.begin(), _unit_windows.end(),
+                                     [hi](const UnitWindow& w) { return w.end <= hi; }),
+                      _unit_windows.end());
 }
 
 void Core::print_current_stats() {
@@ -675,16 +728,33 @@ void Core::print_current_stats() {
     level = spdlog::level::debug;
 
   spdlog::info("========= Core stat =========");
-  for (int i=0; i<_num_systolic_array_per_core; i++)
-    spdlog::info("Core [{}] : Systolic array [{}] utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id, i, sa_utilization.at(i),
-      _stat_sa_compute_cycle.at(i), _stat_sa_compute_idle_cycle.at(i));
+  bool spread_ok = true;
+  if (_unit_table) {
+    credit_unit_windows(_unit_spread_from, _core_cycle);
+    for (size_t u = 0; u < _unit_table->num_units(); u++) {
+      spread_ok = _unit_table->print_spread(fmt::format("Core [{}]", _id), u, _stat_unit_spread.at(u), _config.core_print_interval) && spread_ok;
+      _stat_tot_unit_spread.at(u) += _stat_unit_spread.at(u);
+      _stat_unit_spread.at(u) = 0.0;
+    }
+    _unit_spread_from = _core_cycle;
+  } else {
+    for (int i=0; i<_num_systolic_array_per_core; i++)
+      spdlog::info("Core [{}] : Systolic array [{}] utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id, i, sa_utilization.at(i),
+        _stat_sa_compute_cycle.at(i), _stat_sa_compute_idle_cycle.at(i));
+  }
   spdlog::info("Core [{}] : DMA active_cycles: {}, DMA idle_cycles: {}, DRAM BW: {:.3f} GB/s ({} responses)", _id, _stat_dma_cycle, _stat_dma_idle_cycle, dram_bw, _stat_mem_response);
-  spdlog::info("Core [{}] : Vector unit Utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id,
-    static_cast<float>(_stat_vu_compute_cycle * 100) / _config.core_print_interval, _stat_vu_compute_cycle, _stat_vu_compute_idle_cycle);
-  spdlog::info("Core [{}] : Cross-lane unit Utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id,
-    static_cast<float>(_stat_xlu_compute_cycle * 100) / _config.core_print_interval, _stat_xlu_compute_cycle, _stat_xlu_compute_idle_cycle);
+  if (!_unit_table) {
+    spdlog::info("Core [{}] : Vector unit Utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id,
+      static_cast<float>(_stat_vu_compute_cycle * 100) / _config.core_print_interval, _stat_vu_compute_cycle, _stat_vu_compute_idle_cycle);
+    spdlog::info("Core [{}] : Cross-lane unit Utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id,
+      static_cast<float>(_stat_xlu_compute_cycle * 100) / _config.core_print_interval, _stat_xlu_compute_cycle, _stat_xlu_compute_idle_cycle);
+  }
   spdlog::info("Core [{}] : Total_cycles: {}", _id, _core_cycle);
   update_stats();
+  if (!spread_ok) {
+    spdlog::error("[TOGSim] --unit_table: a unit's periodic credit exceeds its capacity");
+    exit(EXIT_FAILURE);
+  }
 }
 
 void Core::update_stats() {
@@ -701,6 +771,10 @@ void Core::update_stats() {
   _stat_tot_dma_cycle += _stat_dma_cycle;
   _stat_tot_dma_idle_cycle += _stat_dma_idle_cycle;
   _stat_tot_mem_response += +_stat_mem_response;
+  for (size_t u = 0; u < _stat_unit_admitted.size(); u++) {
+    _stat_tot_unit_admitted[u] += _stat_unit_admitted[u];
+    _stat_unit_admitted[u] = 0;
+  }
 
   _stat_vu_compute_cycle = 0;
   _stat_dma_cycle = 0;
