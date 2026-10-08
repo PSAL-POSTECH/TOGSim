@@ -123,6 +123,12 @@ struct BuildState {
   static size_t rec_bytes(const togsim::TraceRec& t) {   // single source of the tile footprint
     return rec_numel(t) * (t.elem_bits / 8);
   }
+  // The spad buffers whose bytes a DMA moves: what a load fills, the one buffer a store drains
+  // (read_bufs[0]); an indirect store's index buffer, read for addresses, is not among them.
+  static std::vector<int64_t> moved_bufs(const togsim::TraceRec& t) {
+    if (t.dir != 1) return t.write_bufs;
+    return t.read_bufs.empty() ? std::vector<int64_t>{} : std::vector<int64_t>{t.read_bufs.front()};
+  }
 
   // Point an indirect dma at its index dump, indirect_index_<key>_<seq>.raw (the vcix
   // tpu model's dma_index_key naming): one uint64 element offset per tile element.
@@ -144,8 +150,8 @@ struct BuildState {
   }
 
   // ---- index + footprint --------------------------------------------------
-  // Open the producer, then replay every work-item once to size each buffer:
-  // buf_bytes must be known before sram_schedule() and before the build.
+  // Open the producer and replay every work-item once to find the DMA'd buffers; each is as
+  // large as the producer states (togsim_spad_buffer_bytes), and one it does not size is refused.
   bool index(const char* so_path, const int64_t* shape_args, int32_t n_shape,
              const uint64_t* tensor_base, int32_t n_tensors,
              const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,
@@ -154,11 +160,17 @@ struct BuildState {
     if (!prod.open(so_path, shape_args, n_shape, tensor_base, n_tensors,
                    cyc, ovl, n_tiles, partition_cores, n_partition_cores))
       return false;
+    const std::vector<int64_t>& stated = prod.spad_buffer_bytes();
     for (size_t i = 0; i < prod.num_items(); i++)
       for (const TraceRec& t : prod.run_item(i)) {
         if (t.kind != TraceRec::DMA) continue;
-        const auto& bs = (t.dir == 1) ? t.read_bufs : t.write_bufs;  // store reads spad, load writes spad
-        for (int64_t b : bs) buf_bytes[b] = rec_bytes(t);
+        for (int64_t b : moved_bufs(t)) {
+          if (b < 0 || (size_t)b >= stated.size() || stated[b] <= 0)
+            throw std::runtime_error(fmt::format(
+                "[TOGSim-trace] spad buffer {} is DMA'd but the producer states no size for it "
+                "(togsim_spad_buffer_bytes has {} entries)", b, stated.size()));
+          buf_bytes[b] = (size_t)stated[b];
+        }
       }
     return true;
   }
@@ -191,8 +203,7 @@ struct BuildState {
   }
 
   // ---- version lifetimes, precomputed (allocates no Instruction) -----------
-  // Per buffer version, record whether anything reads it and where its LAST reader
-  // sits, so feed() can tag that reader as it goes rather than retain every reader.
+  // Per buffer version: whether anything reads it, and where its LAST reader sits.
   void sram_schedule() {
     using togsim::TraceRec;
     int64_t alloc = 0;

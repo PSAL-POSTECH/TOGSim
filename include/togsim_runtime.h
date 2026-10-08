@@ -12,13 +12,20 @@ extern "C" {
 // Producer/runtime ABI version. A producer TU including this header defines the weak
 // togsim_producer_abi_version it was built against (TOGSim's TUs, TOGSIM_HOST, only
 // declare it); LazyProducer::open refuses a producer that lacks it or differs.
-#define TOGSIM_ABI_VERSION 14
+#define TOGSIM_ABI_VERSION 15
 #ifdef TOGSIM_HOST
 extern const int32_t togsim_producer_abi_version;
 #else
 __attribute__((weak, used, visibility("default")))
 extern const int32_t togsim_producer_abi_version = TOGSIM_ABI_VERSION;
 #endif
+
+// The producer also defines, with external linkage, the byte size of every scratchpad buffer id
+// its read_bufs/write_bufs name: togsim_spad_buffer_bytes[id], 0 for an id that is no spad buffer
+// (a virtual dependency edge), and togsim_spad_buffer_count entries (the array may be absent at
+// 0). A buffer is as large as the compiler allocated it; TOGSim does not infer it from the DMAs.
+//   const int32_t togsim_spad_buffer_count;
+//   const int64_t togsim_spad_buffer_bytes[togsim_spad_buffer_count];
 
 // Opaque per-invocation context owned by TOGSim. Holds the recorded trace and
 // the tile_id->cycle lookup. Never dereferenced by the producer.
@@ -33,7 +40,8 @@ typedef enum {
 // Emit a DMA (sec 5.4). `offset` is an ELEMENT offset into tensor `arg_id`; null
 // `strides` => contiguous. `is_async` => it finishes at ISSUE and signals semaphore
 // `sem` with its element count; the barrier on `sem` gates consumers. `read_bufs`/
-// `write_bufs` -> sec 10. A store's `sem` is ignored (its waits are not lowered).
+// `write_bufs` -> sec 10; a store drains read_bufs[0], and an indirect store's index buffer,
+// read for addresses only, follows it. A store's `sem` is ignored (its waits are not lowered).
 // `indirect` => each element also moves by what its index added in the functional
 // run: dump indirect_index_<key>_<n>.raw, key = the work-item's togsim_dispatch key,
 // n = this dma's rank among the work-item's indirect dmas.
