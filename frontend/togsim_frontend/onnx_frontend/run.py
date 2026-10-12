@@ -9,10 +9,13 @@ import os
 import re
 import subprocess
 
+import yaml
+from google.protobuf.message import DecodeError
+
 from .. import paths
 from ..acs import cycles as acs_cycles
 from ..acs import node_mapping
-from ..status import EXIT_NODES_NOT_RUN, EXIT_OK, EXIT_UNSUPPORTED_MACHINE, fail
+from ..status import EXIT_BAD_INPUT, EXIT_NODES_NOT_RUN, EXIT_OK, EXIT_UNSUPPORTED_MACHINE, fail
 from . import emit, graph, shapes, tiling
 from .config import read_hardware
 from .onnx_ops import resolve
@@ -92,14 +95,20 @@ def main(argv=None) -> int:
                     help="skip the ORT fusion pass")
     args = ap.parse_args(argv)
 
-    hw = read_hardware(args.config, args.sa)
+    try:
+        hw = read_hardware(args.config, args.sa)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        return fail(EXIT_BAD_INPUT, f"config {args.config} cannot be read: {exc}")
     why = tiling.unsupported(hw)
     if why:
         return fail(EXIT_UNSUPPORTED_MACHINE, "\n  - ".join(
             [f"{args.config} (SA={hw.sa}, vpu_num_lanes={hw.vlane}) is not a machine the frontend maps a model on. "
              f"Its systolic tiles are the same on every machine, and here:", *why]))
+    try:
+        model, shp = graph.load(args.model, optimize_graph=not args.no_optimize)
+    except (OSError, DecodeError) as exc:
+        return fail(EXIT_BAD_INPUT, f"model {args.model} cannot be read: {exc}")
     os.makedirs(args.out, exist_ok=True)
-    model, shp = graph.load(args.model, optimize_graph=not args.no_optimize)
 
     print(f"config   : {os.path.basename(args.config)}")
     print(f"hardware : SA={hw.sa} lanes={hw.vlane} vlen={hw.vlen_bits}b "

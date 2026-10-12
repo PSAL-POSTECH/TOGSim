@@ -42,10 +42,10 @@ def frontend(tmp_path, graph, config=CONFIG, env=None):
     return run(FRONTEND, graph, "--config", config, "--out", tmp_path / "out", "--no-optimize", env=env)
 
 
-def test_the_statuses_are_four_numbers_and_none_is_pythons_own():
-    numbers = [status.EXIT_OK, status.EXIT_USAGE, status.EXIT_NODES_NOT_RUN,
+def test_the_statuses_are_five_numbers_and_none_is_pythons_own():
+    numbers = [status.EXIT_OK, status.EXIT_USAGE, status.EXIT_NODES_NOT_RUN, status.EXIT_BAD_INPUT,
                status.EXIT_UNSUPPORTED_MACHINE]
-    assert numbers == [0, 2, 3, 5]
+    assert numbers == [0, 2, 3, 4, 5]
 
 
 @simulator
@@ -65,6 +65,7 @@ def test_acs_exits_0_with_the_two_tables_written(tmp_path):
     (FRONTEND, ["model.onnx"]),
     (FRONTEND, ["model.onnx", "--config", CONFIG, "--sa", "eight"]),
     (ACS, ["gemm"]),
+    (ACS, ["no_such_kernel", "--config", CONFIG]),
 ])
 def test_a_command_line_that_cannot_be_parsed_stays_argparses_2(module, args):
     done = run(module, *args)
@@ -75,6 +76,60 @@ def test_a_node_that_did_not_run_exits_3_with_the_report_written(tmp_path):
     done = frontend(tmp_path, model(tmp_path, "Sin"))
     assert done.returncode == status.EXIT_NODES_NOT_RUN, done.stderr
     assert [r["name"] for r in json.loads((tmp_path / "out" / "report.json").read_text())["refused"]] == ["sin"]
+
+
+@pytest.mark.parametrize("text,said", [
+    (None, "No such file or directory"),
+    ("vpu_num_lanes: [", "cannot be read"),
+    ("- vpu_num_lanes\n", "not a mapping"),
+    ("vpu_num_lanes: 8\n", "missing required key 'vpu_vector_length_bits'"),
+    ("vpu_num_lanes: 8\nvpu_vector_length_bits:\n", "not all integers"),
+    ("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\ncore_spad_size_kb: [1]\n", "not all integers"),
+    ("vpu_num_lanes: 0\nvpu_vector_length_bits: 256\n", "vpu_num_lanes is 0, below 1"),
+    ("vpu_num_lanes: 8\nvpu_vector_length_bits: 16\n", "vpu_vector_length_bits is 16, below 32"),
+    ("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\ncore_spad_size_kb: -1\n", "core_spad_size_kb is -1, below 0"),
+])
+@pytest.mark.parametrize("module", [FRONTEND, ACS])
+def test_a_config_that_cannot_be_read_exits_4(module, text, said, tmp_path):
+    config = tmp_path / "systolic_ws_8x8_c1.yml"
+    if text is not None:
+        config.write_text(text)
+    args = [model(tmp_path, "Relu"), "--out", tmp_path / "out"] if module == FRONTEND else ["gemm", "-o", tmp_path]
+    done = run(module, *args, "--config", config)
+    assert done.returncode == status.EXIT_BAD_INPUT, done.stderr
+    assert done.stderr.startswith(f"error: config {config} cannot be read") and said in done.stderr
+    assert "Traceback" not in done.stderr and not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("module", [FRONTEND, ACS])
+def test_a_config_whose_name_does_not_carry_the_array_dimension_exits_4_without_sa(module, tmp_path):
+    config = tmp_path / "machine.yml"
+    config.write_text(CONFIG.read_text())
+    args = [model(tmp_path, "Sin"), "--out", tmp_path / "out"] if module == FRONTEND else ["gemm", "-o", tmp_path]
+    done = run(module, *args, "--config", config)
+    assert done.returncode == status.EXIT_BAD_INPUT and "Pass --sa" in done.stderr
+    assert run(module, *args, "--config", config, "--sa", "8").returncode in (status.EXIT_OK, status.EXIT_NODES_NOT_RUN)
+
+
+@pytest.mark.parametrize("sa", [0, -8])
+@pytest.mark.parametrize("module", [FRONTEND, ACS])
+def test_an_array_dimension_below_1_exits_4(module, sa, tmp_path):
+    args = [model(tmp_path, "Relu"), "--out", tmp_path / "out"] if module == FRONTEND else ["gemm", "-o", tmp_path]
+    done = run(module, *args, "--config", CONFIG, "--sa", sa)
+    assert done.returncode == status.EXIT_BAD_INPUT, done.stderr
+    assert f"the systolic array dimension (--sa, else the config's name) is {sa}, below 1" in done.stderr
+    assert "Traceback" not in done.stderr and not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("content", [None, b"\x00\xff not an ONNX model"])
+def test_a_model_that_cannot_be_read_exits_4(content, tmp_path):
+    graph = tmp_path / "model.onnx"
+    if content is not None:
+        graph.write_bytes(content)
+    done = frontend(tmp_path, graph)
+    assert done.returncode == status.EXIT_BAD_INPUT, done.stderr
+    assert done.stderr.startswith(f"error: model {graph} cannot be read") and "Traceback" not in done.stderr
+    assert not (tmp_path / "out").exists()
 
 
 def test_an_unsupported_machine_exits_5_and_not_the_2_of_a_usage_error(tmp_path):

@@ -1,11 +1,15 @@
 """`python -m togsim_frontend.acs <kernel>`: write tog_cycles.tsv and tog_units.tsv for one kernel of kernels/, its
-whole tile: the tables of a shape the tile divides. The frontend adds the rows of the short last tiles of a shape."""
+whole tile: the tables of a shape the tile divides. The frontend adds the rows of the short last tiles of a shape.
+Its exit statuses are those of status.py; a kernel name without a node table is a usage error."""
 from __future__ import annotations
 
 import argparse
 import os
 
+import yaml
+
 from ..onnx_frontend.config import read_hardware
+from ..status import EXIT_BAD_INPUT, EXIT_OK, fail
 from . import cycles as acs_cycles
 from . import node_mapping
 
@@ -33,7 +37,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Derive a TOGSim cycle table and unit table for one kernel, without gem5. "
                     "The numbers are estimates, not calibrated against gem5.")
-    ap.add_argument("kernel", help="kernel name, as in kernels/<name>_tog.cpp")
+    ap.add_argument("kernel", choices=sorted(node_mapping.KERNELS), metavar="kernel",
+                    help="kernel name, as in kernels/<name>_tog.cpp")
     ap.add_argument("--config", required=True)
     ap.add_argument("-o", "--out", default=".",
                     help="directory for tog_cycles.tsv and tog_units.tsv (default: the current one)")
@@ -45,7 +50,10 @@ def main(argv=None) -> int:
                         help=f"the tile's {what}, when the kernel is built with another tile than its default")
     args = ap.parse_args(argv)
 
-    hw = read_hardware(args.config, args.sa)
+    try:
+        hw = read_hardware(args.config, args.sa)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        return fail(EXIT_BAD_INPUT, f"config {args.config} cannot be read: {exc}")
     desc = node_mapping.lookup(args.kernel)
     if args.kernel not in EXAMPLE_TILE:
         raise KeyError(f"no default tile recorded for kernel {args.kernel!r}; add it to EXAMPLE_TILE in "
@@ -68,7 +76,7 @@ def main(argv=None) -> int:
     print(f"  {'node':<14} {'type':<8} {'cycles':>7} {'rows':>7}")
     for cost, node in zip(costs.values(), desc.nodes):
         print(f"  {node.name:<14} {node.compute_type:<8} {cost.cycles:>7} {cost.systolic_rows:>7}")
-    return 0
+    return EXIT_OK
 
 
 if __name__ == "__main__":
