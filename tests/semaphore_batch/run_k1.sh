@@ -13,12 +13,12 @@ CFG="$OUT/cfg.yml"
 sed -e "s#^ramulator_config_path: \.\./#ramulator_config_path: $HERE/../../#" "$SRC_CFG" > "$CFG"
 echo "systolic_array_split: none" >> "$CFG"
 echo "200 0" > "$OUT/cyc.tsv"
-printf "1048576\n%.0s" 1 2 3 > "$OUT/trace_tensors.txt"   # tensors 1 MiB apart, as before packed layouts
+printf "1048576\n%.0s" 1 2 3 > "$OUT/tog_tensors.txt"   # tensors 1 MiB apart, as before packed layouts
 fail=0
 
 run_case() {
   g++ -std=c++17 -shared -fPIC -O1 -DK1_CASE="$1" -I"$INC" "$HERE/k1_tog.cpp" -o "$OUT/k1_$1.so" || exit 2
-  "$SIM" --config "$CFG" --trace_so "$OUT/k1_$1.so" --cycle_table "$OUT/cyc.tsv" --log_level trace > "$OUT/k1_$1.log" 2>&1
+  "$SIM" --config "$CFG" --tog_so "$OUT/k1_$1.so" --cycle_table "$OUT/cyc.tsv" --log_level trace > "$OUT/k1_$1.log" 2>&1
 }
 
 run_case 0
@@ -40,7 +40,7 @@ PY
 abi=$(grep -o "define TOGSIM_ABI_VERSION [0-9]*" "$INC/togsim_runtime.h" | grep -o "[0-9]*$")
 # Each refused case names the refusal it must get: any other one means the case lost its scenario.
 refused() {   # refused <label> <log> <rc> <expected substring>
-  local msg; msg=$(grep -o "\[TOGSim-trace\] [a-z].*" "$2" | head -1)
+  local msg; msg=$(grep -o "\[TOGSim\] [a-z].*" "$2" | head -1)
   if [ "$3" -ne 0 ] && [[ "$msg" == *"$4"* ]]; then echo "$1 refused (rc=$3): $msg"
   else echo "$1 FAIL: rc=$3, wanted \"$4\", got: ${msg:-no refusal message}"; fail=1; fi
 }
@@ -53,7 +53,7 @@ done
 
 run_rewait() {
   g++ -std=c++17 -shared -fPIC -O1 -DREWAIT_CASE="$1" -I"$INC" "$HERE/rewait_tog.cpp" -o "$OUT/rewait_$1.so" || exit 2
-  "$SIM" --config "$CFG" --trace_so "$OUT/rewait_$1.so" --cycle_table "$OUT/rewait_cyc.tsv" --log_level trace > "$OUT/rewait_$1.log" 2>&1
+  "$SIM" --config "$CFG" --tog_so "$OUT/rewait_$1.so" --cycle_table "$OUT/rewait_cyc.tsv" --log_level trace > "$OUT/rewait_$1.log" 2>&1
 }
 
 if [ "$abi" -ge 14 ]; then

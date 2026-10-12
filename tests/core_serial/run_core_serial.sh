@@ -16,15 +16,15 @@ sed -e 's/^num_systolic_array_per_core: .*/num_systolic_array_per_core: 4/' "$OU
 sed -e 's/^num_cores: 1$/num_cores: 2/' "$OUT/cfg.yml" > "$OUT/c2.yml"
 printf "150000\t0\n100\t0\n" > "$OUT/xlu_cycles.tsv"
 printf "300\t0\n100\t0\n" > "$OUT/xlu_c2_cycles.tsv"
-for g in g1 g2 x; do mkdir -p "$OUT/$g"; cp "$HERE"/trace_tensors.txt "$HERE"/trace_tensor_shapes.txt "$OUT/$g/"; done
-cp "$HERE/trace_shape.txt" "$OUT/g1/trace_shape.txt"; cp "$HERE/trace_shape_2x1.txt" "$OUT/g2/trace_shape.txt"
-cp "$HERE/trace_shape.txt" "$OUT/x/trace_shape.txt"
-for g in g1 g2; do g++ -std=c++17 -shared -fPIC -O1 -I"$INC" "$HERE/gemm512_typed_tog.cpp" -o "$OUT/$g/trace.so" || exit 2; done
-g++ -std=c++17 -shared -fPIC -O1 -I"$INC" "$HERE/xlu_tog.cpp" -o "$OUT/x/trace.so" || exit 2
+for g in g1 g2 x; do mkdir -p "$OUT/$g"; cp "$HERE"/tog_tensors.txt "$HERE"/tog_tensor_shapes.txt "$OUT/$g/"; done
+cp "$HERE/tog_shape.txt" "$OUT/g1/tog_shape.txt"; cp "$HERE/tog_shape_2x1.txt" "$OUT/g2/tog_shape.txt"
+cp "$HERE/tog_shape.txt" "$OUT/x/tog_shape.txt"
+for g in g1 g2; do g++ -std=c++17 -shared -fPIC -O1 -I"$INC" "$HERE/gemm512_typed_tog.cpp" -o "$OUT/$g/tog.so" || exit 2; done
+g++ -std=c++17 -shared -fPIC -O1 -I"$INC" "$HERE/xlu_tog.cpp" -o "$OUT/x/tog.so" || exit 2
 
 run() {   # run <name> <TOG dir> <cfg> <cycle table> [<unit table>]
   local ut=(); [ $# -ge 5 ] && ut=(--unit_table "$HERE/$5")
-  timeout 600 "$SIM" --config "$OUT/$3" --trace_so "$OUT/$2/trace.so" --cycle_table "$4" "${ut[@]}" \
+  timeout 600 "$SIM" --config "$OUT/$3" --tog_so "$OUT/$2/tog.so" --cycle_table "$4" "${ut[@]}" \
     --log_level trace > "$OUT/$1.log" 2>&1
   echo $? > "$OUT/$1.rc"
 }

@@ -147,7 +147,7 @@ struct BuildState {
       return;
     }
     if (!indirect_missing++)
-      spdlog::warn("[TOGSim-trace] indirect dma without its index dump ({}: {}); modeled as a dense tile",
+      spdlog::warn("[TOGSim] indirect dma without its index dump ({}: {}); modeled as a dense tile",
                    path, ec ? "absent" : std::to_string(bytes) + " bytes for " +
                                              std::to_string(rec_numel(t)) + " elements");
   }
@@ -170,7 +170,7 @@ struct BuildState {
         for (int64_t b : moved_bufs(t)) {
           if (b < 0 || (size_t)b >= stated.size() || stated[b] <= 0)
             throw std::runtime_error(fmt::format(
-                "[TOGSim-trace] spad buffer {} is DMA'd but the TOG states no size for it "
+                "[TOGSim] spad buffer {} is DMA'd but the TOG states no size for it "
                 "(togsim_spad_buffer_bytes has {} entries)", b, stated.size()));
           buf_bytes[b] = (size_t)stated[b];
         }
@@ -241,7 +241,7 @@ struct BuildState {
   // (`expected` < 0: no wait follows the batch).
   [[noreturn]] void sem_error(const char* what, uint64_t sem, int64_t sum, int64_t expected) const {
     throw std::runtime_error(fmt::format(
-        "[TOGSim-trace] {}: work-item {} (key {}) sem {} signaled {} elements, wait expects {}",
+        "[TOGSim] {}: work-item {} (key {}) sem {} signaled {} elements, wait expects {}",
         what, item, tog.item_key(item), sem, sum,
         expected < 0 ? std::string("none") : std::to_string(expected)));
   }
@@ -439,7 +439,7 @@ struct BuildState {
   std::shared_ptr<TileSubGraph> build_one_tile() {
     if (next >= tog.num_items()) {
       if (indirect_found + indirect_missing)
-        spdlog::info("[TOGSim-trace] indirect dmas: {} with their index dump, {} without",
+        spdlog::info("[TOGSim] indirect dmas: {} with their index dump, {} without",
                      indirect_found, indirect_missing);
       indirect_found = indirect_missing = 0;
       return nullptr;

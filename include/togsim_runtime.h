@@ -9,15 +9,15 @@
 extern "C" {
 #endif
 
-// TOG ABI version. A TOG's TU including this header defines the weak
-// togsim_producer_abi_version it was built against (TOGSim's TUs, TOGSIM_HOST, only
-// declare it); LazyTog::open refuses a TOG that lacks it or differs.
-#define TOGSIM_ABI_VERSION 15
+// TOG ABI version. A TOG's TU including this header defines the weak togsim_abi_version it was
+// built against (TOGSim's TUs, TOGSIM_HOST, only declare it); LazyTog::open refuses a TOG that
+// lacks it or differs. 16 renamed the symbol and the sidecar files; the calls are those of 15.
+#define TOGSIM_ABI_VERSION 16
 #ifdef TOGSIM_HOST
-extern const int32_t togsim_producer_abi_version;
+extern const int32_t togsim_abi_version;
 #else
 __attribute__((weak, used, visibility("default")))
-extern const int32_t togsim_producer_abi_version = TOGSIM_ABI_VERSION;
+extern const int32_t togsim_abi_version = TOGSIM_ABI_VERSION;
 #endif
 
 // The TOG also defines, with external linkage, the byte size of every scratchpad buffer id
@@ -46,7 +46,7 @@ typedef enum {
 // run: dump indirect_index_<key>_<n>.raw, key = the work-item's togsim_dispatch key,
 // n = this dma's rank among the work-item's indirect dmas.
 
-// --- BEGIN trace-producer call formats (copied verbatim into generated trace.cpp) ---
+// --- BEGIN TOG call formats (copied verbatim into generated tog.cpp) ---
 // Each togsim_* call below lowers 1:1 to one of these free functions. Arg formats:
 //   togsim_dma(ctx, dir, arg_id, offset, ndim, dims[], strides[], elem_bits,
 //              is_async, sem, read_bufs[], n_read, write_bufs[], n_write, indirect)
@@ -56,8 +56,8 @@ typedef enum {
 //                                          3=cross-lane
 //   togsim_memory_barrier(ctx, sem, expected)   // expected = elements signaled on sem
 //   togsim_dispatch(ctx, tile_fn, iv[], n_iv, key)   // run one work-item
-//   togsim_kernel(ctx, shape_args[], n_shape_args)   // producer entry point
-// --- END trace-producer call formats ---
+//   togsim_kernel(ctx, shape_args[], n_shape_args)   // TOG entry point
+// --- END TOG call formats ---
 void togsim_dma(EmitCtx* ctx, int32_t dir, int32_t arg_id,
                 uint64_t offset, int32_t ndim, const int64_t* dims,
                 const int64_t* strides, int32_t elem_bits,

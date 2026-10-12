@@ -52,7 +52,7 @@ class Simulator {
     }
     for (auto& core : _cores) core->set_unit_table(_unit_table.get());
   }
-  // A launched kernel's trace_units.tsv joins the one table: the tile_id shift its computes carry.
+  // A launched kernel's tog_units.tsv joins the one table: the tile_id shift its computes carry.
   int64_t add_kernel_unit_table(const std::string& path) {
     auto it = _kernel_unit_base.find(path);
     if (it != _kernel_unit_base.end()) return it->second;

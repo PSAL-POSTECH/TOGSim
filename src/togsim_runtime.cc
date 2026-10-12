@@ -144,11 +144,17 @@ bool LazyTog::open(const char* so_path, const int64_t* shape_args, int32_t n_sha
 
   _lib = dlopen(so_path, RTLD_NOW | RTLD_GLOBAL);
   if (!_lib) { fprintf(stderr, "togsim: dlopen failed: %s\n", dlerror()); return false; }
-  auto abi = (const int32_t*)dlsym(_lib, "togsim_producer_abi_version");
+  auto abi = (const int32_t*)dlsym(_lib, "togsim_abi_version");
   if (!abi) {
-    fprintf(stderr, "togsim: refusing TOG %s: it embeds no togsim_producer_abi_version "
-            "(built without togsim_runtime.h, or before ABI %d); TOGSim expects ABI %d\n",
-            so_path, TOGSIM_ABI_VERSION, TOGSIM_ABI_VERSION);
+    auto old = (const int32_t*)dlsym(_lib, "togsim_producer_abi_version");
+    if (old)
+      fprintf(stderr, "togsim: refusing TOG %s: it was built against ABI %d (it embeds "
+              "togsim_producer_abi_version, the symbol of ABI 15 and earlier), TOGSim expects "
+              "ABI %d; rebuild the TOG\n", so_path, (int)*old, TOGSIM_ABI_VERSION);
+    else
+      fprintf(stderr, "togsim: refusing TOG %s: it embeds no togsim_abi_version "
+              "(built without togsim_runtime.h); TOGSim expects ABI %d\n",
+              so_path, TOGSIM_ABI_VERSION);
     return false;
   }
   if (*abi != TOGSIM_ABI_VERSION) {

@@ -11,20 +11,20 @@
 
 namespace fs = std::filesystem;
 
-// `trace_tensor_tile: [rows, cols]` lays every tensor argument of the TOG out in tiles of that many 4-byte
+// `tog_tensor_tile: [rows, cols]` lays every tensor argument of the TOG out in tiles of that many 4-byte
 // elements; a tile keeps its bytes, so rows scale by 4/elem (bf16 (16,128), as TPU packs it).
-// Shapes come from trace_tensor_shapes.txt beside the .so: rows cols elem_bytes per argument.
+// Shapes come from tog_tensor_shapes.txt beside the .so: rows cols elem_bytes per argument.
 std::vector<std::shared_ptr<TensorTiling>> tog_tensor_tilings(const YAML::Node& cfg, const fs::path& dir) {
   std::vector<std::shared_ptr<TensorTiling>> out;
-  if (!cfg["trace_tensor_tile"]) return out;
-  const auto tile = cfg["trace_tensor_tile"].as<std::vector<uint64_t>>();
+  if (!cfg["tog_tensor_tile"]) return out;
+  const auto tile = cfg["tog_tensor_tile"].as<std::vector<uint64_t>>();
   if (tile.size() != 2 || !tile[0] || !tile[1]) {
-    spdlog::error("[TOGSim] trace_tensor_tile wants [rows, cols], both nonzero");
+    spdlog::error("[TOGSim] tog_tensor_tile wants [rows, cols], both nonzero");
     exit(EXIT_FAILURE);
   }
-  std::ifstream sh(dir / "trace_tensor_shapes.txt");
+  std::ifstream sh(dir / "tog_tensor_shapes.txt");
   if (!sh.is_open()) {
-    spdlog::error("[TOGSim] trace_tensor_tile is set but {} is absent", (dir / "trace_tensor_shapes.txt").string());
+    spdlog::error("[TOGSim] tog_tensor_tile is set but {} is absent", (dir / "tog_tensor_shapes.txt").string());
     exit(EXIT_FAILURE);
   }
   uint64_t rows, cols, elem;
@@ -40,12 +40,12 @@ std::vector<std::shared_ptr<TensorTiling>> tog_tensor_tilings(const YAML::Node& 
 }
 
 // The TOG's tensor arguments back to back in argument order, each start aligned to 16 KiB (XLA's
-// program HBM alignment), from the byte sizes trace_tensors.txt lists beside trace.so; a tiled
+// program HBM alignment), from the byte sizes tog_tensors.txt lists beside tog.so; a tiled
 // tensor takes its padded footprint and learns its base.
 std::vector<uint64_t> tog_tensor_bases(const fs::path& dir, const std::vector<std::shared_ptr<TensorTiling>>& tilings) {
-  std::ifstream tt(dir / "trace_tensors.txt");
+  std::ifstream tt(dir / "tog_tensors.txt");
   if (!tt.is_open()) {
-    spdlog::error("[TOGSim] {} is absent: the TOG's tensor arguments have no addresses", (dir / "trace_tensors.txt").string());
+    spdlog::error("[TOGSim] {} is absent: the TOG's tensor arguments have no addresses", (dir / "tog_tensors.txt").string());
     exit(EXIT_FAILURE);
   }
   const uint64_t align = 16 * 1024;
@@ -61,7 +61,7 @@ std::vector<uint64_t> tog_tensor_bases(const fs::path& dir, const std::vector<st
     at = (at + bytes + align - 1) / align * align;
   }
   if (!tilings.empty() && tilings.size() != bases.size()) {
-    spdlog::error("[TOGSim] trace_tensors.txt lists {} tensors, trace_tensor_shapes.txt {}", bases.size(), tilings.size());
+    spdlog::error("[TOGSim] tog_tensors.txt lists {} tensors, tog_tensor_shapes.txt {}", bases.size(), tilings.size());
     exit(EXIT_FAILURE);
   }
   return bases;
@@ -95,7 +95,7 @@ std::unique_ptr<TileGraph> build_tog_tilegraph(Simulator* simulator,
   // -- absent means the TOG carries its own constants.
   std::vector<int64_t> shape;
   {
-    std::ifstream sh(fs::path(tog_so_path).parent_path() / "trace_shape.txt");
+    std::ifstream sh(fs::path(tog_so_path).parent_path() / "tog_shape.txt");
     int64_t v;
     while (sh >> v) shape.push_back(v);
   }
@@ -106,30 +106,30 @@ std::unique_ptr<TileGraph> build_tog_tilegraph(Simulator* simulator,
                           cyc.data(), ovl.data(), (int)cyc.size(),
                           partition_cores.data(), (int32_t)partition_cores.size(),
                           (fs::path(tog_so_path).parent_path() / "runtime" / "indirect_access").string(),
-                          "trace_kernel",
+                          "kernel",
                           std::vector<std::shared_ptr<const TensorTiling>>(tilings.begin(), tilings.end()),
                           unit_tile_base);
 }
 
 void launchKernel(Simulator* simulator, unsigned int kernel_id, std::string onnx_path, std::string attribute_path, const YAML::Node& config_yaml, cycle_type request_time=0, int partition_id=0, int device_id=0) {
-  // The kernel's trace.so / trace_cycles.tsv sit in the directory of the handle it is launched with.
+  // The kernel's tog.so / tog_cycles.tsv sit in the directory of the handle it is launched with.
   std::string dir = fs::path(onnx_path).parent_path().string();
-  std::string tog_so = dir + "/trace.so";
-  std::string cycle_tsv = dir + "/trace_cycles.tsv";
+  std::string tog_so = dir + "/tog.so";
+  std::string cycle_tsv = dir + "/tog_cycles.tsv";
   if (!fs::exists(tog_so))
-    throw std::runtime_error("[TOGSim] no trace.so next to " + onnx_path);
+    throw std::runtime_error("[TOGSim] no tog.so next to " + onnx_path);
   // Its unit table, when gem5 left one beside it, joins the simulator's: systolic_array_split reads it.
-  std::string units_tsv = dir + "/trace_units.tsv";
+  std::string units_tsv = dir + "/tog_units.tsv";
   int64_t unit_tile_base = 0;
   if (fs::exists(units_tsv))
     unit_tile_base = simulator->add_kernel_unit_table(units_tsv);
   else if (simulator->get_config().systolic_array_split)
     throw std::runtime_error("[TOGSim] systolic_array_split (on by default) reads each tile's Systolic rows; no "
-                             "trace_units.tsv next to " + onnx_path + " (or set systolic_array_split: none)");
+                             "tog_units.tsv next to " + onnx_path + " (or set systolic_array_split: none)");
   std::unique_ptr<TileGraph> tile_graph =
       build_tog_tilegraph(simulator, tog_so, cycle_tsv, partition_id, unit_tile_base);
   if (!tile_graph)
-    throw std::runtime_error("[TOGSim] trace.so failed to load or replay for " + tog_so);
+    throw std::runtime_error("[TOGSim] tog.so failed to load or replay for " + tog_so);
   tile_graph->set_arrival_time(request_time ? request_time : simulator->get_core_cycle());
   tile_graph->set_kernel_id(kernel_id);
   spdlog::info("[Scheduler {}] Enqueued kernel_id: {}, tog_path: {}, operation: {}, request_time_cycles: {}",
@@ -220,13 +220,13 @@ int main(int argc, char** argv) {
   cmd_parser.add_command_line_option<std::string>(
       "log_level", "Set for log level [trace, debug, info], default = info");
   cmd_parser.add_command_line_option<std::string>(
-      "trace_so", "Path to a compiled TOG (.so)");
+      "tog_so", "Path to a compiled TOG (.so)");
   cmd_parser.add_command_line_option<std::string>(
       "cycle_table", "Path to a 'cycle<TAB>overlapping' per-tile_id sidecar (TSV) "
-                     "for --trace_so; falls back to a flat stub if omitted");
+                     "for --tog_so; falls back to a flat stub if omitted");
   cmd_parser.add_command_line_option<std::string>(
       "unit_table", "Path to a per-tile unit admission table (TSV: tile_id unit unit_of_work "
-                    "capacity_per_cycle admitted) for --trace_so; prints each unit's utilization "
+                    "capacity_per_cycle admitted) for --tog_so; prints each unit's utilization "
                     "in place of the systolic array and cross-lane lines");
   try {
     cmd_parser.parse(argc, argv);
@@ -274,7 +274,7 @@ int main(int argc, char** argv) {
   // If a compiled TOG (.so) is given, load it, bridge its replay to a TileGraph,
   // and run the Simulator on it.
   std::string tog_so_path;
-  cmd_parser.set_if_defined("trace_so", &tog_so_path);
+  cmd_parser.set_if_defined("tog_so", &tog_so_path);
   if (!tog_so_path.empty()) {
     // Standalone single-kernel run: enqueue to partition 0 (its work-items
     // round-robin over partition 0's cores only; see build_tog_tilegraph).
@@ -299,7 +299,7 @@ int main(int argc, char** argv) {
       spdlog::error("{}", e.what());
       exit(1);
     }
-    spdlog::info("[TOGSim-trace] Total cycles: {}", simulator->get_core_cycle());
+    spdlog::info("[TOGSim] Total cycles: {}", simulator->get_core_cycle());
     spdlog::info("Simulation finished");
     simulator->print_core_stat();
     return 0;
@@ -310,8 +310,8 @@ int main(int argc, char** argv) {
   std::string unit_table_path;
   cmd_parser.set_if_defined("unit_table", &unit_table_path);
   if (!unit_table_path.empty()) {
-    spdlog::error("[TOGSim] --unit_table is keyed by one TOG's tile_ids; use it with --trace_so "
-                  "(a launched kernel brings its own trace_units.tsv)");
+    spdlog::error("[TOGSim] --unit_table is keyed by one TOG's tile_ids; use it with --tog_so "
+                  "(a launched kernel brings its own tog_units.tsv)");
     exit(1);
   }
 

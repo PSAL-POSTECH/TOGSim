@@ -53,7 +53,7 @@ class LazyTog {
   LazyTog(const LazyTog&) = delete;
   LazyTog& operator=(const LazyTog&) = delete;
 
-  // dlopen the .so (refused unless its togsim_producer_abi_version is TOGSIM_ABI_VERSION and
+  // dlopen the .so (refused unless its togsim_abi_version is TOGSIM_ABI_VERSION and
   // it states its spad buffer sizes) and run togsim_kernel once: each togsim_dispatch only registers its work-item, so
   // num_items() is known before any record is emitted.
   bool open(const char* so_path, const int64_t* shape_args, int32_t n_shape,
