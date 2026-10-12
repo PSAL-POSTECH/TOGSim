@@ -78,7 +78,7 @@ systolic_array_split: none
 | `[Scheduler p] Kernel k has completed ... finished at cycle N` and the `execution summary` line | Printed by the scheduler of partition `p`. `N` is not the cycle the kernel's work was done: here it reads 1 for a run of 1659 cycles. Read the total instead. |
 | `[TOGSim] Total cycles: N` | The result, printed by a `--tog_so` run. |
 | `Simulation finished` | The end of the simulation; the final statistics follow. |
-| `===== Instructions count =====` and the `inst_count` lines | Per core: the loads (`MOVIN`), stores (`MOVOUT`), computes (`COMP`) and barriers (`MEMORY_BAR`) it ran. A compute of zero cycles is reported as `skipped inst_count`. `GEMM` and `XLU` count computes of the deprecated typed grouping. |
+| `===== Instructions count =====` and the `inst_count` lines | Per core: the loads (`MOVIN`), stores (`MOVOUT`), computes (`COMP`) and barriers (`MEMORY_BAR`) it ran. A load that found its data [held](tog-abi.md#buffers-and-the-scratchpad) is counted in the `MOVIN` `inst_count` and again after it, as `, skipped inst_count: N`: the loads read from DRAM are the difference. A compute of zero cycles is not counted and is reported as `skipped inst_count`. `GEMM` and `XLU` count computes of the deprecated typed grouping. |
 | `========= Core stat =========` and the `Core [i] :` lines | Per core: unit utilization, DMA activity and DRAM bandwidth, DRAM requests by partition, the core's cycles, and how many computes had to wait for the core. |
 | `Total execution cycles: N` | The result. The last line of a `--tog_so` run; a `--models_list` run prints one more line after it, `Wall-clock time for simulation: S seconds`. |
 
@@ -169,7 +169,7 @@ Some lines are spelled differently in the two places they appear: the final
 | `TILE_SCHEDULED` | A work-item is handed to a core. | `spad_footprint` in bytes; `max_dispatch`, the work-items that core keeps in flight (1 or 2). |
 | `INST_ISSUED` | An instruction starts. | For a DMA: `dram` (its address), `size`, `stride`, `elem_bits`, `async`, `indirect`. For `COMP`: `compute_cycle` (after any array split), `tile` (the work-item index, not the `tile_id`). |
 | `INST_FINISHED` | An instruction is done. | |
-| `INST_SKIP` | An asynchronous load is not sent because a load with the same tag was already issued. | |
+| `INST_SKIP` | An asynchronous load is not sent: its buffer [already holds](tog-abi.md#buffers-and-the-scratchpad) the data, read by an earlier load on that core. It has no `INST_ISSUED` line. | As a DMA's `INST_ISSUED`: `dram`, `size`, `stride`. |
 | `ASYNC_DMA_ISSUE` | An asynchronous load has sent all its requests. | |
 | `DRAM_RESP_FIRST` | The first DRAM response of a DMA arrives. | |
 | `DRAM_RESP_DONE` | All data of an asynchronous load has arrived. | |
