@@ -29,7 +29,7 @@ that selects nothing). A failing case says what it expected, what it saw and whe
 | `tests/examples/` | `examples/run.sh <name>` prints `examples/<name>/expected.txt`; the fenced blocks of the READMEs and of `docs/` quote only lines of those files and of the examples' sources; every row of the README's refusal table is a refusal the mistakes example prints. |
 | `tests/outputs/` | The shape of the lines a run logs, against golden files. |
 | `tests/semaphore/` | A barrier waits for every load of its semaphore; a broken contract is refused. |
-| `tests/session/` | `--models_list` with two kernels, on one partition and on two. |
+| `tests/session/` | `--models_list` with two kernels, on one partition and on two. Two kernels at once on one core free only their own scratchpad bytes. |
 | `tests/spad_footprint/` | Buffers are as large as the TOG states; an unsized one is refused. |
 | `tests/typed/` | The deprecated `compute_type` 1, 2 and 3. |
 | `tests/unit/` | Tensor tiling and DMA addresses, without the simulator. |

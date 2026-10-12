@@ -133,6 +133,7 @@ struct BuildState {
   std::map<int64_t, bool> open_ver;       // buf -> version still accepting writes
   std::vector<char> has_readers;                        // version -> ever read?
   std::vector<std::pair<size_t, size_t>> last_reader;   // version -> (work-item, record)
+  int64_t version_base = 0;               // what a core knows this kernel's version 0 by: see sram_schedule
   size_t item = 0, rec = 0;               // position of the record being fed
 
   static size_t rec_numel(const togsim::TraceRec& t) {
@@ -244,8 +245,10 @@ struct BuildState {
   }
 
   // ---- version lifetimes, precomputed (allocates no Instruction) -----------
-  // Per buffer version: whether anything reads it, and where its LAST reader sits.
+  // Per buffer version: whether anything reads it, and where its LAST reader sits. A core keys the bytes it holds
+  // by the version id alone, so the kernel takes ids no other kernel of the process has (version_base onward).
   void sram_schedule() {
+    static int64_t versions_taken = 0;
     using togsim::TraceRec;
     int64_t alloc = 0;
     std::map<int64_t, int64_t> cur;    // buf -> current version id
@@ -273,6 +276,8 @@ struct BuildState {
         pos++;
       }
     }
+    version_base = versions_taken;
+    versions_taken += alloc;
   }
 
   // A TOG that breaks the semaphore contract: names the work-item and the counts
@@ -351,7 +356,7 @@ struct BuildState {
       }
   }
   // a version nothing ever reads is never freed -> leave it untracked
-  int64_t tracked(int64_t a) { return has_readers[a] ? a : (int64_t)-1; }
+  int64_t tracked(int64_t a) { return has_readers[a] ? version_base + a : (int64_t)-1; }
 
   // Run record `t`'s spad effects against the live version state and tag `inst`
   // with what it allocates and frees. Same rule as sram_schedule() (sram_effects),
@@ -367,7 +372,7 @@ struct BuildState {
       // Its LAST reader frees it. sram_schedule() already found where that reader
       // sits, so tag it here rather than retaining every reader to end-of-stream.
       if (last_reader[it->second] == std::make_pair(item, rec))
-        inst->add_sram_release(it->second);
+        inst->add_sram_release(version_base + it->second);
       open_ver[b] = false;                         // next write starts a new version
     }
     for (int64_t b : opens) {
