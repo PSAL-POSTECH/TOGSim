@@ -1,5 +1,6 @@
 """The frontend against a built simulator: every kernel replays with the tables ACS gives it, and a graph's total is
-the sum of its nodes replayed on their own. Skipped when build/bin/Simulator is absent."""
+the sum of its nodes replayed on their own. Skipped when build/bin/Simulator is absent, unless
+TOGSIM_REQUIRE_SIMULATOR is set (CI): then they fail."""
 import json
 import math
 import os
@@ -15,7 +16,7 @@ from togsim_frontend import paths
 from togsim_frontend.acs.node_mapping import KERNELS
 from togsim_frontend.onnx_frontend import run as frontend
 
-pytestmark = pytest.mark.skipif(not paths.simulator().is_file(),
+pytestmark = pytest.mark.skipif(not paths.simulator().is_file() and not os.environ.get("TOGSIM_REQUIRE_SIMULATOR"),
                                 reason=f"{paths.simulator()} is absent: build the simulator first")
 CONFIG = paths.root() / "configs" / "systolic_ws_8x8_c1_simple_noc_tpuv3.yml"
 MIB = 1 << 20
