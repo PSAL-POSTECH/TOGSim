@@ -71,15 +71,21 @@ is read from the config's file name (`..._8x8_...`) or given with `--sa`.
 ## Nodes that do not run
 
 Each of these is exit `3`: an operator without a kernel; a Gemm, MatMul or Conv with
-fewer output columns than one matmul instruction (`SA * vpu_num_lanes`, 64 on 8x8); a grouped
-convolution; a node whose kernel names a tile id the tables ACS wrote do not cover; a node TOGSim
-did not replay to the end. Metadata operators (Reshape, Transpose, ...) have no work and are
-counted as no-ops.
+fewer output columns than one matmul instruction (`SA * vpu_num_lanes`, 64 on 8x8); a Conv that
+is grouped, is not over two spatial axes, has a kernel larger than its padded input, or whose
+output extent by its attributes is not the one ONNX shape inference recorded; a node whose kernel
+names a tile id the tables ACS wrote do not cover; a node TOGSim did not replay to the end.
+Metadata operators (Reshape, Transpose, ...) have no work and are counted as no-ops.
 
 ## Convolutions
 
-A convolution is mapped by its output extent with stride-1 input addresses and a padding of one,
-so what it moves is right for a 3x3, stride-1, pad-1 convolution and approximate otherwise.
+A Conv passes its `strides`, `dilations` and `pads` to the kernel as shape arguments, per axis
+and per side (`auto_pad` is turned into the pads it stands for), and sizes the input tensor as
+the padded input, so its loads are at the addresses that convolution reads. Its tile is still cut
+from the output alone: a tile the output does not divide, or a Conv of fewer input channels than
+`SA` (a 3-channel stem), moves past the end of a row, a pixel or a filter, as any kernel does on
+a shape its tile does not divide. The cost ACS gives a conv tile does not depend on the stride,
+the dilation or the pads: a compute is the tile's outputs by one kernel position's channels.
 
 ## Tests
 
