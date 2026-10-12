@@ -6,6 +6,7 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -133,7 +134,9 @@ struct BuildState {
   std::map<int64_t, bool> open_ver;       // buf -> version still accepting writes
   std::vector<char> has_readers;                        // version -> ever read?
   std::vector<std::pair<size_t, size_t>> last_reader;   // version -> (work-item, record)
+  int64_t version_base = 0;               // what a core knows this kernel's version 0 by: see sram_schedule
   size_t item = 0, rec = 0;               // position of the record being fed
+  bool measuring = false;                  // refuse_overflow's replay, which attaches no index dump
 
   static size_t rec_numel(const togsim::TraceRec& t) {
     size_t numel = 1;
@@ -244,8 +247,10 @@ struct BuildState {
   }
 
   // ---- version lifetimes, precomputed (allocates no Instruction) -----------
-  // Per buffer version: whether anything reads it, and where its LAST reader sits.
+  // Per buffer version: whether anything reads it, and where its LAST reader sits. A core keys the bytes it holds
+  // by the version id alone, so the kernel takes ids no other kernel of the process has (version_base onward).
   void sram_schedule() {
+    static int64_t versions_taken = 0;
     using togsim::TraceRec;
     int64_t alloc = 0;
     std::map<int64_t, int64_t> cur;    // buf -> current version id
@@ -273,6 +278,8 @@ struct BuildState {
         pos++;
       }
     }
+    version_base = versions_taken;
+    versions_taken += alloc;
   }
 
   // A TOG that breaks the semaphore contract: names the work-item and the counts
@@ -351,7 +358,7 @@ struct BuildState {
       }
   }
   // a version nothing ever reads is never freed -> leave it untracked
-  int64_t tracked(int64_t a) { return has_readers[a] ? a : (int64_t)-1; }
+  int64_t tracked(int64_t a) { return has_readers.at(a) ? version_base + a : (int64_t)-1; }
 
   // Run record `t`'s spad effects against the live version state and tag `inst`
   // with what it allocates and frees. Same rule as sram_schedule() (sram_effects),
@@ -366,8 +373,8 @@ struct BuildState {
       if (it == cur_alloc.end()) continue;         // untracked buffer
       // Its LAST reader frees it. sram_schedule() already found where that reader
       // sits, so tag it here rather than retaining every reader to end-of-stream.
-      if (last_reader[it->second] == std::make_pair(item, rec))
-        inst->add_sram_release(it->second);
+      if (last_reader.at(it->second) == std::make_pair(item, rec))
+        inst->add_sram_release(version_base + it->second);
       open_ver[b] = false;                         // next write starts a new version
     }
     for (int64_t b : opens) {
@@ -419,7 +426,7 @@ struct BuildState {
       int64_t uniq = next_tag++;                         // fresh Core tag key per dma record
       auto inst = make_dma(t, uniq);
       inst->set_tile_group(cur_tile_group);
-      if (t.indirect) attach_indices(t, *inst);
+      if (t.indirect && !measuring) attach_indices(t, *inst);
       if (t.arg_id >= 0 && (size_t)t.arg_id < tilings.size()) inst->set_tensor_tiling(tilings[t.arg_id]);
       tile->inc_required_sram_size(rec_bytes(t));         // SRAM footprint (ready-tile ordering)
       note_bufs(t.read_bufs); note_bufs(t.write_bufs);   // distinct-buffer footprint for 1- vs 2-dispatch
@@ -486,6 +493,82 @@ struct BuildState {
     sg_out.reset();
     return out;
   }
+
+  // The most bytes an instruction of `t` has in the spad once it is admitted (Core::try_occupy_sram), on every
+  // schedule: its own, and those of each version that an instruction it waits for filled and that it, or one
+  // that waits for it, frees. If all that `t` fills is within `enough`, that sum is returned: no part is more.
+  static size_t spad_demand(Tile& t, size_t enough) {
+    const auto& insts = t.get_instructions();
+    const size_t n = insts.size();
+    size_t filled = 0;
+    for (const auto& inst : insts)
+      if (inst->get_sram_alloc() >= 0) filled += inst->sram_footprint();
+    if (filled <= enough) return filled;
+    std::unordered_map<const Instruction*, size_t> at;
+    for (size_t i = 0; i < n; i++) at[insts[i].get()] = i;
+    std::vector<std::vector<size_t>> waiters(n), waited_for(n);
+    std::map<int64_t, size_t> freed_by;
+    for (size_t i = 0; i < n; i++) {
+      for (DepEvent e : {DepEvent::ISSUE, DepEvent::DONE})
+        for (const auto& c : insts[i]->get_deps(e)) {
+          waiters[i].push_back(at.at(c.get()));
+          waited_for[at.at(c.get())].push_back(i);
+        }
+      for (int64_t v : insts[i]->get_sram_release()) freed_by[v] = i;
+    }
+    std::vector<size_t> held(n, 0), after(n, n), between(n, n), walk;
+    for (size_t a = 0; a < n; a++) {
+      if (insts[a]->get_sram_alloc() < 0) continue;
+      const size_t bytes = insts[a]->sram_footprint();
+      held[a] += bytes;
+      const auto f = freed_by.find(insts[a]->get_sram_alloc());
+      if (f == freed_by.end()) continue;
+      const size_t r = f->second;
+      for (walk.assign(1, a); !walk.empty();) {
+        const size_t x = walk.back();
+        walk.pop_back();
+        for (size_t y : waiters[x])
+          if (y <= r && after[y] != a) { after[y] = a; walk.push_back(y); }
+      }
+      if (after[r] != a) continue;
+      between[r] = a;
+      for (walk.assign(1, r); !walk.empty();) {
+        const size_t x = walk.back();
+        walk.pop_back();
+        held[x] += bytes;
+        for (size_t y : waited_for[x])
+          if (after[y] == a && between[y] != a) { between[y] = a; walk.push_back(y); }
+      }
+    }
+    return *std::max_element(held.begin(), held.end());
+  }
+
+  // Refuse a TOG a work-item of which needs more of the spad at once than one core has (`spad_bytes`; 0: no
+  // limit). Every work-item is built once, as the run will build it, and measured; the version walk and the ids
+  // the build handed out are then put back, so the run starts as if nothing had been built.
+  void refuse_overflow(const char* so_path, size_t spad_bytes) {
+    if (!spad_bytes) return;
+    const uint64_t first_inst = Instruction::next_global_inst_id();
+    const int first_subgraph = TileSubGraph::next_id();
+    measuring = true;
+    for (item = 0; item < tog.num_items(); item++) {
+      rec = 0;
+      for (const togsim::TraceRec& t : tog.run_item(item)) feed(t);
+      const std::shared_ptr<TileSubGraph> built = std::move(sg_out);
+      const size_t needed = built ? spad_demand(*built->peek_tile(), spad_bytes) : 0;
+      if (needed > spad_bytes)
+        throw std::runtime_error(fmt::format(
+            "[TOGSim] TOG {}: work-item {} (key {}) needs {} bytes in the spad at once, and a core's spad "
+            "holds {} (core_spad_size_kb: {})", so_path, item, tog.item_key(item), needed, spad_bytes,
+            spad_bytes / 1024));
+    }
+    measuring = false;
+    next_alloc = 0;
+    cur_alloc.clear();
+    cur_tile_group = -1;
+    Instruction::rewind_global_inst_id(first_inst);
+    TileSubGraph::rewind_id(first_subgraph);
+  }
 };
 
 }  // namespace
@@ -497,7 +580,7 @@ std::unique_ptr<TileGraph> tog_to_tilegraph(
     const int32_t* partition_cores, int32_t n_partition_cores,
     const std::string& indirect_dir, const std::string& name,
     const std::vector<std::shared_ptr<const TensorTiling>>& tilings, int64_t unit_tile_base,
-    const UnitTable* units) {
+    const UnitTable* units, size_t spad_bytes) {
   using togsim::TraceRec;
   auto S = std::make_shared<BuildState>();
   S->unit_tile_base = unit_tile_base;
@@ -512,6 +595,7 @@ std::unique_ptr<TileGraph> tog_to_tilegraph(
     return nullptr;
 
   S->sram_schedule();   // buffer-version lifetimes, materializing no Instruction
+  S->refuse_overflow(so_path, spad_bytes);
 
   auto tg = std::make_unique<TileGraph>(name, name);
   // Empty cache plan (no L2/CMEM persistence) -- the tile source propagates it

@@ -146,7 +146,7 @@ A run that ends with a message: look the message up in the
 | The total is too small | A consumer called before its producer, or null `strides` ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)). |
 | A unit's utilization is lower than expected, or a compute is not split | The unit table has no rows for that `tile_id`. Look for the `[warning]` line that says so. |
 | A compute takes fewer cycles than the cycle table says | The array split shortened it. `compute_cycle` in the trace is the value after the split. |
-| The run never ends | `core_spad_size_kb` is smaller than a work-item's `spad_footprint` ([known limitations](#known-limitations)). |
+| The run never ends | Work-items wait for spad that is never freed, in an order the loader does not see ([known limitations](#known-limitations)). Raise `core_spad_size_kb`. |
 | The second kernel of a session behaves like the first | Its body function is not `static`. |
 | A changed config key has no effect | Misspelled keys are ignored. Compare with the echo at the top of the log. |
 | A DMA goes to a wrong address | `offset` is in elements, not bytes; an `arg_id` past `tog_tensors.txt` is placed at address 0, with a `[warning]` line. Read `dram=` on its trace line. |
@@ -157,12 +157,15 @@ A run that ends with a message: look the message up in the
 
 Behaviour of the simulator that a user runs into. Each was reproduced with this tree.
 
-- **A spad smaller than a work-item's footprint cannot finish.** If no other work-item is queued
-  for that core, TOGSim stops with `simulation wedged at cycle N: ...` and exit 1 (the hello TOG in
-  16 KB on tpuv6e, at cycle 52837). If more work-items are queued, the run never ends: the tiles
-  example in 16 KB was still running when it was stopped after 20 seconds, with a log of more
-  than 70,000 lines on tpuv6e, and on `examples/minimal.yml`, which prints no periodic statistics,
-  with nothing after `======Start Simulation=====`.
+- **A run can still stop for want of spad.** A work-item that needs more of the spad at once
+  than a core has is [refused](tog-abi.md#buffers-and-the-scratchpad) while its TOG is loaded (the
+  hello TOG and the tiles example in 16 KB). A stall that depends on the order of issue, or on
+  what another work-item holds, is not seen then. If no other work-item is queued for that core,
+  TOGSim stops with `simulation wedged at cycle N: ...` and exit 1: one work-item that loads an
+  8 KB buffer twice before its one reader, in a spad of 8 KB. If more work-items are queued, the
+  run never ends: three work-items whose 8 KB loads of later steps are taken ahead of a 56 KB
+  load, in 72 KB, and a work-item of 64 KB with two of 24 KB dispatched beside it, in 64 KB, were
+  each still running when stopped after 20 seconds.
 - **An unreadable `--models_list` file ends in exit 136**, not in a clean refusal: the log says
   `[TOGSim] Failed to open trace file: <path>` and the process dies printing the statistics of a
   run of zero cycles.

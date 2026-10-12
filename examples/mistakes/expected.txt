@@ -70,7 +70,7 @@ togsim: dlopen failed: valid.so: cannot open shared object file: No such file or
 exit 1
 # examples/mistakes/spad_16kb.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with core_spad_size_kb: 16
 + build/bin/Simulator --config examples/mistakes/spad_16kb.gen.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-[error] [Simulator] simulation wedged at cycle 52837: work remains but nothing is in flight -- the per-core spad (core_spad_size_kb) is too small to hold a kernel's working set. Increase it.
+[error] [TOGSim] TOG examples/mistakes/valid.so: work-item 0 (key 0) needs 32768 bytes in the spad at once, and a core's spad holds 16384 (core_spad_size_kb: 16)
 exit 1
 + build/bin/Simulator --config examples/mistakes/copied.gen.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
 Config file examples/configs/ramulator2_configs/HBM3_TPUv6e.yaml does not exist!

@@ -28,10 +28,11 @@ that selects nothing). A failing case says what it expected, what it saw and whe
 | `tests/cycles/` | `Total execution cycles` of four hand-written TOGs on tpuv6e, as goldens. |
 | `tests/examples/` | `examples/run.sh <name>` prints `examples/<name>/expected.txt`; the fenced blocks of the READMEs and of `docs/` quote only lines of those files and of the examples' sources; every row of the README's refusal table is a refusal the mistakes example prints. |
 | `tests/outputs/` | The shape of the lines a run logs, against golden files. |
-| `tests/semaphore/` | A barrier waits for every load of its semaphore; a broken contract is refused. |
-| `tests/session/` | `--models_list` with two kernels, on one partition and on two. |
+| `tests/semaphore/` | A barrier waits for every load of its semaphore; a broken contract is refused, with `--models_list` and a spad size at the launch. |
+| `tests/session/` | `--models_list` with two kernels, on one partition and on two. Two kernels at once on one core free only their own scratchpad bytes. |
+| `tests/spad_capacity/` | A work-item that needs more of the spad at once than a core has (`core_spad_size_kb`) is refused while its TOG is loaded, with `--tog_so` and with `--models_list` (the first kernel or the second): one byte over, one KB short, a later work-item, a single load larger than the spad; a fill the reader does not wait for is not counted. One that fills the spad to the byte runs, and so does one that names more bytes than the spad and never holds them together, each to a pinned total; `core_spad_size_kb: 0`, or no such key, refuses nothing. A run that was measured traces what one that was not traces. |
 | `tests/spad_footprint/` | Buffers are as large as the TOG states; an unsized one is refused. |
-| `tests/typed/` | The deprecated `compute_type` 1, 2 and 3. |
+| `tests/typed/` | The deprecated `compute_type` 1, 2 and 3. What they pin is not typed-only: among it, the spad a work-item needs at once. |
 | `tests/unit/` | Tensor tiling and DMA addresses, without the simulator. |
 | `tests/warnings/` | What still runs and is said once in a `[warning]` line: a `tile_id` without unit-table rows, an `arg_id` beyond `tog_tensors.txt`. |
 
