@@ -183,7 +183,7 @@ def test_a_conv_relu_graph_totals_its_nodes_replayed_alone(tmp_path):
     report = run_frontend(model, tmp_path / "out")
 
     conv = total(standalone(tmp_path / "conv", "conv", ["TILE_M=16", "TILE_N=64", "TILE_K=64", "TILE_I_H=8", "SA=8"],
-                            (64, 16, 16, 64, 16, 16, 3, 3), (18 * 18 * 64 * 4, 9 * 64 * 64 * 4, 64 * 16 * 16 * 4),
+                            (64, 16, 16, 64, 16, 16, 3, 3) + (1,) * 8, (18 * 18 * 64 * 4, 9 * 64 * 64 * 4, 64 * 16 * 16 * 4),
                             [128, 8206], units_of([128, 8206], {1: 8192})))
     bias_act = total(standalone(tmp_path / "bias_act", "bias_act", ["TM=128", "TN=16"], (1024, 16),
                                 (1024 * 16 * 4, 16 * 4, 1024 * 16 * 4), [64], units_of([64])))

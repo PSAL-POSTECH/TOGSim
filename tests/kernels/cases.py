@@ -78,7 +78,7 @@ def conv_reads_its_shape_and_its_tile(t):
     work_items, positions = 8, 9
     expected = (work_items * positions * 17, work_items, work_items * (positions + 1), work_items * positions * 2)
     tensors = (34 * 34 * 3 * 4, 9 * 64 * 3 * 4, 64 * 32 * 32 * 4)
-    expect_insts(replay(t, "conv", tensors, [16, 8214], {1: 8192}, shape=(3, 32, 32, 64, 32, 32, 3, 3),
+    expect_insts(replay(t, "conv", tensors, [16, 8214], {1: 8192}, shape=(3, 32, 32, 64, 32, 32, 3, 3) + (1,) * 8,
                         defines=("TILE_K=8",)), expected)
 
 

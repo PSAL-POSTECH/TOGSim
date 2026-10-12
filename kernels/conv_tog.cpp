@@ -1,6 +1,6 @@
-// Stride-1 convolution of an I_C x (I_H+2) x (I_W+2) padded input by O_C x K_H x K_W x I_C weights. A work-item
-// is a TILE_N x TILE_I_H x TILE_M output tile; each kernel position and TILE_K input channels is one compute.
-// shape_args: I_C I_H I_W O_C O_H O_W K_H K_W (example 64 16 16 64 16 16 3 3). Compile-time: the TILE_* and SA.
+// Convolution of an I_C x (I_H+P_T+P_B) x (I_W+P_L+P_R) padded input by O_C x K_H x K_W x I_C weights: output (oh, ow)
+// reads row oh*S_H + kh*D_H, column ow*S_W + kw*D_W. A work-item is a TILE_N x TILE_I_H x TILE_M output tile (-D, as SA).
+// shape_args: I_C I_H I_W O_C O_H O_W K_H K_W S_H S_W D_H D_W P_T P_L P_B P_R (example 64 16 16 64 16 16 3 3, then 1s).
 #include "togsim_runtime.h"
 
 #include "kernel_shape.h"
@@ -59,14 +59,22 @@ extern "C" const int64_t togsim_spad_buffer_bytes[3] = {
     KERNEL_CEIL(TILE_K, SA) * TILE_N * SA * KERNEL_ELEM_BYTES,
     TILE_I_H * KERNEL_CEIL(TILE_M, SA) * SA * TILE_K * KERNEL_ELEM_BYTES};
 
+#define CONV_NAMES "I_C I_H I_W O_C O_H O_W K_H K_W S_H S_W D_H D_W P_T P_L P_B P_R"
+static const int32_t CONV_ARGS = 16;
+static const int32_t CONV_EXTENTS = 12;
+
+// One output tile at (oc0, oh0, ow0). A kernel position and TILE_K input channels is one compute, fed the weights
+// and the one input pixel each output of the tile reads there: S_H rows and S_W columns apart.
 static void conv_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   (void)n_iv;
   const int64_t oc0 = iv[0], oh0 = iv[1], ow0 = iv[2];
   const int64_t I_C = iv[3], I_H = iv[4], I_W = iv[5], O_C = iv[6], O_H = iv[7], O_W = iv[8], K_H = iv[9], K_W = iv[10];
-  const int64_t STRIDE_X[4]   = {(I_H + 2) * (I_W + 2) * I_C, (I_W + 2) * I_C, I_C, 1};
+  const int64_t S_H = iv[11], S_W = iv[12], D_H = iv[13], D_W = iv[14];
+  const int64_t X_H = I_H + iv[15] + iv[17], X_W = I_W + iv[16] + iv[18];
+  const int64_t X_ROW = X_W * I_C;
+  const int64_t STRIDE_X[4]   = {X_H * X_ROW, S_H * X_ROW, S_W * I_C, 1};
   const int64_t STRIDE_W[4]   = {I_C * O_C * K_W, I_C * O_C, I_C, 1};
   const int64_t STRIDE_OUT[4] = {0, O_H * O_W, O_W, 1};
-  const int64_t X_ROW = (I_W + 2) * I_C;
 
   togsim_compute(ctx, TID_ACC_INIT, CT_SEGMENT, 0, nullptr,
                  nullptr, 0, BUF_ACC, 1);
@@ -74,7 +82,7 @@ static void conv_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   for (int64_t kh = 0; kh < K_H; ++kh) {
     for (int64_t kw = 0; kw < K_W; ++kw) {
       for (int64_t ic0 = 0; ic0 < I_C; ic0 += TILE_K) {
-        const int64_t x_off = (oh0 + kh) * X_ROW + (ow0 + kw) * I_C + ic0;
+        const int64_t x_off = (oh0 * S_H + kh * D_H) * X_ROW + (ow0 * S_W + kw * D_W) * I_C + ic0;
         const int64_t w_off = (kh * K_W + kw) * O_C * I_C + oc0 * I_C + ic0;
 
         for (int64_t s = 0; s < W_SUBTILES; ++s) {
@@ -85,7 +93,7 @@ static void conv_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
         for (int64_t r = 0; r < TILE_I_H; ++r) {
           for (int64_t s = 0; s < X_SUBTILES; ++s) {
             togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X,
-                       (uint64_t)(x_off + r * X_ROW + s * SA * I_C),
+                       (uint64_t)(x_off + r * S_H * X_ROW + s * SA * S_W * I_C),
                        4, TILE_X, STRIDE_X, ELEM_BITS,
                        ASYNC, SEM_X, nullptr, 0, BUF_X, 1, DENSE);
           }
@@ -104,18 +112,31 @@ static void conv_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
              SYNC, SEM_NONE, BUF_ACC, 1, nullptr, 0, DENSE);
 }
 
+// Refuse a shape whose last output along `axis` reads past the padded input: its loads would leave the tensor.
+static void conv_window_fits(const char* axis, int64_t out, int64_t stride, int64_t kernel, int64_t dilation,
+                             int64_t padded) {
+  const int64_t last = (out - 1) * stride + (kernel - 1) * dilation;
+  if (last >= padded) {
+    fprintf(stderr, "kernel conv: output %s %lld reads input %s %lld, and the padded input has %lld %ss\n",
+            axis, (long long)(out - 1), axis, (long long)last, (long long)padded, axis);
+    exit(1);
+  }
+}
+
 // One work-item per output tile: output channels, then rows, then columns.
 extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n) {
-  static const int64_t EXAMPLE[8] = {64, 16, 16, 64, 16, 16, 3, 3};
-  int64_t shape[8];
-  kernel_shape("conv", "I_C I_H I_W O_C O_H O_W K_H K_W", 8, EXAMPLE, shape_args, n, shape);
+  static const int64_t EXAMPLE[CONV_ARGS] = {64, 16, 16, 64, 16, 16, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1};
+  int64_t iv[3 + CONV_ARGS];
+  int64_t* shape = iv + 3;
+  kernel_shape_from("conv", CONV_NAMES, CONV_ARGS, CONV_EXTENTS, EXAMPLE, shape_args, n, shape);
   const int64_t O_C = shape[3], O_H = shape[4], O_W = shape[5];
+  conv_window_fits("row", O_H, shape[8], shape[6], shape[10], shape[1] + shape[12] + shape[14]);
+  conv_window_fits("column", O_W, shape[9], shape[7], shape[11], shape[2] + shape[13] + shape[15]);
   int64_t key = 0;
-  for (int64_t oc = 0; oc < O_C; oc += TILE_N) {
-    for (int64_t oh = 0; oh < O_H; oh += TILE_I_H) {
-      for (int64_t ow = 0; ow < O_W; ow += TILE_M) {
-        int64_t iv[11] = {oc, oh, ow, shape[0], shape[1], shape[2], shape[3], shape[4], shape[5], shape[6], shape[7]};
-        togsim_dispatch(ctx, conv_tile, iv, 11, key++);
+  for (iv[0] = 0; iv[0] < O_C; iv[0] += TILE_N) {
+    for (iv[1] = 0; iv[1] < O_H; iv[1] += TILE_I_H) {
+      for (iv[2] = 0; iv[2] < O_W; iv[2] += TILE_M) {
+        togsim_dispatch(ctx, conv_tile, iv, 3 + CONV_ARGS, key++);
       }
     }
   }
