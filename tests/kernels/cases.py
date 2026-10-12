@@ -1,6 +1,6 @@
 """The kernel library, kernels/*_tog.cpp, on tpuv6e: each kernel's instruction counts and total cycles at its
-example shape, that a kernel reads its shape arguments, and the shape arguments it refuses. For conv, also the
-elements its DMAs move at a stride, a dilation and a padding, against what a convolution of that shape reads."""
+example shape, that a kernel reads its shape arguments, and the shape arguments it refuses. At a shape the tile
+does not divide, and for conv at a stride, a dilation and a padding: the elements the DMAs move, the tile ids named."""
 import itertools
 import re
 from collections import Counter
@@ -207,6 +207,58 @@ def times(elements, count=1):
     return Counter({offset: count for offset in range(elements)})
 
 
+#: A kernel at a shape none of its tiles divides (the default tiles): the bytes of its tensors, the tile ids of its
+#: variants (node + nodes * variant, a bit per short axis), its (MOVIN, MOVOUT, COMP, MEMORY_BAR), its total (a
+#: golden, 100 + tile id cycles a compute) and how often each element of each tensor is moved.
+SHORT = {
+    "gemm": dict(shape=(40, 100, 300), tensors=(40 * 100 * 4, 100 * 300 * 4, 40 * 300 * 4),
+                 ids={0, 2, 4, 6} | set(range(1, 16, 2)), insts=(16, 4, 12, 16), total=1865,
+                 moves=[times(40 * 100, 2), times(100 * 300, 2), times(40 * 300)]),
+    "attention": dict(shape=(2, 2, 100), tensors=(2 * 100 * 64 * 4,) * 4,
+                      ids=set(range(8)) | set(range(9, 17)) | set(range(18, 26)) | set(range(27, 35)) | {8, 17},
+                      insts=(156, 26, 442, 156), total=50454,
+                      moves=[times(12800, 2), times(12800, 13), times(12800, 13), times(12800)]),
+    "bias_act": dict(shape=(130, 100), tensors=(52000, 400, 52000), ids={0, 1, 2, 3}, insts=(8, 4, 4, 0), total=1078,
+                     moves=[times(13000), times(100, 130), times(13000)]),
+    "bias_gelu": dict(shape=(130, 100), tensors=(52000, 400, 52000), ids={0, 1, 2, 3}, insts=(8, 4, 4, 0), total=1078,
+                      moves=[times(13000), times(100, 130), times(13000)]),
+    "softmax": dict(shape=(130, 100), tensors=(52000, 520, 520, 52000),
+                    ids={0, 5, 10, 15, 1, 6, 2, 7, 12, 17, 3, 8, 4, 9, 14, 19}, insts=(24, 8, 16, 0), total=2337,
+                    moves=[times(13000, 3), times(130, 201), times(130, 101), times(13000)]),
+    "layernorm": dict(shape=(130, 100), tensors=(52000, 52000, 520, 520, 400, 400, 52000),
+                      ids={0, 8, 16, 24, 1, 17, 2, 18, 3, 7, 11, 15}, insts=(44, 10, 14, 0), total=2078,
+                      moves=[times(13000, 2), times(13000, 2), times(130, 101), times(130, 101), times(100, 130),
+                             times(100, 130), times(13000)]),
+    "embed_layernorm": dict(shape=(130, 100), tensors=(1040, 400, 52000), elem_bytes=(8, 4, 4), ids={0, 1, 2, 3},
+                            insts=(8, 4, 4, 0), total=771, moves=[times(130, 100), times(100, 130), times(13000)]),
+    "global_avgpool": dict(shape=(300, 100), tensors=(120000, 1200, 1200), ids={0, 3, 6, 9, 1, 4, 2, 14},
+                           insts=(7, 5, 9, 0), total=1287, moves=[times(30000), times(300, 2), times(300)]),
+    "maxpool": dict(shape=(300, 20), tensors=(96000, 24000), ids={0, 1, 2, 3}, insts=(16, 4, 4, 0), total=1484,
+                    moves=[times(24000), times(6000)]),
+    "adaptive_avgpool": dict(shape=(300, 20), tensors=(96000, 24000), ids={0, 1, 2, 3}, insts=(16, 4, 4, 0),
+                             total=1484, moves=[times(24000), times(6000)]),
+    "concat": dict(shape=(130, 70, 100), tensors=(52000, 28000, 80000), ids=set(), insts=(21, 21, 0, 0), total=1143,
+                   moves=[times(13000), times(7000), times(20000)]),
+    "kvcache_concat": dict(shape=(100, 28), tensors=(100 * 768 * 4, 100 * 256 * 4, 128 * 256 * 4, 128 * 256 * 4),
+                           ids={0, 1}, insts=(4, 12, 4, 0), total=2461,
+                           moves=[times(76800), times(25600), Counter(range(28 * 256, 128 * 256)),
+                                  Counter(range(28 * 256, 128 * 256))]),
+}
+
+
+def short_last_tiles(kernel):
+    """The kernel at its SHORT shape: no DMA ends past its tensor and each element is moved as often as the shape
+    says, the computes name the tile ids of the variants and no other, and the counts and the total are those."""
+    def case(t):
+        how = SHORT[kernel]
+        run = replay_ids(t, kernel, how["tensors"], how["ids"], how["shape"])
+        expect_insts(run, how["insts"])
+        names = [f"tensor argument {i}" for i in range(len(how["tensors"]))]
+        expect_moved(run, how["tensors"], how["moves"], names, how.get("elem_bytes"))
+        expect_ids(run, how["ids"]).expect_total_cycles(how["total"])
+    return case
+
+
 def attention_shares_a_kv_head(t):
     """HEADS KV_HEADS SEQ = 16 8 128: the 128 work-items stay, and each of their two key blocks runs the QK and the
     SV compute twice, once per query head of the KV head (2176 + 128 * 2 * 2 computes)."""
@@ -227,6 +279,7 @@ def refused(shape, saying, kernel="gemm"):
 
 
 CASES = [Case(f"example.{kernel}", example(kernel)) for kernel in EXAMPLE] + [
+    Case(f"short_last_tiles.{kernel}", short_last_tiles(kernel)) for kernel in SHORT] + [
     Case("gemm_reads_its_shape_arguments", gemm_reads_its_shape_arguments),
     Case("conv_reads_its_shape_and_its_tile", conv_reads_its_shape_and_its_tile),
     Case("attention_shares_a_kv_head", attention_shares_a_kv_head),
@@ -241,6 +294,11 @@ CASES = [Case(f"example.{kernel}", example(kernel)) for kernel in EXAMPLE] + [
     Case("conv.dilation_2x3_pads_2_3_2_3", conv_moves((64, 16, 16, 64, 16, 16, 3, 3, 1, 1, 2, 3, 2, 3, 2, 3), 74764)),
     Case("conv.7x7_stride_2_pad_3_of_3_channels", conv_moves(
         (3, 32, 32, 64, 16, 16, 7, 7, 2, 2, 1, 1, 3, 3, 3, 3), 404705, tile_k=8, block=17)),
+    Case("conv.short_on_every_axis", conv_moves(
+        (20, 10, 20, 70, 10, 20, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1), 17926, tile_k=16,
+        ids=set(range(0, 16, 2)) | set(range(1, 32, 2)))),
+    Case("conv.112_columns_in_tiles_of_32", conv_moves(
+        (64, 16, 224, 64, 8, 112, 3, 3, 2, 2, 1, 1, 1, 1, 0, 0), 7176, tile_m=32, ids={0, 1, 8, 9})),
     Case("refused.conv_row_past_the_padded_input", refused(
         (64, 16, 16, 64, 16, 16, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1),
         "kernel conv: output row 15 reads input row 32, and the padded input has 18 rows", "conv")),
