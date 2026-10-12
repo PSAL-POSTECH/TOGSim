@@ -1,7 +1,8 @@
 """ACS without the simulator: what a compute node costs and the two tables written from it."""
 from togsim_frontend.acs import cycles as acs_cycles
 from togsim_frontend.acs.__main__ import EXAMPLE_TILE
-from togsim_frontend.acs.node_mapping import ELEMENTWISE, KERNELS, KernelDesc, NodeDesc, Op, lookup
+from togsim_frontend.acs.node_mapping import (ELEMENTWISE, KERNELS, KernelDesc, NodeDesc, Op, at_variant, lookup,
+                                              tile_ids)
 from togsim_frontend.onnx_frontend.tiling import Hardware
 
 HW = Hardware(sa=8, vlane=8, vlen_bits=256)
@@ -96,3 +97,41 @@ def test_a_block_shallower_than_the_array_is_a_preload_per_channel_it_has():
     assert acs_cycles.systolic_instructions(stem, HW) == (3, 48)
     assert acs_cycles.systolic_cost(stem, HW) == (3 * 128 + 14, 3 * 128, 0)
     assert acs_cycles.systolic_cost({**stem, "depth": 8}, HW).systolic_rows == 8 * 128
+
+
+GEMM_ODD = {"M": 45, "K": 77, "N": 300, "TM": 32, "TN": 256, "TK": 64}
+
+
+def test_a_kernel_names_a_tile_id_per_node_and_variant_its_shape_reaches():
+    """node + nodes * variant, a bit per short axis in the kernel's order. gemm's acc_init spans M and N, its matmul
+    K as well; a dimension under its tile has the short variant alone, one the tile divides the whole one alone."""
+    gemm = lookup("gemm")
+    assert tile_ids(gemm, {**GEMM_ODD, "M": 64, "K": 128, "N": 256}) == [0, 1]
+    assert tile_ids(gemm, GEMM_ODD) == [0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 15]
+    assert tile_ids(gemm, {**GEMM_ODD, "M": 5, "K": 128, "N": 256}) == [2, 3]
+    conv = {"O_C": 64, "TILE_N": 64, "O_H": 16, "TILE_I_H": 8, "O_W": 112, "TILE_M": 32, "I_C": 3, "TILE_K": 8}
+    assert tile_ids(lookup("conv"), conv) == [0, 8, 17, 25]
+    attention = {"SEQ": 100, "Q_LEN": 8, "KV_BLOCK": 64}
+    assert tile_ids(lookup("attention"), attention) == sorted(set(range(36)) - {26, 35})
+    layernorm = {"M": 70, "N": 100, "TM": 8, "TN": 64, "TM_STATS": 128}
+    assert tile_ids(lookup("layernorm"), layernorm) == [3, 7, 11, 15, 16, 17, 18, 24]
+    assert tile_ids(lookup("concat"), {}) == []
+
+
+def test_a_variant_is_the_tile_with_what_is_left_on_its_short_axes():
+    assert at_variant(lookup("gemm"), GEMM_ODD, 0) == GEMM_ODD
+    assert at_variant(lookup("gemm"), GEMM_ODD, 0b101) == {**GEMM_ODD, "TM": 13, "TK": 13}
+    assert at_variant(lookup("gemm"), GEMM_ODD, 0b010) == {**GEMM_ODD, "TN": 44}
+
+
+def test_the_tables_hold_a_row_per_tile_id_costed_and_zeros_between():
+    """Tile ids 2 and 3 alone (a gemm of 5 rows): line i is tile id i, the lines of 0 and 1 are zeros and have no
+    unit rows, so a compute that named them would make TOGSim warn."""
+    short = {"rows": 5, "depth": 64, "cols": 256, "elems": 5 * 256}
+    tiles = {2: short, 3: short}
+    table = acs_cycles.build_table(lookup("gemm"), tiles, HW)
+    units = acs_cycles.build_units(lookup("gemm"), tiles, HW)
+    assert table == [(0, 0), (0, 0), (20, 0), (256 * 5 + 14, 0)]
+    assert units == [(2, "Systolic", "rows", 1, 0), (2, "Vpu", "cycles", 1, 20),
+                     (3, "Systolic", "rows", 1, 1280), (3, "Vpu", "cycles", 1, 0)]
+    assert acs_cycles.uncovered([2, 3], table, units) == [] and acs_cycles.uncovered([0, 2, 5], table, units) == [0, 5]

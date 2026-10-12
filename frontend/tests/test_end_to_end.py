@@ -13,8 +13,9 @@ import yaml
 from onnx import TensorProto, helper
 
 from togsim_frontend import paths
-from togsim_frontend.acs.node_mapping import KERNELS
+from togsim_frontend.acs.node_mapping import KERNELS, lookup, tile_ids
 from togsim_frontend.onnx_frontend import run as frontend
+from togsim_frontend.onnx_frontend import shapes as frontend_shapes
 from togsim_frontend.onnx_frontend.config import read_hardware
 from togsim_frontend.onnx_frontend.onnx_ops import OPS
 
@@ -78,8 +79,9 @@ def test_the_tiles_a_kernel_computes_are_the_nodes_of_its_table(stem, tmp_path, 
     assert "skipped inst_count" not in log
 
 
-def save(tmp_path, nodes, inputs, outputs, initializers):
-    """Write an ONNX model of `nodes`; `initializers` are (name, shape) of float weights."""
+def save(tmp_path, nodes, inputs, outputs, initializers, check=True):
+    """Write an ONNX model of `nodes`; `initializers` are (name, shape) of float weights. `check` off lets through an
+    operator opset 13 does not define (Attention)."""
     weights = [helper.make_tensor(name, TensorProto.FLOAT, shape, [0.0] * math.prod(shape))
                for name, shape in initializers]
     graph = helper.make_graph(
@@ -87,7 +89,8 @@ def save(tmp_path, nodes, inputs, outputs, initializers):
         [helper.make_tensor_value_info(name, TensorProto.FLOAT, shape) for name, shape in inputs],
         [helper.make_tensor_value_info(name, TensorProto.FLOAT, shape) for name, shape in outputs], weights)
     model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 13)])
-    onnx.checker.check_model(model)
+    if check:
+        onnx.checker.check_model(model)
     path = tmp_path / "model.onnx"
     onnx.save(model, str(path))
     return path
@@ -284,3 +287,176 @@ def test_a_fully_mapped_graph_exits_zero_and_refuses_nothing(tmp_path, capsys):
     assert report["refused"] == [] and report["unmapped"] == {} and report["nodes_run"] == 1
     assert "INCOMPLETE" not in capsys.readouterr().out
 
+
+DMA = re.compile(r"INST_ISSUED *\]\[INST_ID=\d+\] MOV(?:IN|OUT) \((.*)\)$", re.M)
+TENSOR_ALIGN = 16384
+
+
+def past_its_tensor(log, tensors):
+    """The DMAs of a trace-level `log` that end past the tensor they start in, as (tensor, bytes past its end).
+    TOGSim lays the tensors of tog_tensors.txt back to back, each start 16 KiB aligned."""
+    bases, at = [], 0
+    for size in tensors:
+        bases.append(at)
+        at = -(-(at + size) // TENSOR_ALIGN) * TENSOR_ALIGN
+    past, dmas = [], [dict(field.split("=", 1) for field in fields.split(" ")) for fields in DMA.findall(log)]
+    assert dmas or not tensors
+    for dma in dmas:
+        first, width = int(dma["dram"], 16), int(dma["elem_bits"]) // 8
+        arg = max(i for i, base in enumerate(bases) if base <= first)
+        size, stride = (dma[key].strip("[]").split(",") for key in ("size", "stride"))
+        last = first + sum((int(n) - 1) * int(step) for n, step in zip(size, stride)) * width
+        if last + width > bases[arg] + tensors[arg]:
+            past.append((arg, last + width - bases[arg] - tensors[arg]))
+    return past
+
+
+ROWS_48, ROWS_100, STEM = [128, 48], [70, 100], [1, 3, 32, 32]
+#: A node whose shape its tile does not divide, per mapped kernel: the operator, its input shapes and attributes.
+SHORT = {
+    "relu_128_rows_in_tiles_of_42": ("Relu", [ROWS_48], {}),
+    "add": ("Add", [ROWS_48, ROWS_48], {}), "gelu": ("Gelu", [ROWS_48], {}),
+    "softmax": ("Softmax", [ROWS_100], {}), "layernorm": ("LayerNormalization", [ROWS_100], {}),
+    "embed_layernorm": ("EmbedLayerNormalization", [ROWS_100], {}),
+    "global_avgpool": ("GlobalAveragePool", [[1, 300, 10, 10]], {}),
+    "maxpool": ("MaxPool", [[1, 64, 16, 100]], dict(kernel_shape=[2, 2], strides=[2, 2])),
+    "avgpool": ("AveragePool", [[1, 64, 16, 100]], dict(kernel_shape=[2, 2], strides=[2, 2])),
+    "concat": ("Concat", [[70, 48], [30, 48]], {}),
+    "gemm_45x77x300": ("Gemm", [[45, 77], [77, 300]], {}), "matmul_5_rows": ("MatMul", [[5, 128], [128, 100]], {}),
+    "conv_7x7_stride_2_pad_3_of_3_channels": ("Conv", [STEM, [64, 3, 7, 7]], dict(
+        kernel_shape=[7, 7], strides=[2, 2], pads=[3, 3, 3, 3])),
+    "conv_10x44_outputs_of_70_filters": ("Conv", [[1, 12, 10, 44], [70, 12, 3, 3]], dict(
+        kernel_shape=[3, 3], pads=[1, 1, 1, 1])),
+    "attention_100_tokens": ("Attention", [[1, 100, 512]], dict(num_heads=8)),
+}
+
+
+@pytest.mark.parametrize("name", sorted(SHORT))
+def test_a_node_its_tile_does_not_divide_computes_the_tile_ids_predicted_and_stays_in_its_tensors(name, tmp_path,
+                                                                                                unsplit_config):
+    """As the frontend lays the node out it replays without a warning; replayed again against a table whose line i
+    says 1001 + i cycles, the tile ids its computes name are the ones node_mapping.tile_ids predicts, some of them
+    of a short variant; and no DMA ends past the tensor it starts in."""
+    op, in_shapes, attributes = SHORT[name]
+    inputs = {f"in{i}": shape for i, shape in enumerate(in_shapes)}
+    node = helper.make_node(op, list(inputs), ["out"], name=name, **attributes)
+    hw = read_hardware(str(CONFIG))
+    kernel, = OPS[op]
+    tog_dir = tmp_path / frontend.prepare_node(node, kernel, inputs, hw, str(tmp_path))
+    assert frontend.simulate(str(tog_dir), str(CONFIG)) > 0 and warnings(tmp_path) == []
+
+    desc = lookup(kernel.stem)
+    predicted = tile_ids(desc, frontend_shapes.constants(node, kernel, inputs, hw))
+    assert not desc.nodes or max(predicted) >= len(desc.nodes), f"{name}: no tile of this shape is short"
+    table = tog_dir / "by_id.tsv"
+    table.write_text("".join(f"{1001 + i}\t0\n" for i in range(max(predicted, default=0) + 1)))
+    done = subprocess.run([str(paths.simulator()), "--config", str(unsplit_config), "--tog_so", str(tog_dir / "tog.so"),
+                           "--cycle_table", str(table), "--log_level", "trace"], capture_output=True, text=True)
+    assert done.returncode == 0, (done.stdout + done.stderr)[-600:]
+    issued = re.findall(r"INST_ISSUED *\]\[INST_ID=\d+\] COMP \(compute_type=0 compute_cycle=(\d+)", done.stdout)
+    seen = {int(cycles) - 1001 for cycles in issued}
+    assert sorted(seen) == predicted
+    tensors = [int(line) for line in (tog_dir / "tog_tensors.txt").read_text().split()]
+    assert past_its_tensor(done.stdout, tensors) == []
+
+
+def test_the_dma_check_sees_a_load_and_a_store_that_leave_their_tensor():
+    """A 2 x 3 DMA at stride 4, 1 from byte 8 of a 32-byte tensor ends 4 bytes past it; one row less stays in.
+    The lines are as TOGSim writes them: a MOVOUT's fields come in another order than a MOVIN's."""
+    movin = ("[1][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000008 rank=2 "
+             "size=[{},3] stride=[4,1] elem_bits=32 async=false indirect=false tag_id=[0x0,0x0])")
+    movout = ("[9][Core 0][INST_ISSUED    ][INST_ID=1] MOVOUT (addr_name=tag1 dram=0x0000000000004008 rank=2 "
+              "elem_bits=32 async=false indirect=false tag=0x0 stride=[4,1] size=[{},3] tag_idx=[0] tile=0)")
+    assert past_its_tensor(movin.format(2), [32, 64]) == [(0, 4)]
+    assert past_its_tensor(movin.format(1) + "\n" + movout.format(2), [32, 32]) == [(1, 4)]
+    assert past_its_tensor(movin.format(1) + "\n" + movout.format(1), [32, 32]) == []
+
+
+def hand_costs(tiles, sa=8, lanes=8, throughput=64, instructions=0):
+    """What ACS charges, written out again: {tile id: (cycles, Systolic rows or None)} for `tiles`, {tile id: (rows,
+    depth, cols)} of a systolic block or {tile id: elements} of a vector tile running `instructions` per element."""
+    costs = {}
+    for tile_id, tile in tiles.items():
+        if isinstance(tile, tuple):
+            rows, depth, cols = tile
+            fed = depth * math.ceil(cols / (sa * lanes)) * rows
+            costs[tile_id] = (fed + 2 * sa - 2, fed)
+        else:
+            costs[tile_id] = (math.ceil(tile / throughput) * instructions, None)
+    return costs
+
+
+def by_hand(tog_dir, stem, macros, shape, tensors, costs):
+    """The total of kernels/<stem>_tog.cpp replayed by hand against the tables `costs` stands for."""
+    cycles = {tile_id: cost[0] for tile_id, cost in costs.items()}
+    rows = {tile_id: cost[1] for tile_id, cost in costs.items() if cost[1] is not None}
+    return total(standalone(tog_dir, stem, macros, shape, tensors, cycles, units_of(cycles, rows)))
+
+
+def test_a_relu_of_128_rows_in_tiles_of_42_runs_three_whole_tiles_and_one_of_2_rows(tmp_path):
+    """128 x 48 in tiles of 42 x 48: the whole tile is 2016 elements, 32 cycles an instruction; the last has 2 rows,
+    96 elements and 2 cycles an instruction, as tile id 1. The graph costs what that replay does by hand."""
+    model = save(tmp_path, [helper.make_node("Relu", ["x"], ["y"], name="relu")], [("x", [128, 48])],
+                 [("y", [128, 48])], [])
+    report = run_frontend(model, tmp_path / "out")
+    costs = hand_costs({0: 42 * 48, 1: 2 * 48}, instructions=2)
+    assert costs == {0: (64, None), 1: (4, None)}
+    relu = by_hand(tmp_path / "bias_act", "bias_act", ["TM=42", "TN=48"], (128, 48),
+                   (128 * 48 * 4, 48 * 4, 128 * 48 * 4), costs)
+    assert report["refused"] == [] and report["unmapped"] == {}
+    assert [(n["op"], n["cycles"]) for n in report["nodes"]] == [("Relu", relu)] and report["total_cycles"] == relu
+    whole = by_hand(tmp_path / "whole", "bias_act", ["TM=42", "TN=48"], (126, 48),
+                    (126 * 48 * 4, 48 * 4, 126 * 48 * 4), {0: (64, None)})
+    assert whole < relu < whole * 4 // 3
+
+
+def test_a_gemm_with_odd_extents_costs_each_block_by_what_is_left_of_it(tmp_path):
+    """Gemm 45 x 77 x 300 in 32 x 256 tiles of 64-deep blocks: 13 rows, 44 columns and a 13-deep block are left.
+    Its sixteen tile ids are costed by their extents, and the graph totals its nodes."""
+    model = save(tmp_path, [
+        helper.make_node("Gemm", ["x", "w", "b"], ["g"], name="gemm"),
+        helper.make_node("Relu", ["g"], ["y"], name="relu"),
+    ], [("x", [45, 77])], [("y", [45, 300])], [("w", [77, 300]), ("b", [300])])
+    report = run_frontend(model, tmp_path / "out")
+
+    extent = lambda variant, bit, whole, left: left if variant >> bit & 1 else whole
+    blocks = {1 + 2 * v: (extent(v, 0, 32, 13), extent(v, 2, 64, 13), extent(v, 1, 256, 44)) for v in range(8)}
+    inits = {2 * v: extent(v, 0, 32, 13) * extent(v, 1, 256, 44) for v in range(4)}
+    costs = {**hand_costs(blocks), **hand_costs(inits, instructions=1)}
+    assert costs[1] == (8206, 8192) and costs[15] == (13 * 13 + 14, 169) and costs[6] == (9, None)
+    gemm = by_hand(tmp_path / "gemm", "gemm", ["TM=32", "TN=256", "TK=64"], (45, 77, 300),
+                   (45 * 77 * 4, 77 * 300 * 4, 45 * 300 * 4), costs)
+    assert report["refused"] == [] and report["unmapped"] == {} and report["nodes_run"] == 2
+    assert [(n["op"], n["cycles"]) for n in report["nodes"]][0] == ("Gemm", gemm)
+    assert report["total_cycles"] == sum(n["cycles"] for n in report["nodes"]) > gemm
+
+
+def test_a_conv_whose_output_columns_its_tile_does_not_divide_costs_the_short_tile_less(tmp_path):
+    """16 -> 64 channels over 8 x 40 outputs in tiles of 8 x 32: the last tile of a row has 8 columns, a quarter of
+    the rows to feed, as tile ids 8 and 9. The graph costs what the conv kernel does replayed by hand."""
+    model = save(tmp_path, [
+        helper.make_node("Conv", ["x", "w"], ["c"], name="conv", kernel_shape=[3, 3], pads=[1, 1, 1, 1]),
+        helper.make_node("Relu", ["c"], ["y"], name="relu"),
+    ], [("x", [1, 16, 8, 40])], [("y", [1, 64, 8, 40])], [("w", [64, 16, 3, 3])])
+    report = run_frontend(model, tmp_path / "out")
+    costs = {**hand_costs({1: (8 * 32, 16, 64), 9: (8 * 8, 16, 64)}),
+             **hand_costs({0: 8 * 32 * 64, 8: 8 * 8 * 64}, instructions=1)}
+    assert costs == {1: (4110, 4096), 9: (1038, 1024), 0: (256, None), 8: (64, None)}
+    conv = by_hand(tmp_path / "conv", "conv", ["TILE_M=32", "TILE_N=64", "TILE_K=16", "TILE_I_H=8", "SA=8"],
+                   (16, 8, 40, 64, 8, 40, 3, 3) + (1,) * 8, (10 * 42 * 16 * 4, 9 * 64 * 16 * 4, 64 * 8 * 40 * 4), costs)
+    assert report["refused"] == [] and report["unmapped"] == {} and report["nodes_run"] == 2
+    assert [(n["op"], n["cycles"]) for n in report["nodes"]][0] == ("Conv", conv)
+    assert report["total_cycles"] == sum(n["cycles"] for n in report["nodes"]) > conv
+
+
+def test_an_attention_over_a_token_count_its_tile_does_not_divide_is_mapped_whole(tmp_path):
+    """100 tokens in tiles of 8 queries by 64 keys: 4 queries and 36 keys are left. Exit 0, no warning, and the total
+    is the node's; fewer cycles than 104 tokens, which the whole tiles of before would have charged for."""
+    def attention(seq):
+        model = save(tmp_path, [helper.make_node("Attention", ["x"], ["y"], name="attention", num_heads=8)],
+                     [("x", [1, seq, 512])], [("y", [1, seq, 512])], [], check=False)
+        return run_frontend(model, tmp_path / f"out{seq}")
+    report = attention(100)
+    assert report["refused"] == [] and report["unmapped"] == {} and report["nodes_run"] == 1
+    assert report["total_cycles"] == report["nodes"][0]["cycles"]
+    assert attention(96)["total_cycles"] < report["total_cycles"] < attention(104)["total_cycles"]
