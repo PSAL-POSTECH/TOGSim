@@ -36,4 +36,5 @@ def read_hardware(config_path: str, sa: int | None = None,
     except KeyError as exc:
         raise ValueError(f"{config_path}: missing required key {exc}") from None
 
-    return Hardware(sa=resolved, vlane=vlane, vlen_bits=vlen, elem_bits=elem_bits)
+    return Hardware(sa=resolved, vlane=vlane, vlen_bits=vlen, elem_bits=elem_bits,
+                    spad_bytes=int(cfg.get("core_spad_size_kb") or 0) * 1024)

@@ -3,8 +3,8 @@ and hardware macros, the byte size of each tensor argument and the tile ACS cost
 from __future__ import annotations
 
 from .onnx_ops import KernelRef, POINTWISE, REDUCING, SYSTOLIC
-from .tiling import (Hardware, check_systolic, pointwise_tile, reducing_tile,
-                     systolic_tile)
+from .tiling import (ATTENTION_KEYS, ATTENTION_QUERIES, CONV_TILE_ROWS, Hardware, check_systolic, pointwise_tile,
+                     reducing_tile, systolic_tile)
 
 
 def rows_cols(shape: list[int]) -> tuple[int, int]:
@@ -80,7 +80,7 @@ def constants(node, kernel: KernelRef, shapes: dict, hw: Hardware) -> dict[str, 
         out.update(dims)
         check_systolic(dims["O_C"], hw)
         tm, tn, tk = systolic_tile(dims["O_W"], dims["O_C"], dims["I_C"], hw)
-        out.update(TILE_M=tm, TILE_N=tn, TILE_K=tk, TILE_I_H=min(8, dims["O_H"]))
+        out.update(TILE_M=tm, TILE_N=tn, TILE_K=tk, TILE_I_H=min(CONV_TILE_ROWS, dims["O_H"]))
 
     elif kernel.stem == "attention":
         q = shapes[node.input[0]]
@@ -88,7 +88,8 @@ def constants(node, kernel: KernelRef, shapes: dict, hw: Hardware) -> dict[str, 
         heads = _attention_heads(node, q)
         kv_heads = int(attr(node, "num_kv_heads", 0)) or heads
         dhead = max(1, q[-1] // max(1, heads))
-        out.update(HEADS=heads, KV_HEADS=kv_heads, SEQ=seq, DHEAD=dhead, Q_LEN=8, KV_BLOCK=64)
+        out.update(HEADS=heads, KV_HEADS=kv_heads, SEQ=seq, DHEAD=dhead, Q_LEN=ATTENTION_QUERIES,
+                   KV_BLOCK=ATTENTION_KEYS)
 
     elif kernel.tile_class == SYSTOLIC:
         m, k, n = _matmul_dims(node, shapes)

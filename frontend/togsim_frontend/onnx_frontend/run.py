@@ -11,11 +11,13 @@ import sys
 from .. import paths
 from ..acs import cycles as acs_cycles
 from ..acs import node_mapping
-from . import emit, graph, shapes
+from . import emit, graph, shapes, tiling
 from .config import read_hardware
 from .onnx_ops import resolve
 
 CYCLE_RE = re.compile(r"Total execution cycles:\s*(\d+)")
+#: Exit status when the config is a machine the tiles do not fit: nothing was run.
+EXIT_UNSUPPORTED_MACHINE = 2
 
 
 def simulate(tog_dir: str, config: str) -> int:
@@ -86,6 +88,13 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     hw = read_hardware(args.config, args.sa)
+    why = tiling.unsupported(hw)
+    if why:
+        print(f"error: {args.config} (SA={hw.sa}, vpu_num_lanes={hw.vlane}) is not a machine the frontend maps a "
+              f"model on. Its systolic tiles are the same on every machine, and here:", file=sys.stderr)
+        for line in why:
+            print(f"  - {line}", file=sys.stderr)
+        return EXIT_UNSUPPORTED_MACHINE
     os.makedirs(args.out, exist_ok=True)
     model, shp = graph.load(args.model, optimize_graph=not args.no_optimize)
 
