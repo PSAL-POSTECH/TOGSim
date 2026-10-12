@@ -57,6 +57,8 @@ void togsim_dispatch(EmitCtx* ctx, togsim_tile_fn fn, int64_t* iv, int32_t n_iv,
   ctx->items.push_back(std::move(w));
 }
 
+// An arg_id tog_tensors.txt does not list is addressed from base 0: the bridge names it in a warning when it
+// indexes the TOG (togsim_trace_bridge.cc).
 void togsim_dma(EmitCtx* ctx, int32_t dir, int32_t arg_id,
                 uint64_t offset, int32_t ndim, const int64_t* dims,
                 const int64_t* strides, int32_t elem_bits,

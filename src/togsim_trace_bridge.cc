@@ -172,7 +172,7 @@ struct BuildState {
   // ---- index + footprint --------------------------------------------------
   // Open the TOG and replay every work-item once: a DMA'd buffer is as large as the TOG states, and a TOG
   // is refused for a buffer it does not size or a compute whose tile id the cycle table does not hold.
-  // Tile ids the unit table in use has no rows for still run, and are named in one warning.
+  // What still runs is named in one warning each: tile ids without unit table rows, arg_ids beyond the tensors.
   bool index(const char* so_path, const int64_t* shape_args, int32_t n_shape,
              const uint64_t* tensor_base, int32_t n_tensors,
              const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,
@@ -183,6 +183,7 @@ struct BuildState {
       return false;
     const std::vector<int64_t>& stated = tog.spad_buffer_bytes();
     std::set<uint64_t> unitless;
+    std::set<int64_t> stray_args;
     for (size_t i = 0; i < tog.num_items(); i++)
       for (const TraceRec& t : tog.run_item(i)) {
         if (t.kind == TraceRec::COMPUTE && t.tile_id >= tog.num_tile_ids())
@@ -196,6 +197,7 @@ struct BuildState {
         if (t.kind == TraceRec::COMPUTE && typed::is_typed(t.compute_type))
           typed::Units::warn_deprecated_once(so_path);
         if (t.kind != TraceRec::DMA) continue;
+        if (t.arg_id < 0 || t.arg_id >= n_tensors) stray_args.insert(t.arg_id);
         for (int64_t b : moved_bufs(t)) {
           if (b < 0 || (size_t)b >= stated.size() || stated[b] <= 0)
             throw std::runtime_error(fmt::format(
@@ -207,6 +209,10 @@ struct BuildState {
     if (!unitless.empty())
       warn_once(fmt::format("[TOGSim] TOG {}: the unit table has no rows for tile ids {}, which its computes "
                             "name: those computes add nothing to the units", so_path, id_list(unitless)));
+    if (!stray_args.empty())
+      warn_once(fmt::format("[TOGSim] TOG {}: its DMAs name arg_id {}, and tog_tensors.txt lists {} tensor(s): "
+                            "those DMAs are addressed from base 0", so_path, id_list(stray_args),
+                            std::max(n_tensors, 0)));
     return true;
   }
 

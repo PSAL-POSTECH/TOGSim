@@ -91,7 +91,7 @@ keeps them always.
 | `tests/semaphore/` | A barrier waits every async load signaled on its semaphore; a TOG that breaks the contract is refused. |
 | `tests/session/` | `--models_list`: a two-kernel command stream on one partition and on two, each kernel with its own `tog_cycles.tsv` and `tog_units.tsv`, and what the mode refuses. |
 | `tests/spad_footprint/` | A scratchpad buffer is as large as the TOG states it; one the TOG does not size is refused. |
-| `tests/warnings/` | What still runs and is said once at warn level: a compute whose tile id the unit table has no rows for, in one line per TOG that lists the ids, with `--tog_so` and with `--models_list`; nothing is said when every tile id has rows, or when the run has no unit table. |
+| `tests/warnings/` | What still runs and is said once at warn level, in one line per TOG that lists the ids, with `--tog_so` and with `--models_list`: a compute whose tile id the unit table has no rows for (nothing is said when every tile id has rows, or when the run has no unit table), and a DMA whose `arg_id` is negative or beyond the tensors of `tog_tensors.txt` (its address stays where it was, from base 0; nothing is said when every `arg_id` is listed). |
 | `tests/typed/` | **Deprecated**, deleted with the [typed grouping](#deprecated-typed-grouping): every case whose TOG uses `compute_type` `1`, `2` or `3`, and no other: every run in it loads a typed TOG. What they pin is not typed-only: a semaphore re-wait, one compute at a time per core, `systolic_array_split` of a matmul. |
 
 A case is a function in its directory's `cases.py`, beside the hand-written TOGs (`*_tog.cpp`) it
@@ -147,7 +147,7 @@ Read from the directory of the TOG, by fixed name:
 
 | File | Required | Contents |
 |---|---|---|
-| `tog_tensors.txt` | yes | One byte size per tensor argument, in `arg_id` order. Tensors are placed back to back in DRAM, each start aligned to 16 KiB. |
+| `tog_tensors.txt` | yes | One byte size per tensor argument, in `arg_id` order. Tensors are placed back to back in DRAM, each start aligned to 16 KiB. A `togsim_dma` whose `arg_id` is negative or beyond the tensors listed still runs, addressed from base 0, and the run says so once per TOG at warn level while the TOG is loaded: `[TOGSim] TOG <so>: its DMAs name arg_id <ids>, and tog_tensors.txt lists <n> tensor(s): those DMAs are addressed from base 0`. |
 | `tog_shape.txt` | no | The kernel's shape arguments, whitespace-separated. Absent: the TOG carries its own constants. |
 | `tog_tensor_shapes.txt` | when the config sets `tog_tensor_tile` | `rows cols elem_bytes` per tensor argument. |
 | `runtime/indirect_access/indirect_index_<key>_<seq>.raw` | no | The indices of an indirect DMA, one `uint64` per element; `<key>` is the work-item's `togsim_dispatch` key, `<seq>` the DMA's rank among that work-item's indirect DMAs. Absent: the DMA is modeled as a dense tile, with a warning. |
