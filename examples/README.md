@@ -1,6 +1,6 @@
 # Examples
 
-Hand-written TOGs that the [README](../README.md#write-your-first-tog) walks through, one step
+Hand-written TOGs that the [tutorial](../docs/tutorial.md) walks through, one step
 each. Build TOGSim first, then from the repository root:
 
 ```bash
