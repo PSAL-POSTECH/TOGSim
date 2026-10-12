@@ -46,13 +46,19 @@ python3 -m togsim_frontend.acs gemm \
 
 The frontend prints a line per node and the total, writes `<out>/report.json`, and keeps each
 node's run in a directory of its own under `<out>` (the TOG, the files beside it, the two tables and
-`togsim.log`, what TOGSim printed). Its exit status:
+`togsim.log`, what TOGSim printed). Its exit status, and that of ACS (`0`, `1`, `2` and `4` there),
+is one of the list in `frontend/togsim_frontend/status.py`; every status but `0` and `3` comes with
+an `error:` line on stderr, or a traceback for `1`:
 
 | Exit | Meaning |
 |---|---|
-| `0` | Every node with work ran; the total covers the model. |
-| `2` | The config is a machine the frontend does not map a model on ([Machines](#machines)). Nothing was read or run; the reasons are on stderr. Also a bad command line. |
+| `0` | Every node with work ran; the total covers the model. ACS: the two tables are written. |
+| `1` | An exception none of the statuses below names: Python's own status, with its traceback. A defect in the frontend, or a failure it does not classify (an output directory that cannot be written, a model ONNX shape inference rejects, a node without an input its operator reads). |
+| `2` | The command line could not be parsed: argparse's own status, with its usage line. For ACS also a kernel name it has no node table for. Nothing else exits `2`. |
 | `3` | At least one node did not run. The nodes that could were replayed and totalled and the report is written, but the total does not cover the whole model: each such node is listed by name with the reason, on stdout and under `refused` in the report, and the last line says so. |
+| `4` | The config or the model cannot be read: missing, unreadable or malformed, a config without `vpu_num_lanes` or `vpu_vector_length_bits`, one whose name does not carry `SA` when `--sa` is not given, or a machine with less than one array row (`--sa` included), one lane or one 32-bit element per lane. Nothing was run and no output directory is created. |
+| `5` | The config is a machine the frontend does not map a model on ([Machines](#machines)). Nothing was read or run; the reasons are on stderr. |
+| `6` | A tool the run depends on failed: the compiler (`$CXX`, else `g++`) is absent or did not build a kernel, or the Simulator is absent, exited non-zero (a config or a TOG it refuses, a crash) or printed no `Total execution cycles`. The run stops at that node, named on stderr with the tool's last output: no total is given and no report is written. The runs of the nodes before it, and the failing run's `togsim.log`, stay under `<out>`. |
 
 ## Machines
 
@@ -80,9 +86,12 @@ is read from the config's file name (`..._8x8_...`) or given with `--sa`.
 Each of these is exit `3`: an operator without a kernel; a Gemm, MatMul or Conv with
 fewer output columns than one matmul instruction (`SA * vpu_num_lanes`, 64 on 8x8); a Conv that
 is grouped, is not over two spatial axes, has a kernel larger than its padded input, or whose
-output extent by its attributes is not the one ONNX shape inference recorded; a node whose kernel
-names a tile id the tables ACS wrote do not cover; a node TOGSim did not replay to the end.
-Metadata operators (Reshape, Transpose, ...) have no work and are counted as no-ops.
+output extent by its attributes is not the one ONNX shape inference recorded; a Conv whose
+`strides` or `dilations` are not two integers of at least 1, whose `pads` are not four of at least
+0, or whose `auto_pad` is not one ONNX defines; a node with an input that has an extent of 0; a
+node whose kernel names a tile id the tables ACS wrote do not cover. A node TOGSim did not replay
+to the end is not one of them: that is exit `6`. Metadata operators (Reshape, Transpose, ...) have
+no work and are counted as no-ops.
 
 ## Convolutions
 
@@ -110,3 +119,5 @@ they were, whole or short.
 
 `frontend/tests/test_end_to_end.py` runs against `build/bin/Simulator` and is skipped without it,
 unless `TOGSIM_REQUIRE_SIMULATOR` is set (CI sets it): then a missing simulator fails the tests.
+`frontend/tests/test_exit_status.py` reaches each exit status through `python3 -m`; three of its
+runs need the simulator in the same way, the others put a script in its place or stop before it.
