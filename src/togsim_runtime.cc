@@ -1,5 +1,5 @@
-// togsim_runtime.cc -- the producer ABI (togsim_runtime.h) and the loader
-// (togsim_loader.h). The producer's calls each record a TraceRec on the opaque
+// togsim_runtime.cc -- the TOG C ABI (togsim_runtime.h) and the loader
+// (togsim_loader.h). The TOG's calls each record a TraceRec on the opaque
 // EmitCtx, resolving DRAM addresses and per-tile cycles as they go.
 
 #include "togsim_loader.h"
@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-// Full definition of the opaque handle from togsim_runtime.h. The producer holds
+// Full definition of the opaque handle from togsim_runtime.h. The TOG holds
 // only EmitCtx* and never dereferences it.
 struct EmitCtx {
   // inputs supplied by the loader
@@ -46,7 +46,7 @@ extern "C" {
 
 void togsim_dispatch(EmitCtx* ctx, togsim_tile_fn fn, int64_t* iv, int32_t n_iv,
                      int64_t key) {
-  // Register the work-item; LazyProducer::run_item runs its body later, on demand.
+  // Register the work-item; LazyTog::run_item runs its body later, on demand.
   // Round-robin over THIS partition's cores only -- a work-item on another
   // partition's core would sit in this partition's scheduler forever.
   togsim::WorkItem w;
@@ -123,11 +123,11 @@ void init_ctx(EmitCtx& ctx, const uint64_t* tensor_base, int32_t n_tensors,
 }
 }  // namespace
 
-LazyProducer::~LazyProducer() {
+LazyTog::~LazyTog() {
   delete _ctx;   // _lib intentionally left open: the tile fns must stay callable
 }
 
-bool LazyProducer::open(const char* so_path, const int64_t* shape_args, int32_t n_shape,
+bool LazyTog::open(const char* so_path, const int64_t* shape_args, int32_t n_shape,
                         const uint64_t* tensor_base, int32_t n_tensors,
                         const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,
                         const int32_t* partition_cores, int32_t n_partition_cores) {
@@ -146,21 +146,21 @@ bool LazyProducer::open(const char* so_path, const int64_t* shape_args, int32_t 
   if (!_lib) { fprintf(stderr, "togsim: dlopen failed: %s\n", dlerror()); return false; }
   auto abi = (const int32_t*)dlsym(_lib, "togsim_producer_abi_version");
   if (!abi) {
-    fprintf(stderr, "togsim: refusing producer %s: it embeds no togsim_producer_abi_version "
+    fprintf(stderr, "togsim: refusing TOG %s: it embeds no togsim_producer_abi_version "
             "(built without togsim_runtime.h, or before ABI %d); TOGSim expects ABI %d\n",
             so_path, TOGSIM_ABI_VERSION, TOGSIM_ABI_VERSION);
     return false;
   }
   if (*abi != TOGSIM_ABI_VERSION) {
-    fprintf(stderr, "togsim: refusing producer %s: it was built against trace ABI %d, "
-            "TOGSim expects ABI %d; rebuild the producer\n",
+    fprintf(stderr, "togsim: refusing TOG %s: it was built against TOG ABI %d, "
+            "TOGSim expects ABI %d; rebuild the TOG\n",
             so_path, (int)*abi, TOGSIM_ABI_VERSION);
     return false;
   }
   auto n_bufs = (const int32_t*)dlsym(_lib, "togsim_spad_buffer_count");
   auto bytes = (const int64_t*)dlsym(_lib, "togsim_spad_buffer_bytes");
   if (!n_bufs || *n_bufs < 0 || (*n_bufs > 0 && !bytes)) {
-    fprintf(stderr, "togsim: refusing producer %s: it states no spad buffer sizes "
+    fprintf(stderr, "togsim: refusing TOG %s: it states no spad buffer sizes "
             "(togsim_spad_buffer_count / togsim_spad_buffer_bytes)\n", so_path);
     return false;
   }
@@ -175,10 +175,10 @@ bool LazyProducer::open(const char* so_path, const int64_t* shape_args, int32_t 
   return true;
 }
 
-size_t LazyProducer::num_items() const { return _ctx->items.size(); }
-int64_t LazyProducer::item_key(size_t i) const { return _ctx->items.at(i).key; }
+size_t LazyTog::num_items() const { return _ctx->items.size(); }
+int64_t LazyTog::item_key(size_t i) const { return _ctx->items.at(i).key; }
 
-const std::vector<TraceRec>& LazyProducer::run_item(size_t i) {
+const std::vector<TraceRec>& LazyTog::run_item(size_t i) {
   _ctx->trace.clear();
   if (i >= _ctx->items.size()) return _ctx->trace;
   WorkItem& w = _ctx->items[i];

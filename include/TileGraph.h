@@ -42,7 +42,7 @@ class TileGraph {
   void append_subgraph(std::shared_ptr<TileSubGraph> subgraph);
 
   // On-demand construction: `_pull` materializes the NEXT dispatch tile, or returns
-  // nullptr once the producer is exhausted. allocate_subgraph calls it only when a
+  // nullptr once the TOG is exhausted. allocate_subgraph calls it only when a
   // core needs work, so peak memory is O(tiles in flight), not O(dispatches).
   void set_tile_source(std::function<std::shared_ptr<TileSubGraph>()> pull) {
     _pull = std::move(pull);

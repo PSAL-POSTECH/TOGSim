@@ -73,7 +73,7 @@ class Instruction : public std::enable_shared_from_this<Instruction> {
   // grouping/coloring in the timeline. Set by the bridge per TILE_BEGIN.
   void set_tile_group(int g) { _tile_group = g; }
   int get_tile_group() const { return _tile_group; }
-  // The producer's tile_id of a compute (-1 = none): keys the --unit_table rows.
+  // The TOG's tile_id of a compute (-1 = none): keys the --unit_table rows.
   void set_tile_id(int64_t id) { _tile_id = id; }
   int64_t get_tile_id() const { return _tile_id; }
   bool check_ready() { return ready_counter == 0; }

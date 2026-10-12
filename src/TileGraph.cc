@@ -51,7 +51,7 @@ void TileGraph::append_subgraph(std::shared_ptr<TileSubGraph> subgraph) {
   _subgraph_vec.push_back(std::move(subgraph));
 }
 
-// Materialize the next dispatch tile, on demand. Returns false once the producer
+// Materialize the next dispatch tile, on demand. Returns false once the TOG
 // is exhausted. Called only when a core has no work left, so the builder never
 // runs ahead of the simulation.
 bool TileGraph::refill() {

@@ -13,11 +13,10 @@ file(GLOB_RECURSE SRC_FILES
 # build
 add_executable(${LIB_NAME} ${SRC_FILES})
 
-# Export the executable's dynamic symbols (-rdynamic) so a dlopen'd trace
-# producer .so resolves the togsim_* runtime callbacks back into this binary
-# (P3 trace pipeline).
+# Export the executable's dynamic symbols (-rdynamic) so a dlopen'd TOG (.so)
+# resolves the togsim_* runtime callbacks back into this binary.
 set_target_properties(${LIB_NAME} PROPERTIES ENABLE_EXPORTS ON)
 
-# TOGSim's TUs only declare togsim_producer_abi_version; a producer TU defines it
-# (togsim_runtime.h), so dlsym on the producer handle finds the producer's own.
+# TOGSim's TUs only declare togsim_producer_abi_version; a TOG's TU defines it
+# (togsim_runtime.h), so dlsym on the TOG's handle finds the TOG's own.
 target_compile_definitions(${LIB_NAME} PRIVATE TOGSIM_HOST)

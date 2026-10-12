@@ -60,7 +60,7 @@ std::shared_ptr<Instruction> make_compute(const togsim::TraceRec& t) {
   return inst;
 }
 
-// Core's compute-unit enum, as the producer encodes it in TraceRec::compute_type.
+// Core's compute-unit enum, as the TOG encodes it in TraceRec::compute_type.
 constexpr int MATMUL_CT = 1, PRELOAD_CT = 2;
 
 // The current producers of one SRAM buffer. Normally a write REPLACEs them, but
@@ -86,8 +86,8 @@ class BufferWriters {
 // the TileGraph's tile source, so it survives between materializations. link() is
 // the dependency DAG, sram_effects() the buffer-version rule, feed() the dispatch.
 struct BuildState {
-  int64_t unit_tile_base = 0;    // see trace_to_tilegraph
-  togsim::LazyProducer prod;
+  int64_t unit_tile_base = 0;    // see tog_to_tilegraph
+  togsim::LazyTog tog;
   size_t next = 0;               // next work-item to materialize
   std::map<int64_t, size_t> buf_bytes;
   std::shared_ptr<TileSubGraph> sg_out;   // the tile just built
@@ -153,24 +153,24 @@ struct BuildState {
   }
 
   // ---- index + footprint --------------------------------------------------
-  // Open the producer and replay every work-item once to find the DMA'd buffers; each is as
-  // large as the producer states (togsim_spad_buffer_bytes), and one it does not size is refused.
+  // Open the TOG and replay every work-item once to find the DMA'd buffers; each is as
+  // large as the TOG states (togsim_spad_buffer_bytes), and one it does not size is refused.
   bool index(const char* so_path, const int64_t* shape_args, int32_t n_shape,
              const uint64_t* tensor_base, int32_t n_tensors,
              const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,
              const int32_t* partition_cores, int32_t n_partition_cores) {
     using togsim::TraceRec;
-    if (!prod.open(so_path, shape_args, n_shape, tensor_base, n_tensors,
+    if (!tog.open(so_path, shape_args, n_shape, tensor_base, n_tensors,
                    cyc, ovl, n_tiles, partition_cores, n_partition_cores))
       return false;
-    const std::vector<int64_t>& stated = prod.spad_buffer_bytes();
-    for (size_t i = 0; i < prod.num_items(); i++)
-      for (const TraceRec& t : prod.run_item(i)) {
+    const std::vector<int64_t>& stated = tog.spad_buffer_bytes();
+    for (size_t i = 0; i < tog.num_items(); i++)
+      for (const TraceRec& t : tog.run_item(i)) {
         if (t.kind != TraceRec::DMA) continue;
         for (int64_t b : moved_bufs(t)) {
           if (b < 0 || (size_t)b >= stated.size() || stated[b] <= 0)
             throw std::runtime_error(fmt::format(
-                "[TOGSim-trace] spad buffer {} is DMA'd but the producer states no size for it "
+                "[TOGSim-trace] spad buffer {} is DMA'd but the TOG states no size for it "
                 "(togsim_spad_buffer_bytes has {} entries)", b, stated.size()));
           buf_bytes[b] = (size_t)stated[b];
         }
@@ -214,9 +214,9 @@ struct BuildState {
     std::map<int64_t, bool> open;      // buf -> version still accepting writes
     std::vector<int64_t> reads, opens;
 
-    for (size_t wi = 0; wi < prod.num_items(); wi++) {
+    for (size_t wi = 0; wi < tog.num_items(); wi++) {
       size_t pos = 0;
-      for (const TraceRec& t : prod.run_item(wi)) {
+      for (const TraceRec& t : tog.run_item(wi)) {
         sram_effects(t, reads, opens);
         for (int64_t b : reads) {
           auto f = cur.find(b);
@@ -237,12 +237,12 @@ struct BuildState {
     }
   }
 
-  // A trace that breaks the semaphore contract: names the work-item and the counts
+  // A TOG that breaks the semaphore contract: names the work-item and the counts
   // (`expected` < 0: no wait follows the batch).
   [[noreturn]] void sem_error(const char* what, uint64_t sem, int64_t sum, int64_t expected) const {
     throw std::runtime_error(fmt::format(
         "[TOGSim-trace] {}: work-item {} (key {}) sem {} signaled {} elements, wait expects {}",
-        what, item, prod.item_key(item), sem, sum,
+        what, item, tog.item_key(item), sem, sum,
         expected < 0 ? std::string("none") : std::to_string(expected)));
   }
 
@@ -434,10 +434,10 @@ struct BuildState {
   }
 
   // ---- materialize exactly one dispatch tile ------------------------------
-  // Returns the work-item `next`'s subgraph; nullptr once the producer is
+  // Returns the work-item `next`'s subgraph; nullptr once the TOG is
   // exhausted. Called from the TileGraph's tile source, on demand.
   std::shared_ptr<TileSubGraph> build_one_tile() {
-    if (next >= prod.num_items()) {
+    if (next >= tog.num_items()) {
       if (indirect_found + indirect_missing)
         spdlog::info("[TOGSim-trace] indirect dmas: {} with their index dump, {} without",
                      indirect_found, indirect_missing);
@@ -445,7 +445,7 @@ struct BuildState {
       return nullptr;
     }
     item = next; rec = 0;
-    for (const togsim::TraceRec& t : prod.run_item(next++)) feed(t);
+    for (const togsim::TraceRec& t : tog.run_item(next++)) feed(t);
     auto out = std::move(sg_out);
     sg_out.reset();
     return out;
@@ -454,7 +454,7 @@ struct BuildState {
 
 }  // namespace
 
-std::unique_ptr<TileGraph> trace_to_tilegraph(
+std::unique_ptr<TileGraph> tog_to_tilegraph(
     const char* so_path, const int64_t* shape_args, int32_t n_shape,
     const uint64_t* tensor_base, int32_t n_tensors,
     const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,

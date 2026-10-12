@@ -1,6 +1,6 @@
 #!/bin/bash
-# One compute at a time per core, and systolic_array_split, on a fixed typed gemm 512 b512 trace (gem5 cycles,
-# overlap 0, Issue rows) and a cross-lane trace; every case below names what it pins, "PASS" iff all hold.
+# One compute at a time per core, and systolic_array_split, on a fixed typed gemm 512 b512 TOG (gem5 cycles,
+# overlap 0, Issue rows) and a cross-lane TOG; every case below names what it pins, "PASS" iff all hold.
 #     run_core_serial.sh [Simulator] [togsim_runtime.h dir]    (defaults: this tree's build and include)
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,10 +19,10 @@ printf "300\t0\n100\t0\n" > "$OUT/xlu_c2_cycles.tsv"
 for g in g1 g2 x; do mkdir -p "$OUT/$g"; cp "$HERE"/trace_tensors.txt "$HERE"/trace_tensor_shapes.txt "$OUT/$g/"; done
 cp "$HERE/trace_shape.txt" "$OUT/g1/trace_shape.txt"; cp "$HERE/trace_shape_2x1.txt" "$OUT/g2/trace_shape.txt"
 cp "$HERE/trace_shape.txt" "$OUT/x/trace_shape.txt"
-for g in g1 g2; do g++ -std=c++17 -shared -fPIC -O1 -I"$INC" "$HERE/gemm512_typed_producer.cpp" -o "$OUT/$g/trace.so" || exit 2; done
-g++ -std=c++17 -shared -fPIC -O1 -I"$INC" "$HERE/xlu_producer.cpp" -o "$OUT/x/trace.so" || exit 2
+for g in g1 g2; do g++ -std=c++17 -shared -fPIC -O1 -I"$INC" "$HERE/gemm512_typed_tog.cpp" -o "$OUT/$g/trace.so" || exit 2; done
+g++ -std=c++17 -shared -fPIC -O1 -I"$INC" "$HERE/xlu_tog.cpp" -o "$OUT/x/trace.so" || exit 2
 
-run() {   # run <name> <trace dir> <cfg> <cycle table> [<unit table>]
+run() {   # run <name> <TOG dir> <cfg> <cycle table> [<unit table>]
   local ut=(); [ $# -ge 5 ] && ut=(--unit_table "$HERE/$5")
   timeout 600 "$SIM" --config "$OUT/$3" --trace_so "$OUT/$2/trace.so" --cycle_table "$4" "${ut[@]}" \
     --log_level trace > "$OUT/$1.log" 2>&1

@@ -1,4 +1,4 @@
-// A load into spad buffer 1 that the producer does not size: UNSIZED_CASE 0 states a table too
+// A load into spad buffer 1 that the TOG does not size: UNSIZED_CASE 0 states a table too
 // short for it, 1 states no table at all. TOGSim refuses both instead of guessing from the DMAs.
 #include "togsim_runtime.h"
 

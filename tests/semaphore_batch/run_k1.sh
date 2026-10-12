@@ -1,6 +1,6 @@
 #!/bin/bash
 # K1: a barrier on a semaphore two async loads signaled releases only after BOTH arrive; a
-# re-wait leaves an in-place compute its buffer's writer; a trace that breaks the semaphore
+# re-wait leaves an in-place compute its buffer's writer; a TOG that breaks the semaphore
 # contract (K1 cases 1-3, rewait case 1) is refused with a non-zero exit.
 #     run_k1.sh [Simulator] [togsim_runtime.h dir]    (defaults: this tree's build and include)
 set -u
@@ -17,7 +17,7 @@ printf "1048576\n%.0s" 1 2 3 > "$OUT/trace_tensors.txt"   # tensors 1 MiB apart,
 fail=0
 
 run_case() {
-  g++ -std=c++17 -shared -fPIC -O1 -DK1_CASE="$1" -I"$INC" "$HERE/k1_producer.cpp" -o "$OUT/k1_$1.so" || exit 2
+  g++ -std=c++17 -shared -fPIC -O1 -DK1_CASE="$1" -I"$INC" "$HERE/k1_tog.cpp" -o "$OUT/k1_$1.so" || exit 2
   "$SIM" --config "$CFG" --trace_so "$OUT/k1_$1.so" --cycle_table "$OUT/cyc.tsv" --log_level trace > "$OUT/k1_$1.log" 2>&1
 }
 
@@ -52,7 +52,7 @@ for c in $cases; do
 done
 
 run_rewait() {
-  g++ -std=c++17 -shared -fPIC -O1 -DREWAIT_CASE="$1" -I"$INC" "$HERE/rewait_producer.cpp" -o "$OUT/rewait_$1.so" || exit 2
+  g++ -std=c++17 -shared -fPIC -O1 -DREWAIT_CASE="$1" -I"$INC" "$HERE/rewait_tog.cpp" -o "$OUT/rewait_$1.so" || exit 2
   "$SIM" --config "$CFG" --trace_so "$OUT/rewait_$1.so" --cycle_table "$OUT/rewait_cyc.tsv" --log_level trace > "$OUT/rewait_$1.log" 2>&1
 }
 

@@ -1,7 +1,7 @@
 #pragma once
-// togsim_loader.h -- the TOGSim half (not the producer ABI): `dlopen` a producer
-// `.so`, run its `togsim_kernel`, and record the emitted instructions as
-// TraceRecs (sec 5.3 / 9.7). togsim_trace_bridge.h turns them into a TileGraph.
+// togsim_loader.h -- the TOGSim half (not the TOG ABI): `dlopen` a TOG `.so`, run its
+// `togsim_kernel`, and record the instructions a replay makes as TraceRecs (sec 5.3 / 9.7).
+// togsim_trace_bridge.h turns them into a TileGraph.
 
 #include <cstdint>
 #include <vector>
@@ -36,7 +36,7 @@ struct TraceRec {
   int64_t  overlapping;   // looked up from the cycle table
 };
 
-// The producer is run ON DEMAND, one work-item at a time (materializing the whole
+// The TOG is replayed ON DEMAND, one work-item at a time (materializing the whole
 // record stream cost 12.7 GiB on a large 8x8 conv). A tile body reads only ctx and
 // iv, so a work-item is (fn, iv, core) -- replayable on its own, whenever needed.
 struct WorkItem {
@@ -46,12 +46,12 @@ struct WorkItem {
   int64_t key = 0;              // names the work-item's index dumps (togsim_dispatch)
 };
 
-class LazyProducer {
+class LazyTog {
  public:
-  LazyProducer() = default;
-  ~LazyProducer();
-  LazyProducer(const LazyProducer&) = delete;
-  LazyProducer& operator=(const LazyProducer&) = delete;
+  LazyTog() = default;
+  ~LazyTog();
+  LazyTog(const LazyTog&) = delete;
+  LazyTog& operator=(const LazyTog&) = delete;
 
   // dlopen the .so (refused unless its togsim_producer_abi_version is TOGSIM_ABI_VERSION and
   // it states its spad buffer sizes) and run togsim_kernel once: each togsim_dispatch only registers its work-item, so
@@ -62,7 +62,7 @@ class LazyProducer {
             const int32_t* partition_cores, int32_t n_partition_cores);
 
   size_t num_items() const;
-  // The producer's togsim_spad_buffer_bytes, indexed by buffer id (0: not a spad buffer).
+  // The TOG's togsim_spad_buffer_bytes, indexed by buffer id (0: not a spad buffer).
   const std::vector<int64_t>& spad_buffer_bytes() const { return _spad_bytes; }
   int64_t item_key(size_t i) const;   // work-item i's togsim_dispatch key
   // Replay work-item `i` and return its record stream (TILE_BEGIN, body,

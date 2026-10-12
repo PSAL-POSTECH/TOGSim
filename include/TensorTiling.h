@@ -1,5 +1,5 @@
 #pragma once
-// A trace tensor's DRAM layout for TOGSim's timing only: its (rows, cols) view stored as
+// A TOG tensor argument's DRAM layout for TOGSim's timing only: its (rows, cols) view stored as
 // (tile_rows, tile_cols) tiles, tiles row-major and row-major inside each. Spike and the
 // functional run keep every tensor row-major; only the requests a DMA sends DRAM move.
 #include <cstdint>

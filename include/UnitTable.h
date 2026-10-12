@@ -18,7 +18,7 @@ class UnitTable {
 
   // Parse and validate `path`; on any error, log the offending line and exit(1).
   static std::unique_ptr<UnitTable> load(const std::string& path);
-  // The rows of another producer's table `path`, its tile_ids shifted behind the ones held: returns
+  // The rows of another TOG's table `path`, its tile_ids shifted behind the ones held: returns
   // that shift. A unit the table does not have yet is an error (one machine, one set of units).
   size_t append(const std::string& path) { return read(path, false); }
 
