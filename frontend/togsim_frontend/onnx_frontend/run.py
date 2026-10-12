@@ -1,3 +1,4 @@
+"""Run an ONNX graph on TOGSim: each node's kernel is replayed on its own and the cycles are summed."""
 from __future__ import annotations
 
 import argparse
@@ -7,47 +8,59 @@ import re
 import subprocess
 import sys
 
+from .. import paths
 from ..acs import cycles as acs_cycles
 from ..acs import node_mapping
 from . import emit, graph, shapes
 from .config import read_hardware
 from .onnx_ops import resolve
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-TOGSIM = os.path.dirname(HERE)
-EXAMPLE_DIR = os.path.join(TOGSIM, "example")
-INCLUDE_DIR = os.path.join(TOGSIM, "include")
-SIMULATOR = os.path.join(TOGSIM, "build", "bin", "Simulator")
-
 CYCLE_RE = re.compile(r"Total execution cycles:\s*(\d+)")
 
 
-def simulate(so: str, table: str, config: str) -> int:
-    cmd = [SIMULATOR, "--config", config, "--trace_so", so, "--cycle_table", table]
+def simulate(tog_dir: str, config: str) -> int:
+    """Replay the kernel laid out in `tog_dir` and return its Total execution cycles."""
+    tog_dir = os.path.abspath(tog_dir)
+    cmd = [str(paths.simulator()), "--config", config,
+           "--tog_so", os.path.join(tog_dir, "tog.so"),
+           "--cycle_table", os.path.join(tog_dir, "tog_cycles.tsv"),
+           "--unit_table", os.path.join(tog_dir, "tog_units.tsv")]
     res = subprocess.run(cmd, capture_output=True, text=True)
     m = CYCLE_RE.search(res.stdout + res.stderr)
-    if not m:
+    if res.returncode != 0 or not m:
         tail = (res.stderr or res.stdout)[-400:]
-        raise RuntimeError(f"TOGSim reported no cycle count: {tail}")
+        raise RuntimeError(f"TOGSim reported no cycle count (exit {res.returncode}): {tail}")
     return int(m.group(1))
 
 
-def run_node(node, kernel, shp, hw, config, out_dir):
+def prepare_node(node, kernel, shp, hw, out_dir) -> str:
+    """Build what one kernel run of `node` needs, in a directory named by the kernel and its constants: tog.so
+    compiled with the node's tile, the two sidecars, and the tables ACS writes. Returns the directory."""
     values = shapes.constants(node, kernel, shp, hw)
-    tag = "_".join(str(values[n]) for n in kernel.size_names if n in values)
-    stem = f"{kernel.stem}_{tag}" if tag else kernel.stem
+    macros = emit.defines(kernel, values)
+    shape = emit.shape_args(kernel, values)
+    build = "_".join(m.split("=")[1] for m in macros)
+    so = emit.compile_so(str(paths.kernel_source(kernel.stem)), str(paths.include_dir()),
+                         os.path.join(out_dir, ".kernels", f"{kernel.stem}_{build}.so" if build else
+                                      f"{kernel.stem}.so"), macros)
 
-    cpp = os.path.join(out_dir, stem + ".cpp")
-    emit.emit(os.path.join(EXAMPLE_DIR, kernel.directory, kernel.stem + ".cpp"),
-              values, cpp)
-    so = emit.compile_so(cpp, INCLUDE_DIR, os.path.join(out_dir, stem + ".so"))
+    tag = "_".join(str(v) for v in shape + [build] if str(v))
+    tog_dir = os.path.join(out_dir, f"{kernel.stem}_{tag}" if tag else kernel.stem)
+    emit.write_tog_dir(tog_dir, so, shape, shapes.tensor_bytes(kernel, values))
 
     desc = node_mapping.lookup(kernel.stem)
     tile = shapes.tile_for_cost(kernel, values)
-    table = os.path.join(out_dir, stem + ".tsv")
-    acs_cycles.write_table(acs_cycles.build_table(desc, tile, hw), table)
+    acs_cycles.write_table(acs_cycles.build_table(desc, tile, hw), os.path.join(tog_dir, "tog_cycles.tsv"))
+    acs_cycles.write_units(acs_cycles.build_units(desc, tile, hw), os.path.join(tog_dir, "tog_units.tsv"))
+    return tog_dir
 
-    return simulate(so, table, config)
+
+def run_node(node, kernel, shp, hw, config, out_dir, done: dict) -> int:
+    """The cycles of one kernel run of `node`; a run whose directory was already replayed is not replayed again."""
+    tog_dir = prepare_node(node, kernel, shp, hw, out_dir)
+    if tog_dir not in done:
+        done[tog_dir] = simulate(tog_dir, config)
+    return done[tog_dir]
 
 
 def main(argv=None) -> int:
@@ -56,7 +69,8 @@ def main(argv=None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("model")
     ap.add_argument("--config", required=True)
-    ap.add_argument("--out", default=os.path.join(HERE, "result"))
+    ap.add_argument("--out", default="togsim_onnx_result",
+                    help="directory for the per-node runs and report.json (default: %(default)s)")
     ap.add_argument("--sa", type=int, default=None,
                     help="systolic array dimension; inferred from the config name")
     ap.add_argument("--no-optimize", action="store_true",
@@ -73,6 +87,7 @@ def main(argv=None) -> int:
     print()
 
     total = 0
+    done: dict[str, int] = {}
     ran = no_compute = 0
     unmapped: dict[str, int] = {}
     rows = []
@@ -89,7 +104,7 @@ def main(argv=None) -> int:
         try:
             for kernel in kernels:
                 node_cycles += run_node(node, kernel, shp, hw, args.config,
-                                        args.out)
+                                        args.out, done)
         except (KeyError, ValueError, RuntimeError,
                 subprocess.CalledProcessError) as exc:
             reason = f"{node.op_type} ({type(exc).__name__})"

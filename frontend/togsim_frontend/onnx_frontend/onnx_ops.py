@@ -1,3 +1,4 @@
+"""Which kernel of kernels/ an ONNX operator runs as, and the names that kernel is specialised by."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,10 +9,9 @@ POINTWISE = "pointwise"
 
 
 @dataclass(frozen=True)
-
-
 class KernelRef:
-    directory: str
+    """A kernel, kernels/<stem>_tog.cpp: `size_names` are its shape arguments in the order it reads them,
+    `tile_names` and `hw_names` the -D macros it is compiled with."""
     stem: str
     tile_class: str
     size_names: tuple = ()
@@ -20,46 +20,35 @@ class KernelRef:
 
 #: op_type -> its kernel.
 OPS: dict[str, list[KernelRef]] = {
-    "Gemm":   [KernelRef("gemm", "gemm", SYSTOLIC, ("M", "K", "N"),
-                         ("TM", "TN", "TK"), ("SA", "VLANE"))],
-    "MatMul": [KernelRef("gemm", "gemm", SYSTOLIC, ("M", "K", "N"),
-                         ("TM", "TN", "TK"), ("SA", "VLANE"))],
+    "Gemm":   [KernelRef("gemm", SYSTOLIC, ("M", "K", "N"), ("TM", "TN", "TK"))],
+    "MatMul": [KernelRef("gemm", SYSTOLIC, ("M", "K", "N"), ("TM", "TN", "TK"))],
 
-    "Conv": [KernelRef("conv", "conv", SYSTOLIC,
+    "Conv": [KernelRef("conv", SYSTOLIC,
                        ("I_C", "I_H", "I_W", "O_C", "O_H", "O_W", "K_H", "K_W"),
-                       ("TILE_M", "TILE_N", "TILE_K"), ("SA", "VLANE"))],
+                       ("TILE_M", "TILE_N", "TILE_K", "TILE_I_H"), ("SA",))],
 
-    "Attention": [KernelRef("attention", "attention", SYSTOLIC,
-                            ("HEADS", "KV_HEADS", "SEQ", "DHEAD"), (), ("SA",))],
-    "MultiHeadAttention": [KernelRef("attention", "attention", SYSTOLIC,
-                                     ("HEADS", "KV_HEADS", "SEQ", "DHEAD"), (),
-                                     ("SA",))],
+    "Attention": [KernelRef("attention", SYSTOLIC, ("HEADS", "KV_HEADS", "SEQ"),
+                            ("Q_LEN", "KV_BLOCK", "DHEAD"))],
+    "MultiHeadAttention": [KernelRef("attention", SYSTOLIC, ("HEADS", "KV_HEADS", "SEQ"),
+                                     ("Q_LEN", "KV_BLOCK", "DHEAD"))],
 
-    "Softmax": [
-        KernelRef("softmax", "softmax", REDUCING, ("M", "N"), ("TM", "TN"))],
+    "Softmax": [KernelRef("softmax", REDUCING, ("M", "N"), ("TM", "TN"))],
 
-    "LayerNormalization": [
-        KernelRef("layernorm", "layernorm", REDUCING, ("M", "N"), ("TM", "TN"))],
+    "LayerNormalization": [KernelRef("layernorm", REDUCING, ("M", "N"), ("TM", "TN"))],
 
-    "EmbedLayerNormalization": [
-        KernelRef("embed_layernorm", "embed_layernorm", REDUCING,
-                  ("SEQ", "DIM"), ("TSEQ", "TDIM"))],
+    "EmbedLayerNormalization": [KernelRef("embed_layernorm", REDUCING, ("SEQ", "DIM"), ("TSEQ", "TDIM"))],
 
-    "GlobalAveragePool": [
-        KernelRef("global_avgpool", "global_avgpool", REDUCING,
-                  ("C", "HW"), ("TC", "THW"))],
+    "GlobalAveragePool": [KernelRef("global_avgpool", REDUCING, ("C", "HW"), ("TC", "THW"))],
 
-    "Relu":  [KernelRef("bias_act", "bias_act", POINTWISE, ("M", "N"), ("TM", "TN"))],
-    "Add":   [KernelRef("bias_act", "bias_act", POINTWISE, ("M", "N"), ("TM", "TN"))],
-    "Gelu":  [KernelRef("bias_gelu", "bias_gelu", POINTWISE, ("M", "N"), ("TM", "TN"))],
+    "Relu":  [KernelRef("bias_act", POINTWISE, ("M", "N"), ("TM", "TN"))],
+    "Add":   [KernelRef("bias_act", POINTWISE, ("M", "N"), ("TM", "TN"))],
+    "Gelu":  [KernelRef("bias_gelu", POINTWISE, ("M", "N"), ("TM", "TN"))],
 
-    "MaxPool": [KernelRef("maxpool", "maxpool", POINTWISE,
-                          ("ROWS", "COLS"), ("TROW", "TCOL"))],
-    "AveragePool": [KernelRef("adaptive_avgpool", "adaptive_avgpool", POINTWISE,
-                              ("ROWS", "COLS"), ("TROW", "TCOL"))],
+    "MaxPool": [KernelRef("maxpool", POINTWISE, ("ROWS", "COLS"), ("TROW", "TCOL"))],
+    "AveragePool": [KernelRef("adaptive_avgpool", POINTWISE, ("ROWS", "COLS"), ("TROW", "TCOL"))],
 
-    "Concat":  [KernelRef("concat", "concat", POINTWISE, ("A_ROWS",), ("TROW",))],
-    "Flatten": [KernelRef("flatten", "flatten", POINTWISE, (), ())],
+    "Concat":  [KernelRef("concat", POINTWISE, ("A_ROWS", "B_ROWS", "D"), ("TROW", "TD"))],
+    "Flatten": [KernelRef("flatten", POINTWISE, (), ())],
 }
 
 #: Fused nodes with no kernel, and the operators they decompose to.
