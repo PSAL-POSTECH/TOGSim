@@ -1,0 +1,92 @@
+# before the run, in order
+[info] [TOGSim] Command line: <path> --config <path> --tog_so <path> --cycle_table <path> --unit_table <path> --log_level trace
+[info] [LoadConfig] Loaded configuration file "<path>"
+[info] PyTorchSim config:
+num_cores: N
+core_freq_mhz: N
+core_stats_print_period_cycles: N
+num_systolic_array_per_core: N
+vpu_num_lanes: N
+vpu_spad_size_kb_per_lane: N
+vpu_vector_length_bits: N
+tpu_systolic_queue_entries: N
+dram_type: ramulator2
+dram_channels: N
+dram_stats_print_period_cycles: N
+ramulator_config_path: <path>
+l2d_type: datacache
+l2d_config: S:N:N:N,N,L:T:m:W:L,A:N:N,N:N,N
+icnt_type: simple
+icnt_latency_cycles: N
+icnt_freq_mhz: N
+icnt_injection_ports_per_core: N
+pytorchsim_functional_mode: N
+pytorchsim_timing_mode: N
+codegen_mapping_strategy: autotune
+codegen_external_mapping_file: ""
+codegen_autotune_max_retry: N
+codegen_autotune_template_topk: N
+codegen_compiler_optimization: all
+core_spad_size_kb: N
+[info] [Config/Core] core_id: N, partition_id: N (no partition section)
+[info] [Config/Core] Core N: core_freq_mhz: N, systolic_arrays_per_core: N
+[info] [Config/DRAM] Ramulator2 config path: <path>
+[info] [Config/DRAM] Ramulator2 configuration :
+[info] [Config/DRAM] Total bandwidth N.N GB/s, N MHz, N channels, N bytes per request
+[info] [Config/L2Cache] Total Size: N KB, Partition Size: N KB, Set: N, Assoc: N, Line Size: NB Sector Size: NB
+[info] [Config/Interconnect] interconnect_freq_mhz: N
+[info] [Config/Interconnect] Simple interconnect selected
+[info] ======Start Simulation=====
+# during the run, sorted
+[info] ========= Core stat =========
+[info] Core [N] : DMA active_cycles: N, DMA idle_cycles: N, DRAM BW: N.N GB/s (N responses)
+[info] Core [N] : Issue utilization(%): N.N, active_cycles: N, idle_cycles: N
+[info] Core [N] : Systolic utilization(%): N.N, active_cycles: N, idle_cycles: N
+[info] Core [N] : Total_cycles: N
+[info] Core [N] : Vpu utilization(%): N.N, active_cycles: N, idle_cycles: N
+[info] [DRAM] all N channels combined | N.N GB/s aggregate, N.N% of utilization (avg. per channel) | N reads, N writes (interval N cycles)
+[info] [TOGSim] indirect dmas: N with their index dump, N without
+[trace] [DRAM] channel N | N.N GB/s avg., N.N% of utilization | N reads, N writes (interval N cycles)
+[trace] [N][Core N] TOG async DMA response (table notify): tag_addr=<hex> global_inst_id=N subgraph_id=N
+[trace] [N][Core N][ASYNC_DMA_ISSUE][INST_ID=N] MOVIN (ASYNC subgraph_id=N addr_name=tagN tag_id=[<hex>,<hex>] tag_idx=[N] tag_stride=[N] tile=N)
+[trace] [N][Core N][DRAM_NUMA      ][INST_ID=N] core_id=N subgraph_id=N numa_id=N addr_name=tagN is_write=false
+[trace] [N][Core N][DRAM_NUMA      ][INST_ID=N] core_id=N subgraph_id=N numa_id=N addr_name=tagN is_write=true
+[trace] [N][Core N][DRAM_RESP_DONE ][INST_ID=N] MOVIN (ASYNC subgraph_id=N addr_name=tagN tag_id=[<hex>,<hex>] tag_idx=[N] tag_stride=[N] tile=N)
+[trace] [N][Core N][DRAM_RESP_FIRST][INST_ID=N] MOVIN (ASYNC subgraph_id=N addr_name=tagN tag_id=[<hex>,<hex>] tag_idx=[N] tag_stride=[N] tile=N)
+[trace] [N][Core N][DRAM_RESP_FIRST][INST_ID=N] MOVIN (addr_name=tagN tile=N)
+[trace] [N][Core N][DRAM_RESP_FIRST][INST_ID=N] MOVOUT (addr_name=tagN tile=N)
+[trace] [N][Core N][INST_FINISHED  ][INST_ID=N] COMP (compute_type=N compute_cycle=N overlapping_cycle=N sa=-N tile=N)
+[trace] [N][Core N][INST_FINISHED  ][INST_ID=N] MEMORY_BAR (addr_name=tagN tag_id=[<hex>,<hex>] tag_idx=[N] tag_stride=[N] tile=N)
+[trace] [N][Core N][INST_FINISHED  ][INST_ID=N] MOVIN (addr_name=tagN tile=N)
+[trace] [N][Core N][INST_FINISHED  ][INST_ID=N] MOVOUT (addr_name=tagN tile=N)
+[trace] [N][Core N][INST_ISSUED    ][INST_ID=N] COMP (compute_type=N compute_cycle=N overlapping_cycle=N sa=-N tile=N)
+[trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MEMORY_BAR (addr_name=tagN tag_id=[<hex>,<hex>] tag_idx=[N] tag_stride=[N] tile=N)
+[trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MOVIN (addr_name=tagN dram=<hex> rank=N size=[N,N] stride=[N,N] elem_bits=N async=false indirect=false tag_id=[<hex>,<hex>])
+[trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MOVIN (addr_name=tagN dram=<hex> rank=N size=[N,N] stride=[N,N] elem_bits=N async=true indirect=false tag_id=[<hex>,<hex>])
+[trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MOVIN (addr_name=tagN dram=<hex> rank=N size=[N] stride=[N] elem_bits=N async=false indirect=false tag_id=[<hex>,<hex>])
+[trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MOVOUT (addr_name=tagN dram=<hex> rank=N elem_bits=N async=false indirect=false tag=<hex> stride=[N,N] size=[N,N] tag_idx=[N] tile=N)
+[trace] [N][Core N][L2CACHE_STAT   ][INST_ID=N] dram=<hex> cacheable=false
+[trace] [N][Core N][TILE_SCHEDULED ] spad_footprint=N max_dispatch=N
+[warning] [TOGSim] indirect dma without its index dump (<path>: absent); modeled as a dense tile
+# after the run, in order
+[info] [TOGSim] Total cycles: N
+[info] Simulation finished
+[info] === DRAM statistics ===
+[trace] === Ramulator2 stats (channels N.. N) ===
+[info] [DRAM] Per-channel average bandwidth
+[info] [DRAM] channel N | N.N GB/s avg., N.N% of utilization | N reads, N writes
+[info] [DRAM] channels N..N combined | N.N GB/s aggregate, N.N% of utilization (avg. per channel) | N reads, N writes
+[info] ===== Instructions count =====
+[info] Core [N] : MOVIN    inst_count: N
+[info] Core [N] : MOVOUT   inst_count: N
+[info] Core [N] : COMP     inst_count: N (GEMM: N, Vector: N, XLU: N)
+[info] Core [N] : MEMORY_BAR inst_count: N
+[info] ========= Core stat =========
+[info] Core [N] : Systolic utilization(%): N.N, active_cycles: N, idle_cycles: N
+[info] Core [N] : Vpu utilization(%): N.N, active_cycles: N, idle_cycles: N
+[info] Core [N] : Issue utilization(%): N.N, active_cycles: N, idle_cycles: N
+[info] Core [N] : DMA active_cycles: N, DMA idle_cycles: N, DRAM BW: N.N GB/s (N responses)
+[info] Core [N] : NUMA local memory: N requests, remote memory: N requests
+[info] Core [N] : Total_cycles: N
+[info] Core [N] : computes held at least once by the core's compute in flight: N
+[info] Total execution cycles: N
