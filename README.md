@@ -91,6 +91,7 @@ keeps them always.
 | `tests/semaphore/` | A barrier waits every async load signaled on its semaphore; a TOG that breaks the contract is refused. |
 | `tests/session/` | `--models_list`: a two-kernel command stream on one partition and on two, each kernel with its own `tog_cycles.tsv` and `tog_units.tsv`, and what the mode refuses. |
 | `tests/spad_footprint/` | A scratchpad buffer is as large as the TOG states it; one the TOG does not size is refused. |
+| `tests/warnings/` | What still runs and is said once at warn level: a compute whose tile id the unit table has no rows for, in one line per TOG that lists the ids, with `--tog_so` and with `--models_list`; nothing is said when every tile id has rows, or when the run has no unit table. |
 | `tests/typed/` | **Deprecated**, deleted with the [typed grouping](#deprecated-typed-grouping): every case whose TOG uses `compute_type` `1`, `2` or `3`, and no other: every run in it loads a typed TOG. What they pin is not typed-only: a semaphore re-wait, one compute at a time per core, `systolic_array_split` of a matmul. |
 
 A case is a function in its directory's `cases.py`, beside the hand-written TOGs (`*_tog.cpp`) it
@@ -162,7 +163,11 @@ Named on the command line:
 - Unit table (`--unit_table`): five tab-separated fields per line,
   `tile_id unit unit_of_work capacity_per_cycle admitted`. Its rows are read for the tile ids the
   computes name; rows of a tile id the cycle table does not hold are reached by no compute and are
-  not an error.
+  not an error. A compute whose tile id has no rows still runs: it adds nothing to the units and
+  `systolic_array_split` leaves it whole. The run says so once per TOG, at warn level, while the
+  TOG is loaded: `[TOGSim] TOG <so>: the unit table has no rows for tile ids <ids>, which its
+  computes name: those computes add nothing to the units`, `<ids>` with consecutive ids folded
+  (`1, 3 to 5`). A run without a unit table says nothing.
 
 Under `--models_list`, a kernel's TOG, cycle table and unit table are `tog.so`,
 `tog_cycles.tsv` and `tog_units.tsv` in the directory of the path its command names. The unit

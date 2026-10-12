@@ -52,6 +52,8 @@ class Simulator {
     }
     for (auto& core : _cores) core->set_unit_table(_unit_table.get());
   }
+  // The unit table the cores sum into, or nullptr when the run has none.
+  const UnitTable* unit_table() const { return _unit_table.get(); }
   // A launched kernel's tog_units.tsv joins the one table: the tile_id shift its computes carry.
   int64_t add_kernel_unit_table(const std::string& path) {
     auto it = _kernel_unit_base.find(path);

@@ -19,6 +19,7 @@ TYPED_WARNING = "uses the typed grouping"
 EVENT = re.compile(r"\[(\d+)\]\[Core (\d+)\]\[(\w+) *\]\[INST_ID=(\d+)\] ([A-Z_]+)(?: \((.*)\))?$", re.M)
 SCHEDULED = re.compile(r"TILE_SCHEDULED *\] spad_footprint=(\d+) max_dispatch=(\d+)")
 SAID = re.compile(r"^(?:\[[^\]]*\] \[(?:error|critical)\] |\s*what\(\):\s*)(.*)$|^(togsim: .*)$", re.M)
+WARNED = re.compile(r"^\[[^\]]*\] \[warning\] (.*)$", re.M)
 _built, _locks, _guard = {}, {}, threading.Lock()
 
 
@@ -137,6 +138,25 @@ class Run:
             self.fail(f'expected the refusal to say "{saying}", got {self._exit()}: {seen}')
         if exit is not None and self.rc != exit:
             self.fail(f'expected the refusal "{saying}" to exit {exit}, got {self._exit()}')
+        return self
+
+    def warned(self, saying):
+        """The warn-level lines that contain `saying`, without their prefix."""
+        return [m[1] for m in WARNED.finditer(self.log) if saying in m[1]]
+
+    def expect_warned_once(self, saying):
+        """The run finished and exactly one warn-level line contains `saying`."""
+        self.expect_ok()
+        if len(self.warned(saying)) != 1:
+            self.fail(f'expected one warning saying "{saying}", got {len(self.warned(saying))}; the warnings: '
+                      f'{self.warned("") or "none"}')
+        return self
+
+    def expect_no_warning(self, saying):
+        """The run finished and no warn-level line contains `saying`."""
+        self.expect_ok()
+        if self.warned(saying):
+            self.fail(f'expected no warning saying "{saying}", got: {self.warned(saying)}')
         return self
 
     def total_cycles(self):
