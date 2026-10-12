@@ -10,22 +10,11 @@ Core::Core(uint32_t id, SimulationConfig config)
       _core_cycle(0),
       _stat_dma_cycle(0),
       _num_systolic_array_per_core(config.num_systolic_array_per_core),
+      _typed(id, config.num_systolic_array_per_core, config.sa_weight_buffer_depth),
       _dma(id, config.dram_req_size, config.l2d_type != L2CacheType::NOCACHE) {
-  _sa_compute_pipeline.resize(_num_systolic_array_per_core);
-  _stat_tot_sa_compute_cycle.resize(_num_systolic_array_per_core);
-  _stat_sa_compute_cycle.resize(_num_systolic_array_per_core);
-  _stat_tot_sa_compute_idle_cycle.resize(_num_systolic_array_per_core);
-  _stat_sa_compute_idle_cycle.resize(_num_systolic_array_per_core);
   _stat_inst_count.resize(static_cast<size_t>(Opcode::COUNT), 0);
   _stat_tot_skipped_inst.resize(static_cast<size_t>(Opcode::COUNT), 0);
   _sram_capacity = (size_t)config.core_spad_size_kb * 1024;  // 0 = throttle disabled
-  _weight_slot_depth = config.sa_weight_buffer_depth;        // per-SA weight slots (>0)
-  if (_weight_slot_depth == 0) {
-    spdlog::error("sa_weight_buffer_depth must be > 0 (raise it to loosen the preload throttle)");
-    exit(EXIT_FAILURE);
-  }
-  _weight_slots_used.resize(_num_systolic_array_per_core, 0);
-  _weight_free = _num_systolic_array_per_core * (int)_weight_slot_depth;
 }
 
 // B_sys = array-unit rows / capacity, N_eff = min(N, max(1, ceil(rows / vpu_num_lanes))); the
@@ -53,23 +42,10 @@ cycle_type Core::split_compute_cycles(const std::shared_ptr<Instruction>& inst) 
   return (cycle_type)std::clamp(shortened, 1.0, (double)cc);
 }
 
-// Round-robin a systolic array that still has a free weight slot; -1 if all full
-// (the preload must stall). Advances _systolic_array_rr past the chosen SA.
-int Core::pick_free_weight_sa() {
-  for (uint32_t i = 0; i < _num_systolic_array_per_core; i++) {
-    uint32_t s = (_systolic_array_rr + i) % _num_systolic_array_per_core;
-    if (_weight_slots_used[s] < (int)_weight_slot_depth) {
-      _systolic_array_rr = (s + 1) % _num_systolic_array_per_core;
-      return (int)s;
-    }
-  }
-  return -1;
-}
-
 void Core::apply_due(const DueAction& a) {
   switch (a.kind) {
     case DueAction::FreeWeightSlot:
-      if (--a.token->refcount <= 0) { _weight_slots_used[a.token->sa]--; _weight_free++; _issue_dirty = true; }  // weight slot freed -> re-arm
+      if (_typed.release(a.token)) _issue_dirty = true;   // weight slot freed -> re-arm
       break;
     case DueAction::ComputeFree:
       _issue_dirty = true;
@@ -158,22 +134,6 @@ std::shared_ptr<Tile> Core::pop_finished_tile() {
   return result;
 }
 
-std::queue<std::shared_ptr<Instruction>>& Core::get_compute_pipeline(int compute_type) {
-  if (compute_type == VECTOR_UNIT)
-    return _vu_compute_pipeline;
-  else if (compute_type == CROSS_LANE)
-    return _xlu_compute_pipeline;
-  else if (compute_type == MATMUL || compute_type == PRELOAD) {
-    uint32_t sa_idx = _systolic_array_rr;
-    _systolic_array_rr = (_systolic_array_rr + 1) % _num_systolic_array_per_core;
-    return _sa_compute_pipeline.at(sa_idx);
-  }
-  else {
-    spdlog::error("Undefined compute type");
-    exit(EXIT_FAILURE);
-  }
-}
-
 void Core::vu_cycle() {
   bool retry = true;
   while (retry) {
@@ -192,48 +152,11 @@ void Core::vu_cycle() {
   }
 }
 
-void Core::xlu_cycle() {
-  bool retry = true;
-  while (retry) {
-    if (!_xlu_compute_pipeline.empty()) {
-      _stat_xlu_compute_cycle++;
-      if(_xlu_compute_pipeline.front()->finish_cycle <= _core_cycle) {
-        finish_instruction(_xlu_compute_pipeline.front());
-        _xlu_compute_pipeline.pop();
-      } else {
-        retry = false;
-      }
-    } else {
-      _stat_xlu_compute_idle_cycle++;
-      retry = false;
-    }
-  }
-}
-
-void Core::sa_cycle() {
-  for (int i=0; i<_num_systolic_array_per_core; i++) {
-    bool retry = true;
-    while (retry) {
-      if (!_sa_compute_pipeline.at(i).empty()) {
-        if(_sa_compute_pipeline.at(i).front()->finish_cycle <= _core_cycle) {
-          finish_instruction(_sa_compute_pipeline.at(i).front());
-          _sa_compute_pipeline.at(i).pop();
-        } else {
-          _stat_sa_compute_cycle.at(i)++;
-          retry = false;
-        }
-      } else {
-        _stat_sa_compute_idle_cycle.at(i)++;
-        retry = false;
-      }
-    }
-  }
-}
-
 void Core::compute_cycle() {
   vu_cycle();
-  sa_cycle();
-  xlu_cycle();
+  _typed.cycle(_core_cycle, this, [](void* core, std::shared_ptr<Instruction>& inst) {
+    static_cast<Core*>(core)->finish_instruction(inst);
+  });
 }
 
 void Core::dma_cycle() {
@@ -342,7 +265,7 @@ void Core::cycle() {
     bool held_compute = false;
     auto& instructions = _tiles[i]->get_ready_instructions();
     // Resume after the prefix already known to be blocked (Tile::scan_from).
-    for (auto it=_tiles[i]->scan_from(_sram_used, _weight_free); it!=instructions.end();) {
+    for (auto it=_tiles[i]->scan_from(_sram_used, _typed.weight_free()); it!=instructions.end();) {
       auto& inst = *it;
 
       switch (inst->get_opcode()) {
@@ -404,41 +327,9 @@ void Core::cycle() {
             }
             // a fresh-output compute occupies its spad bytes on issue; stall if full.
             if (!try_occupy_sram(inst)) break;
-            // SA selection (sec 10.4): a preload picks an SA with a free weight slot
-            // and pins its matmul consumers there; a matmul runs on its pinned SA.
-            int sa_idx = -1;
-            if (ct == MATMUL || ct == PRELOAD) {
-              if (ct == PRELOAD) {
-                // Ask for the slot FIRST: with none free the preload cannot issue,
-                // so nothing else about it is worth computing. Safe to reorder --
-                // try_occupy_sram above is a no-op for a preload (weights untracked).
-                sa_idx = pick_free_weight_sa();
-                if (sa_idx < 0) break;              // all weight slots full -> stall (retry)
-                const int n_consumers = inst->matmul_consumers();   // cached
-                if (n_consumers == 0) {            // weight-slot model needs >=1 consumer
-                  spdlog::error("preload has no matmul consumer (weight-slot model invariant)");
-                  exit(EXIT_FAILURE);
-                }
-                _weight_slots_used[sa_idx]++;
-                _weight_free--;
-                auto tok = std::make_shared<WeightToken>(WeightToken{sa_idx, n_consumers});
-                for (auto& c : inst->get_deps(DepEvent::ISSUE))
-                  if (c->get_compute_type() == MATMUL) {
-                    c->set_assigned_sa(sa_idx);
-                    c->set_weight_token(tok);
-                  }
-              } else {                              // MATMUL
-                sa_idx = inst->get_assigned_sa();   // pinned by its preload
-                if (sa_idx < 0) {                   // unpinned -> no preload set its SA
-                  spdlog::error("matmul was not pinned to an SA by a preload (weight-slot model invariant)");
-                  exit(EXIT_FAILURE);
-                }
-              }
-              inst->set_assigned_sa(sa_idx);         // record the SA actually used (for the trace)
-            }
+            if (typed::is_typed(ct) && !_typed.admit(inst)) break;   // no free weight slot -> stall (retry)
             inst->set_compute_cycle(split_compute_cycles(inst));
-            auto& target_pipeline = (sa_idx >= 0) ? _sa_compute_pipeline.at(sa_idx)
-                                                  : get_compute_pipeline(ct);
+            auto& target_pipeline = typed::is_typed(ct) ? _typed.pipeline(inst) : _vu_compute_pipeline;
             if (inst->get_compute_cycle() > 0 && !target_pipeline.empty()
                 && target_pipeline.back()->finish_cycle > _core_cycle) {
               spdlog::error("[TOGSim] Core {} issued a compute at {} into a pipeline busy until {}",
@@ -450,9 +341,9 @@ void Core::cycle() {
             // release the occupancy (ISSUE) dependents so a successor overlaps this op.
             inst->fire(DepEvent::ISSUE);
 
-            if (ct == MATMUL && inst->get_weight_token())
-              _due_events.emplace(inst->finish_cycle, DueAction{DueAction::FreeWeightSlot,
-                                                                inst->get_weight_token(), nullptr});
+            if (typed::is_typed(ct))
+              if (auto token = _typed.token_to_free(inst))
+                _due_events.emplace(inst->finish_cycle, DueAction{DueAction::FreeWeightSlot, token, nullptr});
 
             release_sram(inst);   // free the tiles it read (before the skip path)
             if (inst->get_compute_cycle() == 0) {
@@ -476,10 +367,7 @@ void Core::cycle() {
               _compute_busy_until = inst->finish_cycle;
               _due_events.emplace(inst->finish_cycle, DueAction{DueAction::ComputeFree, nullptr, nullptr});
               issued = true;
-              if (inst->get_compute_type() == MATMUL || inst->get_compute_type() == PRELOAD)
-                _stat_gemm_inst++;
-              else if (inst->get_compute_type() == CROSS_LANE)
-                _stat_xlu_inst++;
+              if (typed::is_typed(ct)) _typed.count_issued(ct);
             }
           }
           break;
@@ -492,13 +380,7 @@ void Core::cycle() {
               sparse |= finished == (uint32_t)-1;
               pending |= finished == 0;
             }
-            if (!pending && sparse) {
-              for (auto child_inst : inst->get_deps(DepEvent::DONE)) {
-                if (child_inst->get_opcode() == Opcode::COMP && child_inst->get_compute_type() == MATMUL) {
-                  child_inst->set_compute_cycle(0);
-                }
-              }
-            }
+            if (!pending && sparse) typed::Units::skip_matmuls_behind(inst);
             for (auto& key : keys) {
               uint32_t finished = _dma.get_tag_finish(inst->subgraph_id, key);
               if (finished == 0) _dma.register_tag_waiter(inst->subgraph_id, key, inst);
@@ -527,7 +409,7 @@ void Core::cycle() {
         break;
       }
       // Did not issue -> blocked on spad or a weight slot (the only two stalls).
-      _tiles[i]->note_blocked(it, _sram_used, _weight_free);
+      _tiles[i]->note_blocked(it, _sram_used, _typed.weight_free());
       it++;
     }
     if (held_compute) _tiles[i]->drop_scan_cursor();
@@ -594,9 +476,7 @@ bool Core::has_inflight() {
   // finish event on its own (so the sim is NOT frozen). If this is false but
   // tiles remain, only stalled ready instructions are left.
   if (!_vu_compute_pipeline.empty()) return true;
-  if (!_xlu_compute_pipeline.empty()) return true;
-  for (int i = 0; i < _num_systolic_array_per_core; i++)
-    if (!_sa_compute_pipeline.at(i).empty()) return true;
+  if (_typed.busy()) return true;
   if (!_dma_waiting_queue.empty() || !_dma_finished_queue.empty()) return true;
   if (!_dma.empty()) return true;
   if (!_ld_inst_queue.empty() || !_st_inst_queue.empty()) return true;
@@ -607,9 +487,7 @@ bool Core::running() {
   bool running = false;
   running = running || _tiles.size() > 0;
   running = running || !_vu_compute_pipeline.empty();
-  running = running || !_xlu_compute_pipeline.empty();
-  for (int i=0; i<_num_systolic_array_per_core;i++)
-    running = running || !_sa_compute_pipeline.at(i).empty();
+  running = running || _typed.busy();
   running = running || !_dma_waiting_queue.empty() || !_dma_finished_queue.empty();
   running = running || !_dma.empty();
   running = running || !_ld_inst_queue.empty();
@@ -656,7 +534,6 @@ bool Core::can_issue_compute(std::shared_ptr<Instruction>& inst) {
 }
 
 void Core::print_stats() {
-  std::vector<float> sa_utilization;
   update_stats();
   spdlog::info("===== Instructions count =====");
   for (int i = 0; i < static_cast<size_t>(Opcode::COUNT); i++) {
@@ -666,8 +543,8 @@ void Core::print_stats() {
     auto name = opcode_to_string(opcode);
 
     if (opcode == Opcode::COMP) {
-      auto gemm   = _stat_gemm_inst;
-      auto xlu    = _stat_xlu_inst;
+      auto gemm   = _typed.gemm_inst();
+      auto xlu    = _typed.xlu_inst();
       auto vector = inst - gemm - xlu;
       if (skipped)
         spdlog::info("Core [{}] : {:8} inst_count: {} (GEMM: {}, Vector: {}, XLU: {}), skipped inst_count {}",
@@ -686,8 +563,6 @@ void Core::print_stats() {
     }
   }
   spdlog::info("========= Core stat =========");
-  for (int i=0; i<_num_systolic_array_per_core; i++)
-    sa_utilization.push_back(static_cast<float>(_stat_tot_sa_compute_cycle.at(i) * 100) / _core_cycle);
   bool units_ok = true;
   if (_unit_table) {
     for (size_t u = 0; u < _unit_table->num_units(); u++)
@@ -696,17 +571,14 @@ void Core::print_stats() {
                     : _unit_table->print(fmt::format("Core [{}]", _id), u, _stat_tot_unit_admitted.at(u), _core_cycle, true))
                  && units_ok;
   } else {
-    for (int i=0; i<_num_systolic_array_per_core; i++)
-      spdlog::info("Core [{}] : Systolic array [{}] utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id, i, sa_utilization.at(i),
-        _stat_tot_sa_compute_cycle.at(i), _stat_tot_sa_compute_idle_cycle.at(i));
+    _typed.print_array_stats(_core_cycle, true);
   }
   float dram_bw = _config.dram_req_size * _stat_tot_mem_response * _config.core_freq_mhz / (_core_cycle * 1000); // B/cycle
   spdlog::info("Core [{}] : DMA active_cycles: {}, DMA idle_cycles: {}, DRAM BW: {:.3f} GB/s ({} responses)", _id, _stat_tot_dma_cycle, _stat_tot_dma_idle_cycle, dram_bw, _stat_tot_mem_response);
   if (!_unit_table) {
     spdlog::info("Core [{}] : Vector unit utilization(%): {:.2f}, active cycle: {}, idle_cycle: {}", _id,
       static_cast<float>(_stat_tot_vu_compute_cycle * 100) / _core_cycle, _stat_tot_vu_compute_cycle, _stat_tot_vu_compute_idle_cycle);
-    spdlog::info("Core [{}] : Cross-lane unit utilization(%): {:.2f}, active cycle: {}, idle_cycle: {}", _id,
-      static_cast<float>(_stat_tot_xlu_compute_cycle * 100) / _core_cycle, _stat_tot_xlu_compute_cycle, _stat_tot_xlu_compute_idle_cycle);
+    _typed.print_cross_lane_stats(_core_cycle, true);
   }
   spdlog::info("Core [{}] : NUMA local memory: {} requests, remote memory: {} requests", _id, _stat_numa_local_access, _stat_numa_remote_access);
   spdlog::info("Core [{}] : Total_cycles: {}", _id, _core_cycle);
@@ -755,9 +627,6 @@ void Core::credit_unit_windows(cycle_type lo, cycle_type hi) {
 }
 
 void Core::print_current_stats() {
-  std::vector<float> sa_utilization;
-  for (int i=0; i<_num_systolic_array_per_core; i++)
-    sa_utilization.push_back(static_cast<float>(_stat_sa_compute_cycle.at(i) * 100) / _config.core_print_interval);
   float dram_bw = _config.dram_req_size * _stat_mem_response * _config.core_freq_mhz / (_config.core_print_interval * 1000); // B/cycle
   auto level = spdlog::level::info;
   if(_id != 0)
@@ -774,16 +643,13 @@ void Core::print_current_stats() {
     }
     _unit_spread_from = _core_cycle;
   } else {
-    for (int i=0; i<_num_systolic_array_per_core; i++)
-      spdlog::info("Core [{}] : Systolic array [{}] utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id, i, sa_utilization.at(i),
-        _stat_sa_compute_cycle.at(i), _stat_sa_compute_idle_cycle.at(i));
+    _typed.print_array_stats(_config.core_print_interval, false);
   }
   spdlog::info("Core [{}] : DMA active_cycles: {}, DMA idle_cycles: {}, DRAM BW: {:.3f} GB/s ({} responses)", _id, _stat_dma_cycle, _stat_dma_idle_cycle, dram_bw, _stat_mem_response);
   if (!_unit_table) {
     spdlog::info("Core [{}] : Vector unit Utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id,
       static_cast<float>(_stat_vu_compute_cycle * 100) / _config.core_print_interval, _stat_vu_compute_cycle, _stat_vu_compute_idle_cycle);
-    spdlog::info("Core [{}] : Cross-lane unit Utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _id,
-      static_cast<float>(_stat_xlu_compute_cycle * 100) / _config.core_print_interval, _stat_xlu_compute_cycle, _stat_xlu_compute_idle_cycle);
+    _typed.print_cross_lane_stats(_config.core_print_interval, false);
   }
   spdlog::info("Core [{}] : Total_cycles: {}", _id, _core_cycle);
   update_stats();
@@ -794,16 +660,8 @@ void Core::print_current_stats() {
 }
 
 void Core::update_stats() {
-  for (int i=0; i<_num_systolic_array_per_core; i++) {
-    _stat_tot_sa_compute_cycle.at(i) += _stat_sa_compute_cycle.at(i);
-    _stat_tot_sa_compute_idle_cycle.at(i) += _stat_sa_compute_idle_cycle.at(i);
-    _stat_sa_compute_cycle.at(i) = 0;
-    _stat_sa_compute_idle_cycle.at(i) = 0;
-  }
-
+  _typed.roll_stats();
   _stat_tot_vu_compute_cycle += _stat_vu_compute_cycle;
-  _stat_tot_xlu_compute_cycle += _stat_xlu_compute_cycle;
-  _stat_tot_xlu_compute_idle_cycle += _stat_xlu_compute_idle_cycle;
   _stat_tot_dma_cycle += _stat_dma_cycle;
   _stat_tot_dma_idle_cycle += _stat_dma_idle_cycle;
   _stat_tot_mem_response += +_stat_mem_response;
@@ -816,7 +674,5 @@ void Core::update_stats() {
   _stat_dma_cycle = 0;
   _stat_dma_idle_cycle = 0;
   _stat_vu_compute_idle_cycle = 0;
-  _stat_xlu_compute_cycle = 0;
-  _stat_xlu_compute_idle_cycle = 0;
   _stat_mem_response = 0;
 }

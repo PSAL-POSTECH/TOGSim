@@ -62,7 +62,7 @@ std::string format_instruction_detail_line(Instruction& inst) {
                        inst.get_compute_type(),
                        inst.get_compute_cycle(),
                        inst.get_overlapping_cycle(),
-                       inst.get_assigned_sa(),
+                       inst.typed.assigned_sa,
                        inst.get_tile_group());
   }
   if ((op == Opcode::MOVIN || op == Opcode::MOVOUT) && inst.is_async_dma()) {

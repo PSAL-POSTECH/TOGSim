@@ -60,17 +60,14 @@ std::shared_ptr<Instruction> make_compute(const togsim::TraceRec& t) {
   return inst;
 }
 
-// Core's compute-unit enum, as the TOG encodes it in TraceRec::compute_type.
-constexpr int MATMUL_CT = 1, PRELOAD_CT = 2;
-
-// The current producers of one SRAM buffer. Normally a write REPLACEs them, but
-// the K matmuls of Y += X@W commute: each only waits on whoever INITIALIZED the
-// accumulator, so it JOINs the set and reads initializer() in O(1), not O(K).
+// The current producers of one SRAM buffer: a write REPLACEs them. DEPRECATED typed grouping: the
+// K matmuls of Y += X@W commute, so each JOINs the set (accumulate) and waits only on whoever
+// INITIALIZED the accumulator, read from initializer() in O(1), not O(K).
 class BufferWriters {
  public:
   void replace(const std::shared_ptr<Instruction>& w) {   // normal write: sole producer
     _all.assign(1, w);
-    _initializer = (w->get_compute_type() != MATMUL_CT) ? w : nullptr;
+    _initializer = typed::accumulates(w->get_compute_type()) ? nullptr : w;
   }
   void accumulate(const std::shared_ptr<Instruction>& mm) { _all.push_back(mm); }
 
@@ -271,7 +268,7 @@ struct BuildState {
   // joins them and waits only the initializer. WAR: resource models.
   bool is_mm_accum(const std::shared_ptr<Instruction>& inst, int64_t b,
                    const std::vector<int64_t>& writes) {
-    if (inst->get_compute_type() != MATMUL_CT) return false;
+    if (!typed::accumulates(inst->get_compute_type())) return false;
     for (int64_t w : writes) if (w == b) return true;
     return false;
   }
@@ -283,10 +280,8 @@ struct BuildState {
       auto it = writers.find(b);
       if (it != writers.end())
         for (auto& w : it->second.all()) {
-          int pct = w->get_compute_type();
           // both SA ops -> occupancy (overlap on the SA pipeline); else latency.
-          DepEvent on = (inst->get_compute_type() == MATMUL_CT &&
-                         (pct == MATMUL_CT || pct == PRELOAD_CT))
+          DepEvent on = typed::overlaps(inst->get_compute_type(), w->get_compute_type())
                             ? DepEvent::ISSUE : DepEvent::DONE;
           w->add_dep(inst, on);
         }

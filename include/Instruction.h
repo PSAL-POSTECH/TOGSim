@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "TensorTiling.h"
+#include "TypedGrouping.h"
 
 // MEMORY_BAR: the DMA/memory barrier (waits a DMA tag in the tag table).
 enum class Opcode { MOVIN, MOVOUT, COMP, MEMORY_BAR, COUNT};
@@ -22,11 +23,6 @@ enum class Opcode { MOVIN, MOVOUT, COMP, MEMORY_BAR, COUNT};
 // events: ISSUE (occupancy -- the consumer overlaps the producer on the SA
 // pipeline) or DONE (latency -- the consumer needs the producer's result).
 enum class DepEvent : uint8_t { ISSUE = 0, DONE = 1, COUNT = 2 };
-
-// One weight slot on systolic array `sa` (sec 10.4). A preload sets refcount =
-// the matmuls reusing the weight; each frees it at its streaming-end, the last
-// one releases the slot. Shared (shared_ptr) by the preload's matmul consumers.
-struct WeightToken { int sa; int refcount; };
 
 typedef uint64_t addr_type;
 typedef uint64_t cycle_type;
@@ -65,10 +61,6 @@ class Instruction : public std::enable_shared_from_this<Instruction> {
   const std::set<std::shared_ptr<Instruction>, DepLess>& get_deps(DepEvent e) {
     return _deps[static_cast<size_t>(e)];
   }
-  void set_assigned_sa(int s) { _assigned_sa = s; }
-  int get_assigned_sa() const { return _assigned_sa; }
-  void set_weight_token(const std::shared_ptr<WeightToken>& t) { _weight_token = t; }
-  const std::shared_ptr<WeightToken>& get_weight_token() const { return _weight_token; }
   // Trace-only: which work-item (togsim_dispatch tile) this op belongs to, for
   // grouping/coloring in the timeline. Set by the bridge per TILE_BEGIN.
   void set_tile_group(int g) { _tile_group = g; }
@@ -77,10 +69,6 @@ class Instruction : public std::enable_shared_from_this<Instruction> {
   void set_tile_id(int64_t id) { _tile_id = id; }
   int64_t get_tile_id() const { return _tile_id; }
   bool check_ready() { return ready_counter == 0; }
-  // This preload's weight-slot refcount: the MATMULs subscribed to its ISSUE event.
-  // Fixed once the tile is built, but Core's issue scan asks on every stalled cycle
-  // and one preload can have 300k subscribers -- so count once and cache.
-  int matmul_consumers();
   const Opcode get_opcode() { return opcode; }
   bool is_dma_read() { return opcode == Opcode::MOVIN; }
   bool is_dma_write() { return opcode == Opcode::MOVOUT; }
@@ -173,6 +161,7 @@ class Instruction : public std::enable_shared_from_this<Instruction> {
   cycle_type finish_cycle = 0;
   bool held_for_core = false;   // counted once in Core's compute-hold statistic
   uint32_t array_split = 1;     // N_eff: the arrays systolic_array_split spread it over
+  typed::InstState typed;       // DEPRECATED typed grouping: see TypedGrouping.h
 
   bool finished=false;
   int subgraph_id = 0;
@@ -219,10 +208,6 @@ class Instruction : public std::enable_shared_from_this<Instruction> {
   int64_t _sram_alloc_id = -1;
   std::vector<int64_t> _sram_release_allocs;
   size_t _sram_footprint_override = 0;
-  // SA weight-buffer model (see the setters above).
-  int _assigned_sa = -1;
-  std::shared_ptr<WeightToken> _weight_token;
   int _tile_group = -1;   // trace-only work-item id (see set_tile_group)
   int64_t _tile_id = -1;  // compute tile_id (see set_tile_id)
-  int _n_matmul_consumers = -1;   // lazily counted; see matmul_consumers()
 };

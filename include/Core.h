@@ -23,7 +23,7 @@ enum class InstFinishTraceTag {
 // A timed effect due at a cycle: free a weight slot, wake a MEMORY_BAR, or free the core's compute.
 struct DueAction {
   enum Kind { FreeWeightSlot, WakeBar, ComputeFree } kind;
-  std::shared_ptr<WeightToken> token;
+  std::shared_ptr<typed::WeightToken> token;
   std::shared_ptr<Instruction> bar;
 };
 
@@ -65,24 +65,11 @@ class Core {
   const std::vector<double>& get_tot_unit_credit() const { return _stat_tot_unit_credit; }
   cycle_type get_core_cycle() const { return _core_cycle; }
 
-  std::queue<std::shared_ptr<Instruction>>& get_compute_pipeline(int compute_type);
-  enum {
-    VECTOR_UNIT,
-    MATMUL,
-    PRELOAD,
-    // The cross-lane unit. ITS OWN PIPELINE, not the VPU's: on the machine this
-    // models it runs beside the vector unit rather than in it, so a transpose
-    // and an elementwise op overlap.
-    CROSS_LANE,
-    NR_COMPUTE_UNIT
-  };
 
  protected:
   void dma_cycle();
   void compute_cycle();
   void vu_cycle();
-  void sa_cycle();
-  void xlu_cycle();
   bool can_issue_compute(std::shared_ptr<Instruction>& inst);
   void update_stats();
   // Called once per finished instruction; counts a compute's tile into the unit table, and its
@@ -104,9 +91,6 @@ class Core {
   // Occupy inst's buffer-version footprint on issue; false if it would overflow
   // the spad this cycle (the caller stalls it). True for untracked insts.
   bool try_occupy_sram(const std::shared_ptr<Instruction>& inst);
-  // SA weight-buffer throttle (sec 10.4): pick a systolic array that has a free
-  // weight slot (round-robin among free); -1 if all full -> the preload stalls.
-  int pick_free_weight_sa();
   // The cycles a compute runs: its table cycles, shortened under systolic_array_split by
   // spreading its array unit's rows over the arrays (see SimulationConfig::systolic_array_split).
   cycle_type split_compute_cycles(const std::shared_ptr<Instruction>& inst) const;
@@ -117,7 +101,8 @@ class Core {
   const uint32_t _id;
   const SimulationConfig _config;
   uint32_t _num_systolic_array_per_core;
-  uint32_t _systolic_array_rr = 0;
+  // DEPRECATED typed grouping: the systolic-array and cross-lane pipelines and the weight slots.
+  typed::Units _typed;
 
   /* DMA Unit */
   DMA _dma;
@@ -125,18 +110,12 @@ class Core {
   /* cycle */
   cycle_type _core_cycle;
   cycle_type _stat_tot_vu_compute_cycle = 0;
-  std::vector<cycle_type> _stat_tot_sa_compute_cycle;
   cycle_type _stat_tot_dma_cycle = 0;
   cycle_type _stat_tot_dma_idle_cycle = 0;
   cycle_type _stat_tot_vu_compute_idle_cycle = 0;
-  cycle_type _stat_tot_xlu_compute_cycle = 0;
-  cycle_type _stat_tot_xlu_compute_idle_cycle = 0;
-  std::vector<cycle_type> _stat_tot_sa_compute_idle_cycle;
   std::vector<uint64_t> _stat_inst_count;
   std::vector<uint64_t> _stat_tot_skipped_inst;
   uint64_t _stat_tot_mem_response = 0;
-  uint64_t _stat_gemm_inst = 0;
-  uint64_t _stat_xlu_inst = 0;
   uint64_t _stat_compute_stalls = 0;   // computes held at least once by the compute in flight
   uint64_t _stat_skip_dma = 0;
   uint64_t _stat_numa_local_access = 0;
@@ -152,13 +131,9 @@ class Core {
   cycle_type _unit_spread_from = 0;            // start of the interval being accumulated
 
   cycle_type _stat_vu_compute_cycle = 0;
-  std::vector<cycle_type> _stat_sa_compute_cycle;
   cycle_type _stat_dma_cycle = 0;
   cycle_type _stat_dma_idle_cycle = 0;
   cycle_type _stat_vu_compute_idle_cycle = 0;
-  cycle_type _stat_xlu_compute_cycle = 0;
-  cycle_type _stat_xlu_compute_idle_cycle = 0;
-  std::vector<cycle_type> _stat_sa_compute_idle_cycle;
   uint64_t _stat_mem_response = 0;
 
   std::vector<std::shared_ptr<Tile>> _tiles;
@@ -175,8 +150,6 @@ class Core {
   cycle_type _compute_busy_until = 0;
 
   std::queue<std::shared_ptr<Instruction>> _vu_compute_pipeline;
-  std::queue<std::shared_ptr<Instruction>> _xlu_compute_pipeline;
-  std::vector<std::queue<std::shared_ptr<Instruction>>> _sa_compute_pipeline;
   std::queue<std::shared_ptr<Instruction>> _ld_inst_queue;
   std::queue<std::shared_ptr<Instruction>> _st_inst_queue;
 
@@ -192,15 +165,6 @@ class Core {
   // to its accumulated footprint bytes (freed when its last reader issues).
   size_t _sram_used = 0;
   size_t _sram_capacity = 0;
-  // Free SA weight slots. With _sram_used it keys the issue scan's cursor: an
-  // instruction it walked past wakes only if one of the two grows.
-  int _weight_free = 0;
   std::unordered_map<int64_t, size_t> _sram_allocs;
-
-  // SA weight-buffer throttle (sec 10.4). _weight_slots_used[s] = weights resident
-  // on SA s (loaded by a preload, not yet freed by their last matmul);
-  // _weight_slot_depth = per-SA weight-slot capacity (must be > 0).
-  std::vector<int> _weight_slots_used;
-  uint32_t _weight_slot_depth = 0;
   std::multimap<cycle_type, DueAction> _due_events;
 };
