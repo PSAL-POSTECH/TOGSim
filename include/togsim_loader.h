@@ -62,6 +62,8 @@ class LazyTog {
             const int32_t* partition_cores, int32_t n_partition_cores);
 
   size_t num_items() const;
+  // How many tile ids the cycle table holds: a togsim_compute may name 0 to num_tile_ids() - 1.
+  uint64_t num_tile_ids() const;
   // The TOG's togsim_spad_buffer_bytes, indexed by buffer id (0: not a spad buffer).
   const std::vector<int64_t>& spad_buffer_bytes() const { return _spad_bytes; }
   int64_t item_key(size_t i) const;   // work-item i's togsim_dispatch key

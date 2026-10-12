@@ -14,6 +14,25 @@
 
 namespace {
 
+// `ids` as text, each run of consecutive ids folded: "1, 3 to 5, 9".
+template <class T>
+std::string id_list(const std::set<T>& ids) {
+  std::string out;
+  for (auto it = ids.begin(); it != ids.end();) {
+    auto last = it;
+    for (auto next = std::next(it); next != ids.end() && *next == *last + 1; ++next) last = next;
+    out += (out.empty() ? "" : ", ") + std::to_string(*it) + (last == it ? "" : " to " + std::to_string(*last));
+    it = std::next(last);
+  }
+  return out;
+}
+
+// Log `line` at warn level unless this run already logged it: a kernel launched again repeats nothing.
+void warn_once(const std::string& line) {
+  static std::set<std::string> said;
+  if (said.insert(line).second) spdlog::warn("{}", line);
+}
+
 // `uniq` is a per-DMA-record Core tag key, unique within its work-item; the barrier
 // that waits the dma's semaphore batch carries it among its wait keys.
 std::shared_ptr<Instruction> make_dma(const togsim::TraceRec& t, int64_t uniq) {
@@ -84,6 +103,7 @@ class BufferWriters {
 // the dependency DAG, sram_effects() the buffer-version rule, feed() the dispatch.
 struct BuildState {
   int64_t unit_tile_base = 0;    // see tog_to_tilegraph
+  const UnitTable* units = nullptr;
   togsim::LazyTog tog;
   size_t next = 0;               // next work-item to materialize
   std::map<int64_t, size_t> buf_bytes;
@@ -150,8 +170,9 @@ struct BuildState {
   }
 
   // ---- index + footprint --------------------------------------------------
-  // Open the TOG and replay every work-item once to find the DMA'd buffers; each is as
-  // large as the TOG states (togsim_spad_buffer_bytes), and one it does not size is refused.
+  // Open the TOG and replay every work-item once: a DMA'd buffer is as large as the TOG states, and a TOG
+  // is refused for a buffer it does not size or a compute whose tile id the cycle table does not hold.
+  // What still runs is named in one warning each: tile ids without unit table rows, arg_ids beyond the tensors.
   bool index(const char* so_path, const int64_t* shape_args, int32_t n_shape,
              const uint64_t* tensor_base, int32_t n_tensors,
              const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,
@@ -161,11 +182,22 @@ struct BuildState {
                    cyc, ovl, n_tiles, partition_cores, n_partition_cores))
       return false;
     const std::vector<int64_t>& stated = tog.spad_buffer_bytes();
+    std::set<uint64_t> unitless;
+    std::set<int64_t> stray_args;
     for (size_t i = 0; i < tog.num_items(); i++)
       for (const TraceRec& t : tog.run_item(i)) {
+        if (t.kind == TraceRec::COMPUTE && t.tile_id >= tog.num_tile_ids())
+          throw std::runtime_error(fmt::format(
+              "[TOGSim] TOG {}: work-item {} (key {}) computes tile id {}, which the cycle table does "
+              "not hold ({})", so_path, i, tog.item_key(i), t.tile_id,
+              tog.num_tile_ids() ? fmt::format("it has {} tile ids, 0 to {}", tog.num_tile_ids(), tog.num_tile_ids() - 1)
+                                 : std::string("it has no line")));
+        if (t.kind == TraceRec::COMPUTE && units && !units->has_rows(unit_tile_base + (int64_t)t.tile_id))
+          unitless.insert(t.tile_id);
         if (t.kind == TraceRec::COMPUTE && typed::is_typed(t.compute_type))
           typed::Units::warn_deprecated_once(so_path);
         if (t.kind != TraceRec::DMA) continue;
+        if (t.arg_id < 0 || t.arg_id >= n_tensors) stray_args.insert(t.arg_id);
         for (int64_t b : moved_bufs(t)) {
           if (b < 0 || (size_t)b >= stated.size() || stated[b] <= 0)
             throw std::runtime_error(fmt::format(
@@ -174,6 +206,13 @@ struct BuildState {
           buf_bytes[b] = (size_t)stated[b];
         }
       }
+    if (!unitless.empty())
+      warn_once(fmt::format("[TOGSim] TOG {}: the unit table has no rows for tile ids {}, which its computes "
+                            "name: those computes add nothing to the units", so_path, id_list(unitless)));
+    if (!stray_args.empty())
+      warn_once(fmt::format("[TOGSim] TOG {}: its DMAs name arg_id {}, and tog_tensors.txt lists {} tensor(s): "
+                            "those DMAs are addressed from base 0", so_path, id_list(stray_args),
+                            std::max(n_tensors, 0)));
     return true;
   }
 
@@ -457,10 +496,12 @@ std::unique_ptr<TileGraph> tog_to_tilegraph(
     const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,
     const int32_t* partition_cores, int32_t n_partition_cores,
     const std::string& indirect_dir, const std::string& name,
-    const std::vector<std::shared_ptr<const TensorTiling>>& tilings, int64_t unit_tile_base) {
+    const std::vector<std::shared_ptr<const TensorTiling>>& tilings, int64_t unit_tile_base,
+    const UnitTable* units) {
   using togsim::TraceRec;
   auto S = std::make_shared<BuildState>();
   S->unit_tile_base = unit_tile_base;
+  S->units = units;
   S->indirect_dir = indirect_dir;
   S->tilings = tilings;
 

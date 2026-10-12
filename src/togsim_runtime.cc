@@ -57,6 +57,8 @@ void togsim_dispatch(EmitCtx* ctx, togsim_tile_fn fn, int64_t* iv, int32_t n_iv,
   ctx->items.push_back(std::move(w));
 }
 
+// An arg_id tog_tensors.txt does not list is addressed from base 0: the bridge names it in a warning when it
+// indexes the TOG (togsim_trace_bridge.cc).
 void togsim_dma(EmitCtx* ctx, int32_t dir, int32_t arg_id,
                 uint64_t offset, int32_t ndim, const int64_t* dims,
                 const int64_t* strides, int32_t elem_bits,
@@ -85,6 +87,8 @@ void togsim_dma(EmitCtx* ctx, int32_t dir, int32_t arg_id,
   emit_rec(ctx, r);
 }
 
+// A tile_id the cycle table does not hold is recorded with no cycles, never looked up: the bridge
+// refuses the TOG when it indexes it (togsim_trace_bridge.cc), before anything is simulated.
 void togsim_compute(EmitCtx* ctx, uint64_t tile_id, int32_t compute_type,
                     int32_t ndim, const int64_t* dims,
                     const int64_t* read_bufs, int32_t n_read,
@@ -97,8 +101,9 @@ void togsim_compute(EmitCtx* ctx, uint64_t tile_id, int32_t compute_type,
   r.write_bufs.reserve(n_write);
   for (int32_t i = 0; i < n_read; ++i) r.read_bufs.push_back(read_bufs[i]);
   for (int32_t i = 0; i < n_write; ++i) r.write_bufs.push_back(write_bufs[i]);
-  if (ctx->cyc && (int32_t)tile_id < ctx->n_tiles) r.cycle = ctx->cyc[tile_id];
-  if (ctx->ovl && (int32_t)tile_id < ctx->n_tiles) r.overlapping = ctx->ovl[tile_id];
+  const bool held = ctx->n_tiles > 0 && tile_id < (uint64_t)ctx->n_tiles;
+  if (held && ctx->cyc) r.cycle = ctx->cyc[tile_id];
+  if (held && ctx->ovl) r.overlapping = ctx->ovl[tile_id];
   emit_rec(ctx, r);
 }
 
@@ -182,6 +187,7 @@ bool LazyTog::open(const char* so_path, const int64_t* shape_args, int32_t n_sha
 }
 
 size_t LazyTog::num_items() const { return _ctx->items.size(); }
+uint64_t LazyTog::num_tile_ids() const { return _ctx->n_tiles > 0 ? (uint64_t)_ctx->n_tiles : 0; }
 int64_t LazyTog::item_key(size_t i) const { return _ctx->items.at(i).key; }
 
 const std::vector<TraceRec>& LazyTog::run_item(size_t i) {

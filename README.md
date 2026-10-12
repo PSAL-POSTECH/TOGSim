@@ -61,7 +61,8 @@ build/bin/Simulator \
 ```
 
 `systolic_array_split` is `round_robin` unless the config says `none`, and it reads the unit table:
-a `--tog_so` run without `--unit_table` is refused under the default.
+a `--tog_so` run without `--unit_table` is refused under the default. `--cycle_table` is required:
+there is no default cycle table.
 
 ## Test
 
@@ -84,11 +85,13 @@ keeps them always.
 | `tests/abi/` | A TOG that states another ABI version, only the symbol of ABI 15, or none, is refused with the message that names both versions and exit `1`; the same TOG at this ABI replays. |
 | `tests/array_split/` | `systolic_array_split` with a segment TOG: a compute's Systolic rows are spread over its core's arrays, and what the split refuses: a unit table with no array unit or none at all (exit `1`), `systolic_array_unit` named with the split off (the config is rejected, exit `134`), a spread over a unit's capacity. |
 | `tests/configs/` | Every `configs/*.yml`, read where it is, replays a small TOG to the end; each is under the default `systolic_array_split`, so each is also refused without a unit table. |
+| `tests/cycle_table/` | A TOG is replayed against a cycle table: a run without one, or with one that cannot be opened, is refused before anything is simulated (exit `1`), with `--tog_so` and with `--models_list`; a command stream that launches nothing needs none. A compute names a tile id the table holds: one at the table's length, a negative one or one past 32 bits is refused with the message that names the TOG, the tile id and how many the table has; a table one line longer runs it; a table without a line holds no tile id. |
 | `tests/cycles/` | `Total execution cycles` of four of the hand-written TOGs on tpuv6e, as goldens: a change to the timing model, to that config or to a submodule moves them, and has to say so. |
 | `tests/outputs/` | The [output lines](#4-output-lines): the shapes of the lines a `--tog_so` run logs and of its config echo (no timestamp; paths, hex values and numbers replaced by placeholders), each shape once, against a `*.golden` file. Not the values, nor how often a line is printed. |
 | `tests/semaphore/` | A barrier waits every async load signaled on its semaphore; a TOG that breaks the contract is refused. |
 | `tests/session/` | `--models_list`: a two-kernel command stream on one partition and on two, each kernel with its own `tog_cycles.tsv` and `tog_units.tsv`, and what the mode refuses. |
 | `tests/spad_footprint/` | A scratchpad buffer is as large as the TOG states it; one the TOG does not size is refused. |
+| `tests/warnings/` | What still runs and is said once at warn level, in one line per TOG that lists the ids, with `--tog_so` and with `--models_list`: a compute whose tile id the unit table has no rows for (nothing is said when every tile id has rows, or when the run has no unit table), and a DMA whose `arg_id` is negative or beyond the tensors of `tog_tensors.txt` (its address stays where it was, from base 0; nothing is said when every `arg_id` is listed). |
 | `tests/typed/` | **Deprecated**, deleted with the [typed grouping](#deprecated-typed-grouping): every case whose TOG uses `compute_type` `1`, `2` or `3`, and no other: every run in it loads a typed TOG. What they pin is not typed-only: a semaphore re-wait, one compute at a time per core, `systolic_array_split` of a matmul. |
 
 A case is a function in its directory's `cases.py`, beside the hand-written TOGs (`*_tog.cpp`) it
@@ -126,6 +129,15 @@ other log lines, how the build is done) is not part of it.
 - A TOG that breaks the semaphore contract (a wait whose element count differs from what was
   signaled, a wait on a semaphore never signaled, a load batch never waited) is refused with a
   `[TOGSim]` error line and a non-zero exit.
+- A TOG whose `togsim_compute` names a `tile_id` the cycle table does not hold is refused while it
+  is loaded, before anything is simulated, with exit `1` and the line `[TOGSim] TOG <so>: work-item
+  <i> (key <k>) computes tile id <id>, which the cycle table does not hold (it has <n> tile ids, 0
+  to <n-1>)`, or `(it has no line)` against a table without one. `tile_id` is a `uint64_t` and is compared whole: a negative value arrives as a number
+  near 2^64 and is refused like any other. Up to `v1.2.0` such a compute was charged 0 cycles.
+- A TOG is replayed against a cycle table. A run that gives none, or one that cannot be opened, is
+  refused before anything is simulated, with exit `1` and the line `[TOGSim] --tog_so needs
+  --cycle_table: ...` or `[TOGSim] cycle table <path> cannot be opened: ...`. Up to `v1.2.0` such
+  a run replayed against a flat stub (128 cycles for tile ids 0 to 255) without a word.
 
 The comments in the header are the reference for each argument.
 
@@ -135,7 +147,7 @@ Read from the directory of the TOG, by fixed name:
 
 | File | Required | Contents |
 |---|---|---|
-| `tog_tensors.txt` | yes | One byte size per tensor argument, in `arg_id` order. Tensors are placed back to back in DRAM, each start aligned to 16 KiB. |
+| `tog_tensors.txt` | yes | One byte size per tensor argument, in `arg_id` order. Tensors are placed back to back in DRAM, each start aligned to 16 KiB. A `togsim_dma` whose `arg_id` is negative or beyond the tensors listed still runs, addressed from base 0, and the run says so once per TOG at warn level while the TOG is loaded: `[TOGSim] TOG <so>: its DMAs name arg_id <ids>, and tog_tensors.txt lists <n> tensor(s): those DMAs are addressed from base 0`. |
 | `tog_shape.txt` | no | The kernel's shape arguments, whitespace-separated. Absent: the TOG carries its own constants. |
 | `tog_tensor_shapes.txt` | when the config sets `tog_tensor_tile` | `rows cols elem_bytes` per tensor argument. |
 | `runtime/indirect_access/indirect_index_<key>_<seq>.raw` | no | The indices of an indirect DMA, one `uint64` per element; `<key>` is the work-item's `togsim_dispatch` key, `<seq>` the DMA's rank among that work-item's indirect DMAs. Absent: the DMA is modeled as a dense tile, with a warning. |
@@ -143,16 +155,28 @@ Read from the directory of the TOG, by fixed name:
 Named on the command line:
 
 - Cycle table (`--cycle_table`): one `cycle overlapping` pair per line; the line number, from 0, is
-  the `tile_id` a `togsim_compute` names. Absent or empty: a flat stub, 128 cycles for tile ids
-  0 to 255.
+  the `tile_id` a `togsim_compute` names, so a table of `n` lines holds tile ids 0 to `n-1` and a
+  TOG that names any other is refused (layer 1). Required with `--tog_so`: a run without it, or
+  with a path that cannot be opened, is refused. A table without a line opens and holds no tile
+  id: a TOG with no compute replays against it, and any compute is refused. Reading stops at the
+  first token that is not a number, so what follows it is not part of the table.
 - Unit table (`--unit_table`): five tab-separated fields per line,
-  `tile_id unit unit_of_work capacity_per_cycle admitted`.
+  `tile_id unit unit_of_work capacity_per_cycle admitted`. Its rows are read for the tile ids the
+  computes name; rows of a tile id the cycle table does not hold are reached by no compute and are
+  not an error. A compute whose tile id has no rows still runs: it adds nothing to the units and
+  `systolic_array_split` leaves it whole. The run says so once per TOG, at warn level, while the
+  TOG is loaded: `[TOGSim] TOG <so>: the unit table has no rows for tile ids <ids>, which its
+  computes name: those computes add nothing to the units`, `<ids>` with consecutive ids folded
+  (`1, 3 to 5`). A run without a unit table says nothing.
 
 Under `--models_list`, a kernel's TOG, cycle table and unit table are `tog.so`,
 `tog_cycles.tsv` and `tog_units.tsv` in the directory of the path its command names. The unit
 tables of the launched kernels join one table: a kernel's `tile_id`s are shifted behind the rows
 already held, and a unit the first kernel's table does not name is an error. `tog.so` is
-required; `tog_units.tsv` is required unless the config sets `systolic_array_split: none`.
+required; `tog_units.tsv` is required unless the config sets `systolic_array_split: none`;
+`tog_cycles.tsv` is the kernel's cycle table under the same rule as `--cycle_table`, and is
+required as well: a launch whose directory has none, or one that cannot be opened, is refused. A
+command stream that launches no kernel loads no TOG and needs no table.
 
 ### 3. Command line
 
@@ -162,7 +186,7 @@ required; `tog_units.tsv` is required unless the config sets `systolic_array_spl
 |---|---|
 | `--config <yml>` | Machine config. Required. |
 | `--tog_so <so>` | Replay one TOG as kernel 0 on partition 0. |
-| `--cycle_table <tsv>` | Cycle table for `--tog_so`. |
+| `--cycle_table <tsv>` | Cycle table for `--tog_so`; required. A TOG that names a tile id beyond it is refused. |
 | `--unit_table <tsv>` | Unit table for `--tog_so`; required unless the config sets `systolic_array_split: none`. Refused with `--models_list`, where each kernel brings its own `tog_units.tsv`. |
 | `--models_list <file>` | A command stream (a file or a FIFO) instead of one TOG. |
 | `--log_level <trace\|debug\|info>` | Default `info`. |
@@ -178,7 +202,7 @@ Exit status:
 | Status | When |
 |---|---|
 | `0` | The simulation finished (and `--help`). |
-| `1` | A refused TOG, a failed check, a rejected unit table, a command-line error, no `--config`, a config file that cannot be opened or is not YAML, neither `--tog_so` nor `--models_list`. |
+| `1` | A refused TOG (another ABI, no spad buffer sizes, a broken semaphore contract, a tile id the cycle table does not hold), no cycle table or one that cannot be opened, a failed check, a rejected unit table, a command-line error, no `--config`, a config file that cannot be opened or is not YAML, neither `--tog_so` nor `--models_list`. |
 | `134` | An exception nothing catches ends in `abort`: a config without a required key or with a value TOGSim does not implement, a BookSim2 config that cannot be opened. |
 | `255` | `ramulator_config_path` names a file that does not exist; Ramulator2 prints `Config file ... does not exist!` and exits `-1`. |
 

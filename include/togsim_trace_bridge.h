@@ -7,6 +7,7 @@
 
 #include "TensorTiling.h"
 #include "TileGraph.h"
+#include "UnitTable.h"
 #include "togsim_loader.h"
 
 // Build a TileGraph straight from the TOG `so_path`. The graph is built
@@ -16,6 +17,7 @@
 //
 // `indirect_dir` holds the functional run's index dumps an indirect dma reads (see
 // togsim_runtime.h). `name` labels the graph. nullptr if the TOG fails to load or replay.
+// `units` is the run's unit table (nullptr: none): tile ids it has no rows for are warned about, once.
 std::unique_ptr<TileGraph> tog_to_tilegraph(
     const char* so_path, const int64_t* shape_args, int32_t n_shape,
     const uint64_t* tensor_base, int32_t n_tensors,
@@ -23,4 +25,5 @@ std::unique_ptr<TileGraph> tog_to_tilegraph(
     const int32_t* partition_cores, int32_t n_partition_cores,
     const std::string& indirect_dir, const std::string& name,
     const std::vector<std::shared_ptr<const TensorTiling>>& tilings = {},
-    int64_t unit_tile_base = 0);   // added to each compute's tile_id: its rows in a table several kernels share
+    int64_t unit_tile_base = 0,    // added to each compute's tile_id: its rows in a table several kernels share
+    const UnitTable* units = nullptr);
