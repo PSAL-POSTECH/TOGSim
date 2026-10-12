@@ -33,10 +33,11 @@ def systolic_instructions(tile: dict, hw: Hardware) -> tuple[int, int]:
 
 
 def systolic_cost(tile: dict, hw: Hardware) -> Cost:
-    """A block's matmuls each feed min(SA, rows) rows, one per cycle; a preload hides behind the matmul before it,
-    and the last matmul drains through the array's 2*SA - 2 stages. The rows are what the split divides."""
-    _, matmuls = systolic_instructions(tile, hw)
-    fed = matmuls * min(hw.sa, int(tile.get("rows", hw.sa)))
+    """The matmuls under a preload feed the block's rows, one per cycle (SA each, the last what is left); a preload
+    hides behind the matmul before it, and the last matmul drains through the array's 2*SA - 2 stages. The rows
+    are what the split divides."""
+    preloads, _ = systolic_instructions(tile, hw)
+    fed = preloads * int(tile.get("rows", hw.sa))
     return Cost(fed + 2 * hw.sa - 2, systolic_rows=fed)
 
 

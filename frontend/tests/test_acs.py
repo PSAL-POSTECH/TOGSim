@@ -74,3 +74,25 @@ def test_a_tile_id_without_a_cycle_line_or_a_unit_row_is_uncovered():
     assert acs_cycles.uncovered(range(2), table, units) == []
     assert acs_cycles.uncovered(range(2), table[:1], units) == [1]
     assert acs_cycles.uncovered(range(2), table, [row for row in units if row[0] != 0]) == [0]
+
+
+def test_a_short_block_is_costed_by_the_rows_depth_and_columns_it_has():
+    """The formula of a whole block at what is left: 13 rows are a matmul of 8 and one of 5 under each preload, 13
+    deep is 13 preloads per column group, 44 columns are one group of 64 where 256 were four."""
+    def rows_fed(**short):
+        return acs_cycles.systolic_cost({**GEMM_TILE, **short}, HW).systolic_rows
+    assert rows_fed() == 64 * 4 * 32 == 8192
+    assert rows_fed(rows=13) == 64 * 4 * 13
+    assert acs_cycles.systolic_instructions({**GEMM_TILE, "rows": 13}, HW) == (256, 512)
+    assert rows_fed(depth=13) == 13 * 4 * 32
+    assert rows_fed(cols=44) == 64 * 1 * 32
+    assert acs_cycles.systolic_cost({"rows": 13, "depth": 13, "cols": 44}, HW) == (13 * 13 + 14, 13 * 13, 0)
+
+
+def test_a_block_shallower_than_the_array_is_a_preload_per_channel_it_has():
+    """A conv tile of 8 x 16 outputs and 64 filters over the 3 channels of an image: 3 preloads of 128 rows, where
+    the 8-deep block the tile macro names would be 8."""
+    stem = {"rows": 128, "depth": 3, "cols": 64}
+    assert acs_cycles.systolic_instructions(stem, HW) == (3, 48)
+    assert acs_cycles.systolic_cost(stem, HW) == (3 * 128 + 14, 3 * 128, 0)
+    assert acs_cycles.systolic_cost({**stem, "depth": 8}, HW).systolic_rows == 8 * 128
