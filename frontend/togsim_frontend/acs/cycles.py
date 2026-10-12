@@ -87,6 +87,13 @@ def build_units(kernel_desc, tile: dict, hw: Hardware) -> list[tuple]:
     return rows
 
 
+def uncovered(tile_ids, table: list[tuple[int, int]], units: list[tuple]) -> list[int]:
+    """The `tile_ids` the tables do not cover: no cycle table line (TOGSim refuses a compute that names one) or no
+    unit table row (TOGSim warns, and the compute adds nothing to the units)."""
+    with_units = {row[0] for row in units}
+    return sorted(t for t in tile_ids if not 0 <= t < len(table) or t not in with_units)
+
+
 def write_table(rows: list[tuple[int, int]], path: str, origin: str = "acs") -> None:
     with open(path, "w") as fh:
         for cycles, overlapping in rows:

@@ -35,7 +35,8 @@ def simulate(tog_dir: str, config: str) -> int:
 
 def prepare_node(node, kernel, shp, hw, out_dir) -> str:
     """Build what one kernel run of `node` needs, in a directory named by the kernel and its constants: tog.so
-    compiled with the node's tile, the two sidecars, and the tables ACS writes. Returns the directory."""
+    compiled with the node's tile, the two sidecars, and the tables ACS writes. A tile id of the kernel that the
+    tables do not cover refuses the node here, before TOGSim would."""
     values = shapes.constants(node, kernel, shp, hw)
     macros = emit.defines(kernel, values)
     shape = emit.shape_args(kernel, values)
@@ -50,8 +51,15 @@ def prepare_node(node, kernel, shp, hw, out_dir) -> str:
 
     desc = node_mapping.lookup(kernel.stem)
     tile = shapes.tile_for_cost(kernel, values)
-    acs_cycles.write_table(acs_cycles.build_table(desc, tile, hw), os.path.join(tog_dir, "tog_cycles.tsv"))
-    acs_cycles.write_units(acs_cycles.build_units(desc, tile, hw), os.path.join(tog_dir, "tog_units.tsv"))
+    table = acs_cycles.build_table(desc, tile, hw)
+    units = acs_cycles.build_units(desc, tile, hw)
+    missing = acs_cycles.uncovered(range(len(desc.nodes)), table, units)
+    if missing:
+        raise ValueError(f"node {node.name!r}: kernel {kernel.stem} names tile ids {missing} and the tables ACS "
+                         f"wrote have {len(table)} cycle lines and unit rows for tile ids "
+                         f"{sorted({row[0] for row in units})}")
+    acs_cycles.write_table(table, os.path.join(tog_dir, "tog_cycles.tsv"))
+    acs_cycles.write_units(units, os.path.join(tog_dir, "tog_units.tsv"))
     return tog_dir
 
 

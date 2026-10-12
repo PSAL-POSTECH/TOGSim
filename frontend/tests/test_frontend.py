@@ -3,11 +3,14 @@ import os
 import subprocess
 
 import pytest
+from onnx import helper
 
 from togsim_frontend import paths
+from togsim_frontend.acs import cycles as acs_cycles
 from togsim_frontend.acs.__main__ import EXAMPLE_TILE
 from togsim_frontend.acs.node_mapping import KERNELS, lookup
 from togsim_frontend.onnx_frontend import emit
+from togsim_frontend.onnx_frontend import run as frontend
 from togsim_frontend.onnx_frontend.config import array_dim_from_name
 from togsim_frontend.onnx_frontend.onnx_ops import OPS, resolve
 from togsim_frontend.onnx_frontend.tiling import Hardware, check_systolic, systolic_tile
@@ -39,6 +42,19 @@ def test_a_tog_directory_holds_the_sidecars_togsim_reads(tmp_path):
     assert tog == str(tmp_path / "run" / "tog.so")
     assert (tmp_path / "run" / "tog_shape.txt").read_text().split() == ["128", "256"]
     assert (tmp_path / "run" / "tog_tensors.txt").read_text().split() == ["131072", "1024", "131072"]
+
+
+def test_a_node_whose_tile_ids_the_tables_miss_is_refused_by_name(tmp_path, monkeypatch):
+    """A Relu's kernel names tile id 0. With the tables as ACS builds them the run directory is laid out; with a
+    unit table that lost its rows the node is refused before anything is written for TOGSim to trip on."""
+    relu = helper.make_node("Relu", ["x"], ["y"], name="relu_7")
+    shapes = {"x": [64, 256], "y": [64, 256]}
+    tog_dir = frontend.prepare_node(relu, OPS["Relu"][0], shapes, HW, str(tmp_path / "covered"))
+    assert os.path.exists(os.path.join(tog_dir, "tog_units.tsv"))
+    monkeypatch.setattr(acs_cycles, "build_units", lambda desc, tile, hw: [])
+    with pytest.raises(ValueError, match=r"node 'relu_7': kernel bias_act names tile ids \[0\]"):
+        frontend.prepare_node(relu, OPS["Relu"][0], shapes, HW, str(tmp_path / "missed"))
+    assert not list((tmp_path / "missed").rglob("tog_units.tsv"))
 
 
 @pytest.mark.parametrize("op,kernels", sorted(OPS.items()))

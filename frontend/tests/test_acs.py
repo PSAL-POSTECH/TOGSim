@@ -64,3 +64,13 @@ def test_the_cost_function_can_be_replaced():
         assert acs_cycles.build_units(desc, {"elems": 1}, HW)[0] == (0, "Systolic", "rows", 1, 7)
     finally:
         acs_cycles.set_cost_function(acs_cycles.default_cost)
+
+
+def test_a_tile_id_without_a_cycle_line_or_a_unit_row_is_uncovered():
+    """gemm names tile ids 0 and 1: both tables as built cover them, a table one line short or without the rows of
+    a tile does not."""
+    table = acs_cycles.build_table(lookup("gemm"), GEMM_TILE, HW)
+    units = acs_cycles.build_units(lookup("gemm"), GEMM_TILE, HW)
+    assert acs_cycles.uncovered(range(2), table, units) == []
+    assert acs_cycles.uncovered(range(2), table[:1], units) == [1]
+    assert acs_cycles.uncovered(range(2), table, [row for row in units if row[0] != 0]) == [0]
