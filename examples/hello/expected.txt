@@ -1,0 +1,76 @@
+== hello
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/hello/hello_tog.cpp -o examples/hello/tog.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv --log_level trace
+[trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
+[trace] [310][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
+[trace] [311][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [911][Core 0][INST_FINISHED  ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [912][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
+[trace] [944][Core 0][INST_FINISHED  ][INST_ID=2] MOVOUT (addr_name=tag1 tile=0)
+[info] Total execution cycles: 1102
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv --log_level trace
+[trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
+[trace] [2][Core 0][L2CACHE_STAT   ][INST_ID=0] dram=0x0000000000000000 cacheable=false
+[trace] [2][Core 0][DRAM_NUMA      ][INST_ID=0] core_id=0 subgraph_id=0 numa_id=0 addr_name=tag0 is_write=false
+[trace] [147][Core 0][DRAM_RESP_FIRST][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
+[trace] [310][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv
+[info] [DRAM] Per-channel average bandwidth
+[info] [DRAM] channel 0 | 2.98 GB/s avg., 5.82% of utilization | 16 reads, 16 writes
+[info] [DRAM] channels 0..31 combined | 95.30 GB/s aggregate, 5.82% of utilization (avg. per channel) | 512 reads, 512 writes
+[info] ===== Instructions count =====
+[info] Core [0] : MOVIN    inst_count: 1
+[info] Core [0] : MOVOUT   inst_count: 1
+[info] Core [0] : COMP     inst_count: 1 (GEMM: 0, Vector: 1, XLU: 0)
+[info] Core [0] : MEMORY_BAR inst_count: 0
+[info] ========= Core stat =========
+[info] Core [0] : Systolic utilization(%): 23.23, active_cycles: 256, idle_cycles: 846
+[info] Core [0] : Vpu utilization(%): 9.07, active_cycles: 100, idle_cycles: 1002
+[info] Core [0] : DMA active_cycles: 64, DMA idle_cycles: 1038, DRAM BW: 104.000 GB/s (1024 responses)
+[info] Core [0] : NUMA local memory: 1024 requests, remote memory: 0 requests
+[info] Core [0] : Total_cycles: 1102
+[info] Core [0] : computes held at least once by the core's compute in flight: 0
+[info] Total execution cycles: 1102
++ build/bin/Simulator --config examples/minimal.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv
+[info] [TOGSim] Command line: build/bin/Simulator --config examples/minimal.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv
+[info] [LoadConfig] Loaded configuration file "examples/minimal.yml"
+[info] PyTorchSim config:
+num_cores: 1
+core_freq_mhz: 1000
+core_stats_print_period_cycles: 0
+dram_type: simple
+dram_channels: 1
+dram_latency: 10
+dram_stats_print_period_cycles: 0
+icnt_type: simple
+icnt_freq_mhz: 1000
+icnt_latency_cycles: 1
+systolic_array_split: none
+[info] [Config/Core] core_id: 0, partition_id: 0 (no partition section)
+[info] [Config/Core] Core 0: core_freq_mhz: 1000, systolic_arrays_per_core: 1
+[info] [Config/DRAM] Total bandwidth 0.00 GB/s, 1000 MHz, 1 channels, 32 bytes per request
+[info] [Config/L2Cache] No L2 cache
+[info] [SimpleDRAM] DRAM latency: 10
+[info] [SimpleDRAM] no bandwidth cap (latency-only); dram_latency 10 cycles, dram_freq_mhz 1000 for tick alignment
+[info] [Config/Interconnect] interconnect_freq_mhz: 1000
+[info] [Config/Interconnect] Simple interconnect selected
+[info] ======Start Simulation=====
+[info] [Scheduler 0] Kernel 0 has completed - TOG path: kernel operation: kernel finished at cycle 1
+[info] [Scheduler 0] Kernel 0 execution summary - Started at: 1 cycles, Total compute time: 0 cycles
+[info] [TOGSim] Total cycles: 1659
+[info] Simulation finished
+[info] ===== Instructions count =====
+[info] Core [0] : MOVIN    inst_count: 1
+[info] Core [0] : MOVOUT   inst_count: 1
+[info] Core [0] : COMP     inst_count: 1 (GEMM: 0, Vector: 1, XLU: 0)
+[info] Core [0] : MEMORY_BAR inst_count: 0
+[info] ========= Core stat =========
+[info] Core [0] : Systolic array [0] utilization(%): 0.00, active_cycles: 0, idle_cycles: 1659
+[info] Core [0] : DMA active_cycles: 1024, DMA idle_cycles: 635, DRAM BW: 19.000 GB/s (1024 responses)
+[info] Core [0] : Vector unit utilization(%): 36.23, active cycle: 601, idle_cycle: 0
+[info] Core [0] : Cross-lane unit utilization(%): 0.00, active cycle: 0, idle_cycle: 1659
+[info] Core [0] : NUMA local memory: 1024 requests, remote memory: 0 requests
+[info] Core [0] : Total_cycles: 1659
+[info] Core [0] : computes held at least once by the core's compute in flight: 0
+[info] Total execution cycles: 1659
