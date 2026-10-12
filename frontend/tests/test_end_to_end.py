@@ -192,6 +192,59 @@ def test_a_conv_relu_graph_totals_its_nodes_replayed_alone(tmp_path):
     assert report["total_cycles"] == conv + bias_act
 
 
+#: The tables ACS writes for a conv tile of 8 x 16 outputs: 64 or 128 filters over 64 channels, and 64 over 8.
+CONV_64, CONV_128, CONV_8_DEEP = ([128, 8206], {1: 8192}), ([256, 16398], {1: 16384}), ([128, 1038], {1: 1024})
+#: A Conv: its attributes, input and weight shapes, the output's rows and columns; then the kernel run it has to
+#: be, written out by hand: the TILE_N and TILE_K macros, the shape arguments after I_C I_H I_W O_C and the tables.
+CONVS = {
+    "stride_2": (dict(strides=[2, 2], pads=[1, 1, 1, 1]), [1, 64, 32, 32], [64, 64, 3, 3], (16, 16),
+                 (64, 64), (16, 16, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1), CONV_64),
+    "pad_0": ({}, [1, 64, 18, 18], [64, 64, 3, 3], (16, 16),
+              (64, 64), (16, 16, 3, 3, 1, 1, 1, 1, 0, 0, 0, 0), CONV_64),
+    "1x1_stride_2": (dict(strides=[2, 2]), [1, 64, 32, 32], [128, 64, 1, 1], (16, 16),
+                     (128, 64), (16, 16, 1, 1, 2, 2, 1, 1, 0, 0, 0, 0), CONV_128),
+    "7x7_stride_2_pad_3_of_3_channels": (dict(strides=[2, 2], pads=[3, 3, 3, 3]), [1, 3, 32, 32], [64, 3, 7, 7],
+                                         (16, 16), (64, 8), (16, 16, 7, 7, 2, 2, 1, 1, 3, 3, 3, 3), CONV_8_DEEP),
+    "stride_2x1_pads_0_1_1_2": (dict(strides=[2, 1], pads=[0, 1, 1, 2]), [1, 64, 32, 15], [64, 64, 3, 3], (16, 16),
+                                (64, 64), (16, 16, 3, 3, 2, 1, 1, 1, 0, 1, 1, 2), CONV_64),
+    "dilation_2x3": (dict(dilations=[2, 3], pads=[2, 3, 2, 3]), [1, 64, 16, 16], [64, 64, 3, 3], (16, 16),
+                     (64, 64), (16, 16, 3, 3, 1, 1, 2, 3, 2, 3, 2, 3), CONV_64),
+    "same_upper_stride_2": (dict(strides=[2, 2], auto_pad="SAME_UPPER"), [1, 64, 32, 32], [64, 64, 3, 3], (16, 16),
+                            (64, 64), (16, 16, 3, 3, 2, 2, 1, 1, 0, 0, 1, 1), CONV_64),
+}
+
+
+@pytest.mark.parametrize("name", sorted(CONVS))
+def test_a_conv_with_a_stride_a_dilation_or_pads_is_the_kernel_run_at_those_shape_arguments(name, tmp_path):
+    """The graph is mapped whole (exit 0, no TOGSim warning) and totals its nodes; its Conv costs what the conv
+    kernel does when replayed by hand at the shape arguments and the padded input size the attributes stand for."""
+    attributes, x, w, (o_h, o_w), (tile_n, tile_k), rest, (cycles, rows) = CONVS[name]
+    (i_c, i_h, i_w), (o_c, k_h, k_w), (p_t, p_l, p_b, p_r) = x[1:], (w[0], *w[2:]), rest[-4:]
+    model = save(tmp_path, [
+        helper.make_node("Conv", ["x", "w"], ["c"], name="conv", kernel_shape=[k_h, k_w], **attributes),
+        helper.make_node("Relu", ["c"], ["y"], name="relu"),
+    ], [("x", x)], [("y", [1, o_c, o_h, o_w])], [("w", w)])
+    report = run_frontend(model, tmp_path / "out")
+
+    tensors = ((i_h + p_t + p_b) * (i_w + p_l + p_r) * i_c * 4, k_h * k_w * o_c * i_c * 4, o_c * o_h * o_w * 4)
+    conv = total(standalone(tmp_path / "conv", "conv",
+                            ["TILE_M=16", f"TILE_N={tile_n}", f"TILE_K={tile_k}", "TILE_I_H=8", "SA=8"],
+                            (i_c, i_h, i_w, o_c) + rest, tensors, cycles, units_of(cycles, rows)))
+    assert report["refused"] == [] and report["unmapped"] == {} and report["nodes_run"] == 2
+    assert [(n["op"], n["cycles"]) for n in report["nodes"]][0] == ("Conv", conv)
+    assert report["total_cycles"] == sum(n["cycles"] for n in report["nodes"]) > conv
+
+
+def test_a_grouped_conv_is_listed_with_the_reason_and_fails_the_run(tmp_path):
+    model = save(tmp_path, [helper.make_node("Conv", ["x", "w"], ["y"], name="depthwise", kernel_shape=[3, 3],
+                                             pads=[1, 1, 1, 1], group=64)],
+                 [("x", [1, 64, 16, 16])], [("y", [1, 64, 16, 16])], [("w", [64, 1, 3, 3])])
+    report = run_frontend(model, tmp_path / "out", status=frontend.EXIT_NODES_NOT_RUN)
+    assert report["refused"] == [{"name": "depthwise", "op": "Conv",
+                                  "reason": "grouped convolution: no library kernel takes a group count"}]
+    assert report["nodes_run"] == 0 and report["total_cycles"] == 0
+
+
 def test_an_operator_without_a_kernel_is_listed_not_counted_and_fails_the_run(tmp_path, capsys):
     """The Relu still runs and is totalled, the report is written, and the exit status is 3: the total is not the
     model's."""

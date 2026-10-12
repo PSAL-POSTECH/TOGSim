@@ -12,6 +12,7 @@ from togsim_frontend.acs.__main__ import EXAMPLE_TILE
 from togsim_frontend.acs.node_mapping import KERNELS, lookup
 from togsim_frontend.onnx_frontend import emit
 from togsim_frontend.onnx_frontend import run as frontend
+from togsim_frontend.onnx_frontend import shapes
 from togsim_frontend.onnx_frontend import tiling
 from togsim_frontend.onnx_frontend.config import array_dim_from_name, read_hardware
 from togsim_frontend.onnx_frontend.onnx_ops import OPS, resolve
@@ -35,6 +36,55 @@ def test_a_name_the_frontend_has_no_value_for_is_refused():
         emit.defines(GEMM, {"M": 128, "K": 64, "N": 256, "TM": 32})
     with pytest.raises(KeyError):
         emit.shape_args(GEMM, {"M": 128, "TM": 32, "TN": 256, "TK": 64})
+
+
+CONV = OPS["Conv"][0]
+CONV_ARGS = ("S_H", "S_W", "D_H", "D_W", "P_T", "P_L", "P_B", "P_R")
+
+
+def conv_values(x, w, out=None, **attributes):
+    """What shapes.constants gives the conv kernel for a Conv of input `x` and weights `w`; `out` is the output
+    shape ONNX shape inference recorded, when it did."""
+    node = helper.make_node("Conv", ["x", "w"], ["y"], name="conv", **attributes)
+    return shapes.constants(node, CONV, {"x": x, "w": w, **({"y": out} if out else {})}, HW)
+
+
+def test_a_conv_passes_its_strides_dilations_and_four_pads_as_shape_arguments():
+    """The pads stay in ONNX's order, top left bottom right, and the input's bytes are those of the padded input."""
+    values = conv_values([1, 64, 32, 15], [64, 64, 3, 3], [1, 64, 16, 16], strides=[2, 1], pads=[0, 1, 1, 2])
+    assert emit.shape_args(CONV, values) == [64, 32, 15, 64, 16, 16, 3, 3, 2, 1, 1, 1, 0, 1, 1, 2]
+    assert CONV.size_names[8:] == CONV_ARGS
+    assert shapes.tensor_bytes(CONV, values) == [33 * 18 * 64 * 4, 9 * 64 * 64 * 4, 64 * 16 * 16 * 4]
+    dilated = conv_values([1, 64, 16, 16], [64, 64, 3, 3], dilations=[2, 3], pads=[2, 3, 2, 3])
+    assert [dilated[n] for n in ("O_H", "O_W") + CONV_ARGS] == [16, 16, 1, 1, 2, 3, 2, 3, 2, 3]
+
+
+def test_a_conv_without_attributes_has_stride_1_and_no_padding():
+    values = conv_values([1, 64, 18, 18], [64, 64, 3, 3])
+    assert [values[n] for n in ("O_H", "O_W") + CONV_ARGS] == [16, 16, 1, 1, 1, 1, 0, 0, 0, 0]
+
+
+@pytest.mark.parametrize("auto_pad,size,pads,out", [
+    ("VALID", 32, [0, 0, 0, 0], 15), ("SAME_UPPER", 32, [0, 0, 1, 1], 16), ("SAME_LOWER", 32, [1, 1, 0, 0], 16),
+    ("SAME_UPPER", 31, [1, 1, 1, 1], 16)])
+def test_auto_pad_stands_for_the_pads_onnx_defines(auto_pad, size, pads, out):
+    """A 3 x 3 kernel at stride 2: SAME_* pads to an output of ceil(size / 2), the odd cell at the end or the start."""
+    values = conv_values([1, 64, size, size], [64, 64, 3, 3], [1, 64, out, out], strides=[2, 2], auto_pad=auto_pad)
+    assert [values[n] for n in ("P_T", "P_L", "P_B", "P_R")] == pads and values["O_H"] == values["O_W"] == out
+
+
+def test_a_conv_the_kernel_does_not_take_is_refused_with_the_reason():
+    """Groups, another count of spatial axes, a kernel larger than the padded input, and an output extent that is
+    not the one ONNX shape inference recorded."""
+    with pytest.raises(ValueError, match="grouped convolution"):
+        conv_values([1, 64, 16, 16], [64, 1, 3, 3], group=64)
+    with pytest.raises(ValueError, match="a convolution over 1 spatial axes: the conv kernel takes two"):
+        conv_values([1, 64, 16], [64, 64, 3])
+    with pytest.raises(ValueError, match="a 3 x 3 kernel .dilations 4, 4. does not fit the padded input, 8 x 8"):
+        conv_values([1, 64, 8, 8], [64, 64, 3, 3], dilations=[4, 4])
+    with pytest.raises(ValueError, match="shape inference gives the output 64 x 16 x 16, and the strides, "
+                                         "dilations and pads give 64 x 8 x 8"):
+        conv_values([1, 64, 16, 16], [64, 64, 3, 3], [1, 64, 16, 16], strides=[2, 2], pads=[1, 1, 1, 1])
 
 
 def test_a_tog_directory_holds_the_sidecars_togsim_reads(tmp_path):
