@@ -8,10 +8,11 @@ set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SIM="${1:-$HERE/../../build/bin/Simulator}"
 INC="${2:-$HERE/../../include}"
-SRC_CFG="$HERE/../../../configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml"
+SRC_CFG="$HERE/../../configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml"
 OUT="$(mktemp -d)"
 sed -e 's/^core_spad_size_kb:.*/core_spad_size_kb: 48/' \
-    -e "s#^ramulator_config_path: \.\./#ramulator_config_path: $HERE/../../../#" "$SRC_CFG" > "$OUT/cfg.yml"
+    -e "s#^ramulator_config_path: \.\./#ramulator_config_path: $HERE/../../#" "$SRC_CFG" > "$OUT/cfg.yml"
+echo "systolic_array_split: none" >> "$OUT/cfg.yml"
 echo "200 0" > "$OUT/cyc.tsv"
 printf "1048576\n%.0s" 1 2 3 > "$OUT/trace_tensors.txt"   # tensors 1 MiB apart, as before packed layouts
 fail=0

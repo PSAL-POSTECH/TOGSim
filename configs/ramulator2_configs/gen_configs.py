@@ -14,7 +14,7 @@ import os
 
 # Add ramulator2 Python DSL to path
 RAMULATOR_PYTHON = os.path.join(os.path.dirname(__file__),
-                                "../../TOGSim/extern/ramulator2/python")
+                                "../../extern/ramulator2/python")
 sys.path.insert(0, RAMULATOR_PYTHON)
 
 import ramulator
@@ -107,7 +107,7 @@ def gen_hbm2_tpuv2():
     return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
 
 def gen_hbm3_tpuv6e():
-    dram = ramulator.dram.HBM3(org_preset="HBM3_8Gb", timing_preset="HBM3_6400Mbps")
+    dram = ramulator.dram.HBM3(org_preset="HBM3_8Gb", timing_preset="HBM3_6400Mbps", column=256)
     return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
 
 def gen_ddr4():
