@@ -3,7 +3,6 @@
 #include "Memfetch.h"
 #include "Cache.h"
 #include "Instruction.h"
-#include "IntervalTree.h"
 
 class L2CacheBase {
 public:
@@ -49,7 +48,6 @@ public:
 
 class L2DataCache : public L2CacheBase {
 public:
-  typedef IntervalTree<new_addr_type, int> CachePlan;
   L2DataCache(std::string name,  CacheConfig &cache_config, uint32_t id, cycle_type *core_cycle,
     uint32_t l2d_hit_latency, uint32_t num_cores, std::queue<mem_fetch*> *to_xbar_queue,
     std::queue<mem_fetch*> *from_xbar_queue);

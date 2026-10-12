@@ -3,8 +3,6 @@
 #include <chrono>
 #include <filesystem>
 #include <sstream>
-#include <thread>
-#include <atomic>
 
 #include "Simulator.h"
 #include "helper/CommandLineParser.h"
@@ -12,7 +10,6 @@
 #include "togsim_trace_bridge.h"  // ... and bridge its trace to a TileGraph
 
 namespace fs = std::filesystem;
-namespace po = boost::program_options;
 
 // `trace_tensor_tile: [rows, cols]` lays every trace tensor out in tiles of that many 4-byte
 // elements; a tile keeps its bytes, so rows scale by 4/elem (bf16 (16,128), as TPU packs it).

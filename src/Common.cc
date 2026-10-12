@@ -163,8 +163,6 @@ SimulationConfig initialize_config(const YAML::Node& config,
   if (config["icnt_injection_ports_per_core"])
     parsed_config.icnt_injection_ports_per_core = config["icnt_injection_ports_per_core"].as<uint32_t>();
 
-  if (config["scheduler"])
-    parsed_config.scheduler_type = config["scheduler"].as<std::string>();
   if (config["num_partition"])
     parsed_config.num_partition = config["num_partition"].as<uint32_t>();
   if (config["partition"]) {

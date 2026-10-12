@@ -10,7 +10,6 @@
 #include "Dram.h"
 #include "Interconnect.h"
 #include "scheduler/Scheduler.h"
-#include "Model.h"
 
 namespace fs = std::filesystem;
 
@@ -36,7 +35,6 @@ class Simulator {
   }
   void run_simulator();
   cycle_type get_core_cycle() { return _core_cycles; }
-  int until(cycle_type untile_cycle);
   int get_partition_id(int core_id) { return _config.partiton_map[core_id]; }
   std::unique_ptr<Scheduler>& get_partition_scheduler(int core_id) { return _partition_scheduler.at(get_partition_id(core_id)); }
   void print_core_stat();
@@ -79,7 +77,6 @@ class Simulator {
   SimulationConfig _config;
   YAML::Node _hardware_config_yaml;
   uint32_t _n_cores;
-  uint32_t _n_sp_cores;
   uint32_t _noc_node_per_core;
   uint32_t _n_memories;
   uint32_t _memory_req_size;
