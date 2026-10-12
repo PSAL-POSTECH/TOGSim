@@ -45,12 +45,21 @@ def _text_attr(node, name, default: str) -> str:
     return default
 
 
+def _counts(node, name, default: list[int], least: int) -> list[int]:
+    """The attribute `name` of `node` as the kernel takes it: as many integers as `default`, each at least `least`.
+    Another count or a smaller value is refused, as the kernel would refuse it or the tiling divide by it."""
+    got = attr(node, name, default)
+    if not isinstance(got, list) or len(got) != len(default) or min(got) < least:
+        raise ValueError(f"{name} {got} is not {len(default)} integers of at least {least}")
+    return got
+
+
 def _conv_pads(node, in_hw, kernel_hw, strides, dilations) -> list[int]:
     """The four paddings of a Conv as ONNX orders them, top left bottom right: its `pads`, or what `auto_pad`
     stands for (VALID none; SAME_* an output of ceil(input / stride), the odd cell after or before)."""
     auto_pad = _text_attr(node, "auto_pad", "NOTSET")
     if auto_pad == "NOTSET":
-        return list(attr(node, "pads", [0, 0, 0, 0]))
+        return _counts(node, "pads", [0, 0, 0, 0], 0)
     if auto_pad == "VALID":
         return [0, 0, 0, 0]
     if auto_pad not in ("SAME_UPPER", "SAME_LOWER"):
@@ -75,8 +84,8 @@ def _conv_dims(node, shapes) -> dict[str, int]:
         raise ValueError("grouped convolution: no library kernel takes a group count")
     o_c, _, k_h, k_w = w
     i_c, i_h, i_w = x[1], x[2], x[3]
-    s_h, s_w = attr(node, "strides", [1, 1])
-    d_h, d_w = attr(node, "dilations", [1, 1])
+    s_h, s_w = _counts(node, "strides", [1, 1], 1)
+    d_h, d_w = _counts(node, "dilations", [1, 1], 1)
     p_t, p_l, p_b, p_r = _conv_pads(node, (i_h, i_w), (k_h, k_w), (s_h, s_w), (d_h, d_w))
     o_h = (i_h + p_t + p_b - (k_h - 1) * d_h - 1) // s_h + 1
     o_w = (i_w + p_l + p_r - (k_w - 1) * d_w - 1) // s_w + 1
@@ -108,7 +117,11 @@ def _pool_dims(node, shapes) -> tuple[int, int]:
 
 def constants(node, kernel: KernelRef, shapes: dict, hw: Hardware) -> dict[str, int]:
     """Every name of `kernel` (size, tile and hardware) with its value for `node`. conv walks the kernel
-    positions itself, so its tile is O_W columns of O_C by I_C channels, TILE_I_H output rows at a time."""
+    positions itself, so its tile is O_W columns of O_C by I_C channels, TILE_I_H output rows at a time. An input
+    with an extent below 1 is refused: no kernel takes a dimension of 0, and no tile divides one."""
+    for name in node.input:
+        if any(extent < 1 for extent in shapes.get(name, ())):
+            raise ValueError(f"input {name!r} is {' x '.join(map(str, shapes[name]))}: a tensor without elements")
     out: dict[str, int] = {}
 
     if kernel.stem == "conv":

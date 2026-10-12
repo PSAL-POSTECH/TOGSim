@@ -127,6 +127,13 @@ def test_a_node_that_did_not_run_exits_3_with_the_report_written(tmp_path):
     ("ONNX shape inference gives the output 64 x 3 x 3", dict(out=[1, 64, 3, 3])),
     ("auto_pad 'FULL' is not one ONNX defines", dict(auto_pad="FULL")),
     ("8 columns is under one matmul instruction", dict(w=(8, 64, 3, 3))),
+    ("strides [0, 0] is not 2 integers of at least 1", dict(strides=[0, 0])),
+    ("strides [0, 0] is not 2 integers of at least 1", dict(strides=[0, 0], auto_pad="SAME_UPPER")),
+    ("strides [1] is not 2 integers of at least 1", dict(strides=[1])),
+    ("dilations [0, 0] is not 2 integers of at least 1", dict(dilations=[0, 0])),
+    ("pads [-1, -1, -1, -1] is not 4 integers of at least 0", dict(pads=[-1, -1, -1, -1])),
+    ("pads [1, 1] is not 4 integers of at least 0", dict(pads=[1, 1])),
+    ("input 'w' is 64 x 0 x 3 x 3: a tensor without elements", dict(w=(64, 0, 3, 3))),
 ])
 def test_a_conv_the_frontend_refuses_exits_3_with_the_reason_in_the_report(said, graph, tmp_path):
     done = frontend(tmp_path, conv(tmp_path, **graph))

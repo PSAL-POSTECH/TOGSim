@@ -87,6 +87,24 @@ def test_a_conv_the_kernel_does_not_take_is_refused_with_the_reason():
         conv_values([1, 64, 16, 16], [64, 64, 3, 3], [1, 64, 16, 16], strides=[2, 2], pads=[1, 1, 1, 1])
 
 
+@pytest.mark.parametrize("attributes,said", [
+    (dict(strides=[0, 1]), "strides .0, 1. is not 2 integers of at least 1"),
+    (dict(strides=[2]), "strides .2. is not 2 integers of at least 1"),
+    (dict(dilations=[1, -1]), "dilations .1, -1. is not 2 integers of at least 1"),
+    (dict(pads=[0, 0, 0, -1]), "pads .0, 0, 0, -1. is not 4 integers of at least 0"),
+    (dict(pads=[1, 1]), "pads .1, 1. is not 4 integers of at least 0")])
+def test_a_conv_with_a_stride_a_dilation_or_a_pad_no_convolution_has_is_refused(attributes, said):
+    with pytest.raises(ValueError, match=said):
+        conv_values([1, 64, 16, 16], [64, 64, 3, 3], **attributes)
+
+
+@pytest.mark.parametrize("op,kernels", sorted(OPS.items()))
+def test_a_node_over_a_tensor_without_elements_is_refused_whatever_its_kernel(op, kernels):
+    node = helper.make_node(op, ["x", "w"], ["y"], name="empty")
+    with pytest.raises(ValueError, match="input 'x' is 4 x 0 x 8: a tensor without elements"):
+        shapes.constants(node, kernels[0], {"x": [4, 0, 8], "w": [8, 8], "y": [4, 8]}, HW)
+
+
 def test_a_tog_directory_holds_the_sidecars_togsim_reads(tmp_path):
     so = tmp_path / "kernel.so"
     so.write_bytes(b"\x7fELF")
