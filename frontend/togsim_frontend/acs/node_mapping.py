@@ -1,3 +1,4 @@
+"""The compute nodes of each kernel in kernels/, by tile_id, and the operations a vector node runs per element."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ class Op:
 
 class NodeDesc:
     name: str
-    compute_type: str       # "vector" | "matmul" | "preload"
+    compute_type: str       # "vector" | "systolic"
     ops: tuple = ()
 
 
@@ -38,19 +39,18 @@ class KernelDesc:
 def _vec(name, *ops):
     return NodeDesc(name, "vector", tuple(ops))
 
-#: Kernel name -> its compute nodes, in the order the .cpp emits them.
+#: Kernel name -> its compute nodes, by tile_id. A "systolic" node is a whole block of the kernel's K loop:
+#: every preload and matmul the array runs for it is one compute.
 KERNELS: dict[str, KernelDesc] = {
 
     "gemm": KernelDesc("gemm", (
         _vec("acc_init", Op(ELEMENTWISE, 1, "zero the accumulator")),
-        NodeDesc("preload", "preload"),
-        NodeDesc("matmul", "matmul"),
+        NodeDesc("matmul", "systolic"),
     )),
 
     "conv": KernelDesc("conv", (
         _vec("acc_init", Op(ELEMENTWISE, 1, "zero the accumulator")),
-        NodeDesc("preload", "preload"),
-        NodeDesc("matmul", "matmul"),
+        NodeDesc("matmul", "systolic"),
     )),
 
     "softmax": KernelDesc("softmax", (
@@ -122,16 +122,14 @@ KERNELS: dict[str, KernelDesc] = {
     "flatten": KernelDesc("flatten", ()),
 
     "attention": KernelDesc("attention", (
-        NodeDesc("qk_preload", "preload"),
-        NodeDesc("qk_matmul", "matmul"),
+        NodeDesc("qk", "systolic"),
         _vec("rowmax", Op(REDUCTION, MAXMIN, "running row max")),
         _vec("sub", Op(ELEMENTWISE, 1, "s - max")),
         _vec("exp", Op(ELEMENTWISE, 1, "exp")),
         _vec("rowsum", Op(REDUCTION, 1, "fold the row sum")),
         _vec("mac", Op(ELEMENTWISE, 2, "running l")),
         _vec("rescale", Op(ELEMENTWISE, 2, "rescale the accumulator")),
-        NodeDesc("sv_preload", "preload"),
-        NodeDesc("sv_matmul", "matmul"),
+        NodeDesc("sv", "systolic"),
         _vec("normalize",
              Op(ELEMENTWISE, 1, "/ l"),
              Op(ELEMENTWISE, 1, "scale")),
