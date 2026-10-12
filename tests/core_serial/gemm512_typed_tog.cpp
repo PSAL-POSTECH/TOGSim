@@ -5,7 +5,7 @@
 //              dir: 0=load (MOVIN), 1=store (MOVOUT); indirect: 0 or 1
 //   togsim_compute(ctx, tile_id, compute_type, ndim, dims[], read_bufs[], n_read,
 //                  write_bufs[], n_write)   compute_type: 0=vector, 1=matmul, 2=preload,
-//                                          3=cross-lane
+//                                          3=cross-lane (1-3 DEPRECATED: typed grouping)
 //   togsim_memory_barrier(ctx, sem, expected)   // expected = elements signaled on sem
 //   togsim_dispatch(ctx, tile_fn, iv[], n_iv, key)   // run one work-item
 //   togsim_kernel(ctx, shape_args[], n_shape_args)   // TOG entry point

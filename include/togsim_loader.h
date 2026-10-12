@@ -31,7 +31,7 @@ struct TraceRec {
   int64_t  index_seq;     // ... and this dma's rank among its indirect dmas
   // COMPUTE
   uint64_t tile_id;
-  int32_t  compute_type;  // 0 vector / 1 matmul / 2 preload / 3 cross-lane (Core unit enum)
+  int32_t  compute_type;  // 0, or DEPRECATED 1 matmul / 2 preload / 3 cross-lane (TypedGrouping.h)
   int64_t  cycle;         // looked up from the cycle table
   int64_t  overlapping;   // looked up from the cycle table
 };

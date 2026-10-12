@@ -28,9 +28,9 @@ struct SimulationConfig {
   // load that would overflow the spad waits for a consumer to free a tile. 0 = unset
   // -> disabled.
   uint32_t core_spad_size_kb = 0;
-  // SA weight-buffer depth (sec 10.4): weight tiles a systolic array holds; a
-  // preload stalls until a slot frees (its matmuls finished). 2 = weight
-  // double-buffer (convention default, tunable). 0 = disabled.
+  // DEPRECATED typed grouping. SA weight-buffer depth: weight tiles a systolic array holds; a
+  // preload stalls until a slot frees (its matmuls finished). 2 = weight double-buffer
+  // (convention default, tunable). 0 is refused.
   uint32_t sa_weight_buffer_depth = 2;
   // systolic_array_split: round_robin (default) -- a compute's array-unit rows spread over
   // min(N, ceil(rows / vpu_num_lanes)) arrays (needs --unit_table); none ignores N.

@@ -53,7 +53,7 @@ typedef enum {
 //              dir: 0=load (MOVIN), 1=store (MOVOUT); indirect: 0 or 1
 //   togsim_compute(ctx, tile_id, compute_type, ndim, dims[], read_bufs[], n_read,
 //                  write_bufs[], n_write)   compute_type: 0=vector, 1=matmul, 2=preload,
-//                                          3=cross-lane
+//                                          3=cross-lane (1-3 DEPRECATED: typed grouping)
 //   togsim_memory_barrier(ctx, sem, expected)   // expected = elements signaled on sem
 //   togsim_dispatch(ctx, tile_fn, iv[], n_iv, key)   // run one work-item
 //   togsim_kernel(ctx, shape_args[], n_shape_args)   // TOG entry point
@@ -66,9 +66,9 @@ void togsim_dma(EmitCtx* ctx, int32_t dir, int32_t arg_id,
                 const int64_t* write_bufs, int32_t n_write,
                 int32_t indirect);
 
-// Emit a fixed-size tile compute. Cost comes from the tile_id->cycle table,
-// not from `dims`. `compute_type` (0 vector / 1 matmul / 2 preload / 3 cross-lane) routes
-// the op to the VPU, the systolic array or the cross-lane unit.
+// Emit a fixed-size tile compute. Cost comes from the tile_id->cycle table, not from `dims`.
+// `compute_type` 0 holds the core for its cycles. DEPRECATED, the typed grouping: 1 matmul and
+// 2 preload route it to a systolic array, 3 cross-lane to the cross-lane unit; kept for comparison.
 void togsim_compute(EmitCtx* ctx, uint64_t tile_id, int32_t compute_type,
                     int32_t ndim, const int64_t* dims,
                     const int64_t* read_bufs, int32_t n_read,

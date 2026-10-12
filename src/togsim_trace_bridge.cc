@@ -163,6 +163,8 @@ struct BuildState {
     const std::vector<int64_t>& stated = tog.spad_buffer_bytes();
     for (size_t i = 0; i < tog.num_items(); i++)
       for (const TraceRec& t : tog.run_item(i)) {
+        if (t.kind == TraceRec::COMPUTE && typed::is_typed(t.compute_type))
+          typed::Units::warn_deprecated_once(so_path);
         if (t.kind != TraceRec::DMA) continue;
         for (int64_t b : moved_bufs(t)) {
           if (b < 0 || (size_t)b >= stated.size() || stated[b] <= 0)

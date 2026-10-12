@@ -112,6 +112,15 @@ void Units::skip_matmuls_behind(const std::shared_ptr<Instruction>& bar) {
       child->set_compute_cycle(0);
 }
 
+void Units::warn_deprecated_once(const char* so_path) {
+  static bool warned = false;
+  if (warned) return;
+  warned = true;
+  spdlog::warn("[TOGSim] {} uses the typed grouping (compute_type 1, 2 or 3), which is deprecated: it "
+               "replays for comparison and will be removed. Emit the TOG with the segment grouping "
+               "(compute_type 0 only)", so_path);
+}
+
 void Units::cycle(uint64_t core_cycle, void* core, Finish finish) {
   for (uint32_t i = 0; i < _num_arrays; i++) {
     bool retry = true;

@@ -1,7 +1,7 @@
 #pragma once
-// TypedGrouping.h -- what TOGSim models only for a TOG of the typed grouping, where the compiler
-// classifies each compute (compute_type 1 matmul / 2 preload / 3 cross-lane): the per-type
-// pipelines, the weight slots and the occupancy edges. A TOG whose computes are all 0 uses none.
+// TypedGrouping.h -- DEPRECATED. What TOGSim models only for a TOG of the typed grouping, where
+// the compiler classifies each compute (compute_type 1 matmul / 2 preload / 3 cross-lane): the
+// per-type pipelines, the weight slots and the occupancy edges. A TOG of 0s alone uses none.
 #include <cstdint>
 #include <memory>
 #include <queue>
@@ -52,6 +52,8 @@ class Units {
   void count_issued(int compute_type);
   // A barrier over a sparse tag costs the matmuls behind it nothing.
   static void skip_matmuls_behind(const std::shared_ptr<Instruction>& bar);
+  // Warn, once per run, that the TOG `so_path` uses the deprecated typed compute types.
+  static void warn_deprecated_once(const char* so_path);
 
   // One core cycle of the array pipelines, then of the cross-lane pipeline.
   void cycle(uint64_t core_cycle, void* core, Finish finish);
