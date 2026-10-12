@@ -99,8 +99,11 @@ class BufferWriters {
   std::shared_ptr<Instruction> _initializer;   // the non-MATMUL member of _all, if any
 };
 
-// What each spad buffer holds, as its last async load brought it: a tensor's bytes at an address in a shape. A
-// later load of the same thing into the same buffer finds the data there: it shares the first load's tag key, which
+// A spad buffer of one core: every core has a spad of its own, and a kernel names the same buffer ids on each.
+using CoreBuf = std::pair<int32_t, int64_t>;
+
+// What each core's spad buffer holds, as its last async load brought it: a tensor's bytes at an address in a shape.
+// A later load of the same thing into that buffer finds the data there: it shares the first load's tag key, which
 // the Core skips, and opens no version. A store to the tensor, or anything else written into the buffer, ends that.
 struct Resident {
   struct What {
@@ -112,7 +115,7 @@ struct Resident {
       return arg == o.arg && bits == o.bits && addr == o.addr && dims == o.dims && strides == o.strides;
     }
   };
-  std::map<int64_t, What> held;   // buf -> its content
+  std::map<CoreBuf, What> held;   // its content
   int64_t next_tag = 0;
 
   // The shared tag of load `t`, and whether it repeats what its buffer holds; -1 for any other
@@ -121,7 +124,7 @@ struct Resident {
     using togsim::TraceRec;
     repeat = false;
     if (t.kind == TraceRec::COMPUTE) {
-      for (int64_t b : t.write_bufs) held.erase(b);
+      for (int64_t b : t.write_bufs) held.erase({t.core, b});
       return -1;
     }
     if (t.kind != TraceRec::DMA) return -1;
@@ -131,17 +134,18 @@ struct Resident {
       return -1;
     }
     if (!t.is_async || t.indirect || t.arg_id < 0 || t.write_bufs.size() != 1) {
-      for (int64_t b : t.write_bufs) held.erase(b);
+      for (int64_t b : t.write_bufs) held.erase({t.core, b});
       return -1;
     }
     What now{t.arg_id, t.elem_bits, t.addr, t.dims, t.strides, 0};
-    auto it = held.find(t.write_bufs.front());
+    const CoreBuf into{t.core, t.write_bufs.front()};
+    auto it = held.find(into);
     if (it != held.end() && it->second.same(now)) {
       repeat = true;
       return it->second.tag;
     }
     now.tag = next_tag++;
-    held[t.write_bufs.front()] = now;
+    held[into] = now;
     return now.tag;
   }
 };
@@ -175,12 +179,12 @@ struct BuildState {
   std::set<int64_t> cur_tile_bufs;
   size_t cur_tile_footprint = 0;
 
-  // SRAM buffer versions, NOT scoped to a work-item: the spad is one physical
-  // resource, so a buffer reused by the next tile is a new version that waits for
+  // SRAM buffer versions, NOT scoped to a work-item: a core's spad is one physical
+  // resource, so a buffer reused by its next tile is a new version that waits for
   // the old one to free. sram_schedule() precomputes the schedule; see below.
   int64_t next_alloc = 0;
-  std::map<int64_t, int64_t> cur_alloc;   // buf -> current version id
-  std::map<int64_t, bool> open_ver;       // buf -> version still accepting writes
+  std::map<CoreBuf, int64_t> cur_alloc;   // buf -> current version id
+  std::map<CoreBuf, bool> open_ver;       // buf -> version still accepting writes
   std::vector<char> has_readers;                        // version -> ever read?
   std::vector<std::pair<size_t, size_t>> last_reader;   // version -> (work-item, record)
   int64_t version_base = 0;               // what a core knows this kernel's version 0 by: see sram_schedule
@@ -302,8 +306,8 @@ struct BuildState {
     static int64_t versions_taken = 0;
     using togsim::TraceRec;
     int64_t alloc = 0;
-    std::map<int64_t, int64_t> cur;    // buf -> current version id
-    std::map<int64_t, bool> open;      // buf -> version still accepting writes
+    std::map<CoreBuf, int64_t> cur;    // buf -> current version id
+    std::map<CoreBuf, bool> open;      // buf -> version still accepting writes
     std::vector<int64_t> reads, opens;
     Resident there;
 
@@ -315,16 +319,16 @@ struct BuildState {
         sram_effects(t, reads, opens);
         if (repeat) opens.clear();                   // the version it would open is still held
         for (int64_t b : reads) {
-          auto f = cur.find(b);
+          auto f = cur.find({t.core, b});
           if (f == cur.end()) continue;              // untracked buffer
           has_readers[f->second] = 1;
           last_reader[f->second] = {wi, pos};        // keep the LAST one
-          open[b] = false;                           // next write starts a new version
+          open[{t.core, b}] = false;                 // next write starts a new version
         }
         for (int64_t b : opens)
-          if (!cur.count(b) || !open[b]) {           // a read closed it -> new version
-            cur[b] = alloc++;
-            open[b] = true;
+          if (!cur.count({t.core, b}) || !open[{t.core, b}]) {   // a read closed it -> new version
+            cur[{t.core, b}] = alloc++;
+            open[{t.core, b}] = true;
             has_readers.push_back(0);
             last_reader.emplace_back((size_t)-1, (size_t)-1);
           }
@@ -424,15 +428,16 @@ struct BuildState {
     if (repeat) opens.clear();                     // a load of what the buffer holds: no version
 
     for (int64_t b : reads) {                      // consume the current version
-      auto it = cur_alloc.find(b);
+      auto it = cur_alloc.find({t.core, b});
       if (it == cur_alloc.end()) continue;         // untracked buffer
       // Its LAST reader frees it. sram_schedule() already found where that reader
       // sits, so tag it here rather than retaining every reader to end-of-stream.
       if (last_reader.at(it->second) == std::make_pair(item, rec))
         inst->add_sram_release(version_base + it->second);
-      open_ver[b] = false;                         // next write starts a new version
+      open_ver[{t.core, b}] = false;               // next write starts a new version
     }
-    for (int64_t b : opens) {
+    for (int64_t bid : opens) {
+      const CoreBuf b{t.core, bid};
       const bool fresh = !cur_alloc.count(b) || !open_ver[b];   // a read closed it
       if (fresh) {
         cur_alloc[b] = next_alloc++;
@@ -448,7 +453,7 @@ struct BuildState {
         // carry b's size explicitly (it was never DMA'd in). Further producing
         // writes into an already-open version are the same physical bytes.
         inst->set_sram_alloc(tracked(cur_alloc[b]));
-        inst->set_sram_footprint(buf_bytes.at(b));
+        inst->set_sram_footprint(buf_bytes.at(bid));
       }
     }
   }
