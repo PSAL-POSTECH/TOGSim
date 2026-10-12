@@ -1,5 +1,6 @@
 """DEPRECATED typed grouping: every TOG here uses compute_type 1, 2 or 3. Delete this directory with the mode.
-What they pin is not typed-only (a semaphore re-wait, one compute per core, systolic_array_split); the TOGs are.
+What they pin is not typed-only (a semaphore re-wait, the spad a work-item needs at once, one compute per core,
+systolic_array_split); the TOGs are.
 Every run here loads its TOG: the refusals that end before one is loaded are in tests/array_split/."""
 from pathlib import Path
 
@@ -29,6 +30,15 @@ def rewait_follows_inplace_write(t):
 
 def rewait_with_wrong_count(t):
     rewait(t, "WRONG_COUNT").expect_refused("re-wait expects another element count", exit=1)
+
+
+def held_through_overlap_refused(t):
+    """A 24 KB spad against the 32 KB the matmul finds held: one of the two loads reaches it only through the
+    preload it overlaps (an edge released at issue), and the refusal counts that load too."""
+    run = t.simulate(t.tog("held_through_overlap_tog.cpp"),
+                     t.machine(core_spad_size_kb=24, systolic_array_split="none"), cycles=[200], timeout=60)
+    run.expect_refused("work-item 0 (key 0) needs 32768 bytes in the spad at once, and a core's spad holds 24576",
+                       exit=1)
 
 
 def gemm512(t, grid=(1, 1), cycles=GEMM512_CYCLES, units=GEMM512_UNITS, **machine):
@@ -127,6 +137,7 @@ def split_refused(saying, exit, **given):
 CASES = [
     Case("semaphore.rewait_follows_inplace_write", rewait_follows_inplace_write),
     Case("semaphore.refused.rewait_with_wrong_count", rewait_with_wrong_count),
+    Case("spad_capacity.refused.held_through_overlap", held_through_overlap_refused),
     Case("one_compute_per_core.gemm512_one_work_item", gemm512_one_work_item),
     Case("one_compute_per_core.gemm512_two_work_items", gemm512_two_work_items),
     Case("one_compute_per_core.crosslane_beside_vector", crosslane_beside_vector),

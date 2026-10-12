@@ -156,8 +156,19 @@ the scratchpad.
 - The machine's `core_spad_size_kb` is the spad of one core. A core keeps two work-items in flight,
   or one if a work-item's footprint is more than half the spad (`max_dispatch` on the
   `TILE_SCHEDULED` line). Without the key the spad is unlimited.
-- `core_spad_size_kb` must be at least the largest footprint: the hello TOG, with a footprint of
-  32768 bytes, replays in a spad of 32 KB. In a smaller one a run cannot finish
+- `core_spad_size_kb` must hold what a work-item needs **at once**: the most that one of its
+  instructions finds in the spad when it is issued, whatever the order of issue. That is the bytes
+  the instruction occupies itself (a load its data tile, a compute a buffer it writes first), plus
+  the bytes of every buffer that was filled by an instruction it waits for and is not freed before
+  it, or an instruction that waits for it, is issued. An instruction is issued only while that
+  fits, so a work-item that needs more would never end: its TOG is
+  [refused](#what-gets-a-run-refused) while it is loaded, before anything is simulated. The hello
+  TOG holds its two buffers together at the compute, 32768 bytes: it replays in a spad of 32 KB
+  and is refused in a smaller one.
+- A work-item that names more bytes than the spad without holding them together is not refused:
+  its loads wait for the spad. A fill that its reader does not wait for is not counted. The
+  refusal does not cover every run that stops for want of spad: one that depends on the order of
+  issue, or on what another work-item holds, is not seen while loading
   ([known limitations](running.md#known-limitations)).
 
 ## Indirect DMAs
@@ -303,12 +314,18 @@ needs a unit table that has `Systolic` rows**. To run without one, set
 | `[TOGSim] systolic_array_split: the unit table has no array unit Systolic` | 1 | The table has no row for the array unit. | Add a `Systolic` row, or turn the split off. |
 | `[TOGSim] <dir>/tog_tensors.txt is absent: the TOG's tensor arguments have no addresses` | 1 | No `tog_tensors.txt` beside `tog.so`. | Create it. |
 | `togsim: dlopen failed: valid.so: cannot open shared object file: No such file or directory` | 1 | `--tog_so` has no `/` in it, so the loader searches the library path, not the current directory. | Write `./valid.so`. |
-| `[Simulator] simulation wedged at cycle 52837: work remains but nothing is in flight -- the per-core spad (core_spad_size_kb) is too small to hold a kernel's working set. Increase it.` | 1 | `core_spad_size_kb` is smaller than a work-item's `spad_footprint`. | Raise it to at least the footprint. |
+| `[TOGSim] TOG <so>: work-item 0 (key 0) needs 32768 bytes in the spad at once, and a core's spad holds 16384 (core_spad_size_kb: 16)` | 1 | A work-item holds more bytes in the spad [at once](#buffers-and-the-scratchpad) than `core_spad_size_kb`. | Raise it to at least those bytes, or free a buffer before the next is filled. |
 | `Config file <path>/configs/ramulator2_configs/HBM3_TPUv6e.yaml does not exist!` | 255 | A shipped config was copied out of `configs/`; its `../configs/...` path no longer resolves. | Make the path absolute ([how](machine.md#changing-the-machine)). |
 | `what():  Config key num_cores not found` | 134 | The machine config lacks a required key. | Add it ([keys](config-keys.md)). |
 
 A message that starts with `togsim: dlopen failed:` and names an undefined symbol means the TOG
 calls a function that neither it nor TOGSim defines.
+
+In a session a refusal is the error of the command that met it, `[TOGSim] Error processing command
+<n> (type: LAUNCH_KERNEL): ...`. The spad refusal is always the launch's. When the config sets
+`core_spad_size_kb` the work-items are built once while the TOG is loaded, so a broken semaphore
+contract is the launch's error too; without a spad size it is the error of the `DEVICE_SYNC` that
+runs the kernel.
 
 TOGSim has more refusals than a first TOG runs into. These are not in the example; all exit 1:
 
@@ -316,6 +333,7 @@ TOGSim has more refusals than a first TOG runs into. These are not in the exampl
 |---|---|
 | `re-wait expects another element count` | A second barrier on a semaphore, with no new loads, states another count than the first. |
 | `issued tile is not supported format` | A DMA has `ndim` 0, `ndim` above 4, or null `dims`. |
+| `[Simulator] simulation wedged at cycle <n>: work remains but nothing is in flight` | A work-item waits for spad that is never freed, in a way the loader does not see ([known limitations](running.md#known-limitations)). |
 | `--unit_table <file>: cannot open` | The unit table is not there. |
 | `unit <name> disagrees with line <n> on unit_of_work/capacity` | Two rows of one unit differ in `unit_of_work` or `capacity_per_cycle`. |
 | `second row for tile <id> unit <name>` | Two rows for the same `tile_id` and unit. |

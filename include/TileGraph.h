@@ -17,6 +17,9 @@ class TileSubGraph {
   const std::shared_ptr<Tile> peek_tile();
   std::shared_ptr<Tile> get_tile();
   int get_id() { return _id; }
+  // The id the next subgraph takes, and the way to hand ids back (see Instruction::rewind_global_inst_id).
+  static int next_id() { return _next_id; }
+  static void rewind_id(int id) { _next_id = id; }
   void set_core_id(int core_id) { _core_id = core_id; }
   int get_core_id() { return _core_id; }
   void init_cache_plan(std::shared_ptr<IntervalTree<unsigned long long,int>> plan) { _cache_plan = plan; }
