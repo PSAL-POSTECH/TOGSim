@@ -199,7 +199,7 @@ def test_an_unsupported_machine_is_an_error_before_anything_is_read_or_run(tmp_p
     config = paths.root() / "configs" / "systolic_ws_256x256_c1_simple_noc_tpuv6e.yml"
     status = frontend.main([str(tmp_path / "model.onnx"), "--config", str(config), "--out", str(tmp_path / "out")])
     said = capsys.readouterr().err
-    assert status == frontend.EXIT_UNSUPPORTED_MACHINE == 2
+    assert status == frontend.EXIT_UNSUPPORTED_MACHINE
     assert str(config) in said and "SA=256, vpu_num_lanes=256" in said
     assert "65536 (SA * vpu_num_lanes = 256 * 256)" in said
     assert not (tmp_path / "out").exists()

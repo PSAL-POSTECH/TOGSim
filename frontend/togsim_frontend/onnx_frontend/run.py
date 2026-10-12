@@ -1,5 +1,6 @@
 """Run an ONNX graph on TOGSim: each node's kernel is replayed on its own and the cycles are summed. A node that
-does not run is listed by name with the reason and left out of the total, and the exit status then says so."""
+does not run is listed by name with the reason and left out of the total, and the exit status then says so. The
+statuses are those of status.py."""
 from __future__ import annotations
 
 import argparse
@@ -7,20 +8,16 @@ import json
 import os
 import re
 import subprocess
-import sys
 
 from .. import paths
 from ..acs import cycles as acs_cycles
 from ..acs import node_mapping
+from ..status import EXIT_NODES_NOT_RUN, EXIT_OK, EXIT_UNSUPPORTED_MACHINE, fail
 from . import emit, graph, shapes, tiling
 from .config import read_hardware
 from .onnx_ops import resolve
 
 CYCLE_RE = re.compile(r"Total execution cycles:\s*(\d+)")
-#: Exit status when the config is a machine the tiles do not fit: nothing was run.
-EXIT_UNSUPPORTED_MACHINE = 2
-#: Exit status when a node did not run: the report is written, and its total does not cover the whole model.
-EXIT_NODES_NOT_RUN = 3
 
 
 def simulate(tog_dir: str, config: str) -> int:
@@ -98,11 +95,9 @@ def main(argv=None) -> int:
     hw = read_hardware(args.config, args.sa)
     why = tiling.unsupported(hw)
     if why:
-        print(f"error: {args.config} (SA={hw.sa}, vpu_num_lanes={hw.vlane}) is not a machine the frontend maps a "
-              f"model on. Its systolic tiles are the same on every machine, and here:", file=sys.stderr)
-        for line in why:
-            print(f"  - {line}", file=sys.stderr)
-        return EXIT_UNSUPPORTED_MACHINE
+        return fail(EXIT_UNSUPPORTED_MACHINE, "\n  - ".join(
+            [f"{args.config} (SA={hw.sa}, vpu_num_lanes={hw.vlane}) is not a machine the frontend maps a model on. "
+             f"Its systolic tiles are the same on every machine, and here:", *why]))
     os.makedirs(args.out, exist_ok=True)
     model, shp = graph.load(args.model, optimize_graph=not args.no_optimize)
 
@@ -167,7 +162,7 @@ def main(argv=None) -> int:
         print(f"INCOMPLETE     : {len(refused)} node(s) did not run, so the total does not cover the whole model "
               f"(exit status {EXIT_NODES_NOT_RUN})")
         return EXIT_NODES_NOT_RUN
-    return 0
+    return EXIT_OK
 
 if __name__ == "__main__":
     raise SystemExit(main())
