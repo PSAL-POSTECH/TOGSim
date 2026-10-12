@@ -1,6 +1,7 @@
 """Each exit status of status.py, reached through the two entry points as a caller runs them: `python -m` in a
 process of its own. Only the runs marked `simulator` need build/bin/Simulator."""
 import json
+import math
 import os
 import subprocess
 import sys
@@ -11,6 +12,7 @@ import pytest
 from onnx import TensorProto, helper
 
 from togsim_frontend import paths, status
+from togsim_frontend.acs.node_mapping import KERNELS
 
 simulator = pytest.mark.skipif(not paths.simulator().is_file() and not os.environ.get("TOGSIM_REQUIRE_SIMULATOR"),
                                reason=f"{paths.simulator()} is absent: build the simulator first")
@@ -29,11 +31,23 @@ def run(module, *args, env=None, code=None):
     return subprocess.run([sys.executable, *head, *map(str, args)], capture_output=True, text=True, env=environ)
 
 
-def model(tmp_path, op):
-    """An ONNX model of one `op` node over a 64 x 256 input."""
-    io = [helper.make_tensor_value_info(name, TensorProto.FLOAT, [64, 256]) for name in ("x", "y")]
+def model(tmp_path, op, shape=(64, 256)):
+    """An ONNX model of one `op` node over an input of `shape`."""
+    io = [helper.make_tensor_value_info(name, TensorProto.FLOAT, list(shape)) for name in ("x", "y")]
     graph = helper.make_graph([helper.make_node(op, ["x"], ["y"], name=op.lower())], "g", io[:1], io[1:])
     path = tmp_path / f"{op.lower()}.onnx"
+    onnx.save(helper.make_model(graph, opset_imports=[helper.make_opsetid("", 13)]), str(path))
+    return path
+
+
+def conv(tmp_path, x=(1, 64, 16, 16), w=(64, 64, 3, 3), out=None, **attributes):
+    """An ONNX model of one Conv node of input `x` and weights `w` with `attributes`; `out` is the output shape the
+    model declares, left to shape inference when not given."""
+    weights = helper.make_tensor("w", TensorProto.FLOAT, list(w), [0.0] * math.prod(w))
+    io = [helper.make_tensor_value_info(name, TensorProto.FLOAT, shape) for name, shape in (("x", list(x)), ("y", out))]
+    graph = helper.make_graph([helper.make_node("Conv", ["x", "w"], ["y"], name="conv", **attributes)], "g", io[:1],
+                              io[1:], [weights])
+    path = tmp_path / "conv.onnx"
     onnx.save(helper.make_model(graph, opset_imports=[helper.make_opsetid("", 13)]), str(path))
     return path
 
@@ -70,8 +84,21 @@ def test_a_model_whose_nodes_all_ran_exits_0(tmp_path):
     assert json.loads((tmp_path / "out" / "report.json").read_text())["nodes_run"] == 1
 
 
-def test_acs_exits_0_with_the_two_tables_written(tmp_path):
-    done = run(ACS, "gemm", "--config", CONFIG, "-o", tmp_path)
+@simulator
+def test_a_node_its_tile_does_not_divide_exits_0_with_a_line_for_the_short_tile(tmp_path):
+    """A Relu of 128 rows runs tiles of 42 rows and one of 2: tile id 0 and, for the short one, tile id 1."""
+    done = frontend(tmp_path, model(tmp_path, "Relu", shape=(128, 48)))
+    assert done.returncode == status.EXIT_OK, done.stderr
+    assert json.loads((tmp_path / "out" / "report.json").read_text())["nodes_run"] == 1
+    (table,) = (tmp_path / "out").glob("bias_act_*/tog_cycles.tsv")
+    assert len([line for line in table.read_text().splitlines() if not line.startswith("#")]) == 2
+
+
+@pytest.mark.parametrize("args", [[kernel] for kernel in sorted(KERNELS)] + [
+    ["gemm", "--rows", "13", "--depth", "3", "--cols", "100"]], ids=" ".join)
+def test_acs_exits_0_with_the_two_tables_written(args, tmp_path):
+    """Every kernel with a node table, the two without a compute node among them, and a tile short of the array."""
+    done = run(ACS, *args, "--config", CONFIG, "-o", tmp_path)
     assert done.returncode == status.EXIT_OK, done.stderr
     assert (tmp_path / "tog_cycles.tsv").exists() and (tmp_path / "tog_units.tsv").exists()
 
@@ -91,6 +118,34 @@ def test_a_node_that_did_not_run_exits_3_with_the_report_written(tmp_path):
     done = frontend(tmp_path, model(tmp_path, "Sin"))
     assert done.returncode == status.EXIT_NODES_NOT_RUN, done.stderr
     assert [r["name"] for r in json.loads((tmp_path / "out" / "report.json").read_text())["refused"]] == ["sin"]
+
+
+@pytest.mark.parametrize("said,graph", [
+    ("grouped convolution", dict(w=(64, 32, 3, 3), group=2)),
+    ("a convolution over 1 spatial axes", dict(x=(1, 64, 16), w=(64, 64, 3))),
+    ("a 32 x 32 kernel (dilations 1, 1) does not fit the padded input, 16 x 16", dict(w=(64, 64, 32, 32))),
+    ("ONNX shape inference gives the output 64 x 3 x 3", dict(out=[1, 64, 3, 3])),
+    ("auto_pad 'FULL' is not one ONNX defines", dict(auto_pad="FULL")),
+    ("8 columns is under one matmul instruction", dict(w=(8, 64, 3, 3))),
+])
+def test_a_conv_the_frontend_refuses_exits_3_with_the_reason_in_the_report(said, graph, tmp_path):
+    done = frontend(tmp_path, conv(tmp_path, **graph))
+    assert done.returncode == status.EXIT_NODES_NOT_RUN, done.stderr
+    report = json.loads((tmp_path / "out" / "report.json").read_text())
+    assert [said in r["reason"] for r in report["refused"]] == [True] and report["nodes_run"] == 0
+    assert "Traceback" not in done.stderr and "error:" not in done.stderr
+
+
+def test_a_node_whose_tile_ids_the_tables_do_not_cover_exits_3(tmp_path):
+    """The unit table is made to lose its rows: the node is refused by the frontend, before TOGSim would be run."""
+    code = ("import sys, runpy, togsim_frontend.acs.cycles as cycles\n"
+            "cycles.build_units = lambda desc, tiles, hw: []\n"
+            f"sys.argv[0] = {FRONTEND!r}\n"
+            f"runpy.run_module({FRONTEND!r}, run_name='__main__')\n")
+    done = run(None, model(tmp_path, "Relu"), "--config", CONFIG, "--out", tmp_path / "out", "--no-optimize",
+               env=tree(tmp_path), code=code)
+    assert done.returncode == status.EXIT_NODES_NOT_RUN, done.stderr
+    assert "relu (Relu): node 'relu': kernel bias_act names tile ids [0]" in done.stdout
 
 
 @pytest.mark.parametrize("text,said", [
