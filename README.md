@@ -183,6 +183,8 @@ The machine is the YAML file given to `--config`. `configs/` ships 19 of them, a
 | [docs/config-keys.md](docs/config-keys.md) | Every machine config key. |
 | [docs/output-lines.md](docs/output-lines.md) | A whole log line by line, and the lines a script may rely on. |
 | [docs/compatibility.md](docs/compatibility.md) | What a compiler or a script may depend on, and how another repository pins TOGSim. |
+| [docs/kernels.md](docs/kernels.md) | The kernel library: fourteen hand-written kernels, their shape arguments and their tiles. |
+| [docs/frontend.md](docs/frontend.md) | The optional frontend layer: ACS, an analytic cycle model, and the ONNX frontend. |
 | [docs/glossary.md](docs/glossary.md) | The terms. |
 
 ## Testing
