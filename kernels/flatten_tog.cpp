@@ -1,16 +1,13 @@
-#include <cstddef>
-#include <cstdint>
-using std::size_t;
-
+// Flatten moves no data and computes nothing: the kernel dispatches no work-item and names no spad buffer.
+// It takes no shape arguments.
 #include "togsim_runtime.h"
 
-int32_t togsim_abi_version(void) { return TOGSIM_ABI_VERSION; }
+#include "kernel_shape.h"
 
-// config:  systolic_ws_8x8_c1_simple_noc_tpuv3.yml
-// VLANE:   8
-// mapping: autotune
+extern "C" const int32_t togsim_spad_buffer_count = 0;
 
-// DISPATCH
+// Nothing to dispatch.
 extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n) {
-  (void)ctx; (void)shape_args; (void)n;
+  (void)ctx;
+  kernel_shape("flatten", "", 0, nullptr, shape_args, n, nullptr);
 }
