@@ -150,8 +150,9 @@ struct BuildState {
   }
 
   // ---- index + footprint --------------------------------------------------
-  // Open the TOG and replay every work-item once to find the DMA'd buffers; each is as
-  // large as the TOG states (togsim_spad_buffer_bytes), and one it does not size is refused.
+  // Open the TOG and replay every work-item once: a DMA'd buffer is as large as the TOG states
+  // (togsim_spad_buffer_bytes), and a TOG is refused for a buffer it does not size or for a
+  // compute whose tile id the cycle table does not hold.
   bool index(const char* so_path, const int64_t* shape_args, int32_t n_shape,
              const uint64_t* tensor_base, int32_t n_tensors,
              const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,
@@ -163,6 +164,11 @@ struct BuildState {
     const std::vector<int64_t>& stated = tog.spad_buffer_bytes();
     for (size_t i = 0; i < tog.num_items(); i++)
       for (const TraceRec& t : tog.run_item(i)) {
+        if (t.kind == TraceRec::COMPUTE && t.tile_id >= tog.num_tile_ids())
+          throw std::runtime_error(fmt::format(
+              "[TOGSim] TOG {}: work-item {} (key {}) computes tile id {}, which the cycle table does "
+              "not hold (it has {} tile ids, 0 to {})", so_path, i, tog.item_key(i), t.tile_id,
+              tog.num_tile_ids(), (int64_t)tog.num_tile_ids() - 1));
         if (t.kind == TraceRec::COMPUTE && typed::is_typed(t.compute_type))
           typed::Units::warn_deprecated_once(so_path);
         if (t.kind != TraceRec::DMA) continue;
