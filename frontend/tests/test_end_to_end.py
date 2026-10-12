@@ -87,8 +87,9 @@ def save(tmp_path, nodes, inputs, outputs, initializers):
     return path
 
 
-def run_frontend(model, out):
-    assert frontend.main([str(model), "--config", str(CONFIG), "--out", str(out), "--no-optimize"]) == 0
+def run_frontend(model, out, status=0):
+    """Run the frontend on `model`, expecting its exit status to be `status`: the report it wrote."""
+    assert frontend.main([str(model), "--config", str(CONFIG), "--out", str(out), "--no-optimize"]) == status
     return json.loads((out / "report.json").read_text())
 
 
@@ -135,11 +136,36 @@ def test_a_conv_relu_graph_totals_its_nodes_replayed_alone(tmp_path):
     assert report["total_cycles"] == conv + bias_act
 
 
-def test_an_operator_without_a_kernel_is_listed_and_not_counted(tmp_path):
+def test_an_operator_without_a_kernel_is_listed_not_counted_and_fails_the_run(tmp_path, capsys):
+    """The Relu still runs and is totalled, the report is written, and the exit status is 3: the total is not the
+    model's."""
     model = save(tmp_path, [
         helper.make_node("Relu", ["x"], ["r"], name="relu"),
         helper.make_node("Sin", ["r"], ["y"], name="sin"),
     ], [("x", [64, 256])], [("y", [64, 256])], [])
-    report = run_frontend(model, tmp_path / "out")
+    report = run_frontend(model, tmp_path / "out", status=frontend.EXIT_NODES_NOT_RUN)
+    assert frontend.EXIT_NODES_NOT_RUN == 3
     assert report["unmapped"] == {"Sin": 1} and report["nodes_run"] == 1
+    assert report["refused"] == [{"name": "sin", "op": "Sin", "reason": "no kernel in kernels/ runs this operator"}]
     assert report["total_cycles"] == report["nodes"][0]["cycles"] > 0
+    said = capsys.readouterr().out
+    assert "  sin (Sin): no kernel in kernels/ runs this operator" in said
+    assert said.rstrip().splitlines()[-1].startswith("INCOMPLETE     : 1 node(s) did not run, so the total does not")
+
+
+def test_a_node_its_kernel_cannot_run_at_its_shape_is_listed_with_the_reason_and_fails_the_run(tmp_path):
+    """A Gemm of 32 output columns is under one matmul instruction of 64."""
+    model = save(tmp_path, [helper.make_node("Gemm", ["x", "w", "b"], ["y"], name="narrow")],
+                 [("x", [64, 128])], [("y", [64, 32])], [("w", [128, 32]), ("b", [32])])
+    report = run_frontend(model, tmp_path / "out", status=frontend.EXIT_NODES_NOT_RUN)
+    assert [(r["name"], r["op"]) for r in report["refused"]] == [("narrow", "Gemm")]
+    assert "32 columns is under one matmul instruction" in report["refused"][0]["reason"]
+    assert report["nodes_run"] == 0 and report["total_cycles"] == 0
+
+
+def test_a_fully_mapped_graph_exits_zero_and_refuses_nothing(tmp_path, capsys):
+    model = save(tmp_path, [helper.make_node("Relu", ["x"], ["y"], name="relu")], [("x", [64, 256])],
+                 [("y", [64, 256])], [])
+    report = run_frontend(model, tmp_path / "out", status=0)
+    assert report["refused"] == [] and report["unmapped"] == {} and report["nodes_run"] == 1
+    assert "INCOMPLETE" not in capsys.readouterr().out

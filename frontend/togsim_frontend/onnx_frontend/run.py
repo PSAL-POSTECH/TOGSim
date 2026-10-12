@@ -1,4 +1,5 @@
-"""Run an ONNX graph on TOGSim: each node's kernel is replayed on its own and the cycles are summed."""
+"""Run an ONNX graph on TOGSim: each node's kernel is replayed on its own and the cycles are summed. A node that
+does not run is listed by name with the reason and left out of the total, and the exit status then says so."""
 from __future__ import annotations
 
 import argparse
@@ -18,6 +19,8 @@ from .onnx_ops import resolve
 CYCLE_RE = re.compile(r"Total execution cycles:\s*(\d+)")
 #: Exit status when the config is a machine the tiles do not fit: nothing was run.
 EXIT_UNSUPPORTED_MACHINE = 2
+#: Exit status when a node did not run: the report is written, and its total does not cover the whole model.
+EXIT_NODES_NOT_RUN = 3
 
 
 def simulate(tog_dir: str, config: str) -> int:
@@ -107,12 +110,15 @@ def main(argv=None) -> int:
     done: dict[str, int] = {}
     ran = no_compute = 0
     unmapped: dict[str, int] = {}
+    refused = []
     rows = []
 
-    for node in model.graph.node:
+    for index, node in enumerate(model.graph.node):
+        name = node.name or f"#{index}"
         kernels = resolve(node.op_type)
         if kernels is None:
             unmapped[node.op_type] = unmapped.get(node.op_type, 0) + 1
+            refused.append({"name": name, "op": node.op_type, "reason": "no kernel in kernels/ runs this operator"})
             continue
         if not kernels:
             no_compute += 1
@@ -126,33 +132,36 @@ def main(argv=None) -> int:
                 subprocess.CalledProcessError) as exc:
             reason = f"{node.op_type} ({type(exc).__name__})"
             unmapped[reason] = unmapped.get(reason, 0) + 1
-            print(f"  !! {node.op_type:<18} {exc}", file=sys.stderr)
+            refused.append({"name": name, "op": node.op_type, "reason": str(exc)})
             continue
 
         total += node_cycles
         ran += 1
-        rows.append({"op": node.op_type, "name": node.name or f"#{ran}",
-                     "cycles": node_cycles})
+        rows.append({"op": node.op_type, "name": name, "cycles": node_cycles})
         print(f"  {node.op_type:<20} {node_cycles:>12,} cycles")
 
     print()
     print(f"nodes run      : {ran}")
     print(f"nodes no-op    : {no_compute}")
     print(f"total cycles   : {total:,}")
-    if unmapped:
-        print("\nUNMAPPED (not counted in the total):")
-        for op, n in sorted(unmapped.items(), key=lambda kv: -kv[1]):
-            print(f"  {op}: {n}")
+    if refused:
+        print(f"\nNOT RUN ({len(refused)} of {ran + len(refused)} nodes with work, not counted in the total):")
+        for entry in refused:
+            print(f"  {entry['name']} ({entry['op']}): {entry['reason']}")
 
     report = {"model": args.model, "config": args.config,
               "hardware": {"sa": hw.sa, "vlane": hw.vlane,
                            "vlen_bits": hw.vlen_bits},
               "total_cycles": total, "nodes_run": ran,
-              "nodes_no_compute": no_compute, "unmapped": unmapped,
+              "nodes_no_compute": no_compute, "unmapped": unmapped, "refused": refused,
               "nodes": rows}
     with open(os.path.join(args.out, "report.json"), "w") as fh:
         json.dump(report, fh, indent=2)
     print(f"\nreport         : {os.path.join(args.out, 'report.json')}")
+    if refused:
+        print(f"INCOMPLETE     : {len(refused)} node(s) did not run, so the total does not cover the whole model "
+              f"(exit status {EXIT_NODES_NOT_RUN})")
+        return EXIT_NODES_NOT_RUN
     return 0
 
 if __name__ == "__main__":
