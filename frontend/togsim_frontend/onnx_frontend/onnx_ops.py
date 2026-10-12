@@ -24,7 +24,8 @@ OPS: dict[str, list[KernelRef]] = {
     "MatMul": [KernelRef("gemm", SYSTOLIC, ("M", "K", "N"), ("TM", "TN", "TK"))],
 
     "Conv": [KernelRef("conv", SYSTOLIC,
-                       ("I_C", "I_H", "I_W", "O_C", "O_H", "O_W", "K_H", "K_W"),
+                       ("I_C", "I_H", "I_W", "O_C", "O_H", "O_W", "K_H", "K_W",
+                        "S_H", "S_W", "D_H", "D_W", "P_T", "P_L", "P_B", "P_R"),
                        ("TILE_M", "TILE_N", "TILE_K", "TILE_I_H"), ("SA",))],
 
     "Attention": [KernelRef("attention", SYSTOLIC, ("HEADS", "KV_HEADS", "SEQ"),

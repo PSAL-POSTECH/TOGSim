@@ -38,21 +38,57 @@ def _matmul_dims(node, shapes) -> tuple[int, int, int]:
     return m, k, n
 
 
+def _text_attr(node, name, default: str) -> str:
+    for a in node.attribute:
+        if a.name == name:
+            return a.s.decode()
+    return default
+
+
+def _conv_pads(node, in_hw, kernel_hw, strides, dilations) -> list[int]:
+    """The four paddings of a Conv as ONNX orders them, top left bottom right: its `pads`, or what `auto_pad`
+    stands for (VALID none; SAME_* an output of ceil(input / stride), the odd cell after or before)."""
+    auto_pad = _text_attr(node, "auto_pad", "NOTSET")
+    if auto_pad == "NOTSET":
+        return list(attr(node, "pads", [0, 0, 0, 0]))
+    if auto_pad == "VALID":
+        return [0, 0, 0, 0]
+    if auto_pad not in ("SAME_UPPER", "SAME_LOWER"):
+        raise ValueError(f"auto_pad {auto_pad!r} is not one ONNX defines")
+    begin, end = [], []
+    for size, k, s, d in zip(in_hw, kernel_hw, strides, dilations):
+        total = max(0, (-(-size // s) - 1) * s + (k - 1) * d + 1 - size)
+        small, large = total // 2, total - total // 2
+        begin.append(small if auto_pad == "SAME_UPPER" else large)
+        end.append(large if auto_pad == "SAME_UPPER" else small)
+    return begin + end
+
+
 def _conv_dims(node, shapes) -> dict[str, int]:
+    """The shape arguments of the conv kernel for a Conv node. The output extent is what the attributes give over
+    the padded input, and has to be what ONNX shape inference recorded for the node's output, when it did."""
     x = shapes[node.input[0]]
     w = shapes[node.input[1]]
+    if len(x) != 4 or len(w) != 4:
+        raise ValueError(f"a convolution over {len(w) - 2} spatial axes: the conv kernel takes two")
     if attr(node, "group", 1) != 1:
         raise ValueError("grouped convolution: no library kernel takes a group count")
     o_c, _, k_h, k_w = w
-    strides = attr(node, "strides", [1, 1])
-    s = strides[0] if isinstance(strides, list) else strides
-    pads = attr(node, "pads", [0, 0, 0, 0])
-    p = pads[0] if isinstance(pads, list) else pads
     i_c, i_h, i_w = x[1], x[2], x[3]
-    o_h = (i_h + 2 * p - k_h) // s + 1
-    o_w = (i_w + 2 * p - k_w) // s + 1
-    return dict(I_C=i_c, I_H=i_h, I_W=i_w, O_C=o_c,
-                O_H=max(1, o_h), O_W=max(1, o_w), K_H=k_h, K_W=k_w)
+    s_h, s_w = attr(node, "strides", [1, 1])
+    d_h, d_w = attr(node, "dilations", [1, 1])
+    p_t, p_l, p_b, p_r = _conv_pads(node, (i_h, i_w), (k_h, k_w), (s_h, s_w), (d_h, d_w))
+    o_h = (i_h + p_t + p_b - (k_h - 1) * d_h - 1) // s_h + 1
+    o_w = (i_w + p_l + p_r - (k_w - 1) * d_w - 1) // s_w + 1
+    if o_h < 1 or o_w < 1:
+        raise ValueError(f"a {k_h} x {k_w} kernel (dilations {d_h}, {d_w}) does not fit the padded input, "
+                         f"{i_h + p_t + p_b} x {i_w + p_l + p_r}")
+    inferred = shapes.get(node.output[0]) if node.output else None
+    if inferred is not None and list(inferred[1:]) != [o_c, o_h, o_w]:
+        raise ValueError(f"ONNX shape inference gives the output {' x '.join(map(str, inferred[1:]))}, and the "
+                         f"strides, dilations and pads give {o_c} x {o_h} x {o_w}")
+    return dict(I_C=i_c, I_H=i_h, I_W=i_w, O_C=o_c, O_H=o_h, O_W=o_w, K_H=k_h, K_W=k_w,
+                S_H=s_h, S_W=s_w, D_H=d_h, D_W=d_w, P_T=p_t, P_L=p_l, P_B=p_b, P_R=p_r)
 
 
 def _attention_heads(node, q_shape) -> int:
@@ -169,7 +205,8 @@ def tensor_bytes(kernel: KernelRef, v: dict[str, int]) -> list[int]:
     if kernel.stem == "gemm":
         return [v["M"] * v["K"] * e, v["K"] * v["N"] * e, v["M"] * v["N"] * e]
     if kernel.stem == "conv":
-        return [(v["I_H"] + 2) * (v["I_W"] + 2) * v["I_C"] * e, v["K_H"] * v["K_W"] * v["O_C"] * v["I_C"] * e,
+        padded = (v["I_H"] + v["P_T"] + v["P_B"]) * (v["I_W"] + v["P_L"] + v["P_R"])
+        return [padded * v["I_C"] * e, v["K_H"] * v["K_W"] * v["O_C"] * v["I_C"] * e,
                 v["O_C"] * v["O_H"] * v["O_W"] * e]
     if kernel.stem == "attention":
         q = v["HEADS"] * v["SEQ"] * v["DHEAD"] * e
