@@ -1,6 +1,5 @@
 #pragma once
 #include <fstream>
-#include <robin_hood.h>
 #include <spdlog/fmt/ranges.h>
 #include <spdlog/spdlog.h>
 #include <list>

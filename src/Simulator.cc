@@ -21,9 +21,6 @@ Simulator::Simulator(SimulationConfig config, YAML::Node hardware_config_yaml)
   _n_memories = config.dram_channels;
   _memory_req_size = config.dram_req_size;
   _noc_node_per_core = config.icnt_injection_ports_per_core;
-  char* onnxim_path_env = std::getenv("TORCHSIM_DIR");
-  std::string onnxim_path = onnxim_path_env != NULL?
-    std::string(onnxim_path_env): std::string("./");
 
   // Create core objects
   _cores.resize(_n_cores);
@@ -41,10 +38,7 @@ Simulator::Simulator(SimulationConfig config, YAML::Node hardware_config_yaml)
   if (config.dram_type == DramType::SIMPLE) {
     _dram = std::make_unique<SimpleDRAM>(config, &_core_cycles);
   } else if (config.dram_type == DramType::RAMULATOR2) {
-    std::string ramulator_config = fs::path(onnxim_path)
-                                       .append("configs")
-                                       .append(config.dram_config_path)
-                                       .string();
+    const std::string ramulator_config = config.dram_config_path;
     spdlog::info("[Config/DRAM] Ramulator2 config path: {}", ramulator_config);
     {
       std::ifstream in(ramulator_config);
@@ -57,7 +51,6 @@ Simulator::Simulator(SimulationConfig config, YAML::Node hardware_config_yaml)
         spdlog::info("[Config/DRAM] Ramulator2 configuration :\n{}", raw);
       }
     }
-    config.dram_config_path = ramulator_config;
     _dram = std::make_unique<DramRamulator2>(config, &_core_cycles);
   } else {
     spdlog::error("[Configuration] Invalid DRAM type...!");

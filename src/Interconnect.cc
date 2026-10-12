@@ -78,13 +78,7 @@ Booksim2Interconnect::Booksim2Interconnect(SimulationConfig config) {
   _config = config;
   _n_nodes = config.num_cores * _config.icnt_injection_ports_per_core + config.dram_channels;
   spdlog::info("Initialize Booksim2");
-  /* Same base as Simulator.cc DRAM: TORCHSIM_DIR + configs + path; absolute icnt_config_path replaces prefix. */
-  char* onnxim_path_env = std::getenv("TORCHSIM_DIR");
-  std::string onnxim_path =
-      onnxim_path_env != NULL ? std::string(onnxim_path_env) : std::string("./");
-
-  _config_path =
-      fs::path(onnxim_path).append("configs").append(config.icnt_config_path).string();
+  _config_path = config.icnt_config_path;
   spdlog::info("Booksim 2 config path : {}", _config_path);
   print_config(_config_path);
   _booksim = std::make_unique<booksim2::Interconnect>(_config_path, _n_nodes);

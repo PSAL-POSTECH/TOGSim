@@ -1,7 +1,6 @@
 #ifndef DRAM_H
 #define DRAM_H
 #include <optional>
-#include <robin_hood.h>
 #include <cstdint>
 #include <queue>
 #include <utility>
