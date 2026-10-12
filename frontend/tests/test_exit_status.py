@@ -38,14 +38,29 @@ def model(tmp_path, op):
     return path
 
 
+def tree(tmp_path, simulator_script=None):
+    """A TOGSim root with this tree's kernels/, include/ and configs/ and, as build/bin/Simulator, the shell
+    script given; without one the root has no Simulator."""
+    root = tmp_path / "root"
+    root.mkdir()
+    for name in ("kernels", "include", "configs"):
+        (root / name).symlink_to(paths.root() / name, target_is_directory=True)
+    if simulator_script is not None:
+        binary = root / "build" / "bin" / "Simulator"
+        binary.parent.mkdir(parents=True)
+        binary.write_text(f"#!/bin/sh\n{simulator_script}\n")
+        binary.chmod(0o755)
+    return {"TOGSIM_DIR": str(root)}
+
+
 def frontend(tmp_path, graph, config=CONFIG, env=None):
     return run(FRONTEND, graph, "--config", config, "--out", tmp_path / "out", "--no-optimize", env=env)
 
 
-def test_the_statuses_are_five_numbers_and_none_is_pythons_own():
+def test_the_statuses_are_six_numbers_and_none_is_pythons_own():
     numbers = [status.EXIT_OK, status.EXIT_USAGE, status.EXIT_NODES_NOT_RUN, status.EXIT_BAD_INPUT,
-               status.EXIT_UNSUPPORTED_MACHINE]
-    assert numbers == [0, 2, 3, 4, 5]
+               status.EXIT_UNSUPPORTED_MACHINE, status.EXIT_TOOL_FAILED]
+    assert numbers == [0, 2, 3, 4, 5, 6]
 
 
 @simulator
@@ -137,6 +152,52 @@ def test_an_unsupported_machine_exits_5_and_not_the_2_of_a_usage_error(tmp_path)
     assert done.returncode == status.EXIT_UNSUPPORTED_MACHINE == 5 != status.EXIT_USAGE
     assert "is not a machine the frontend maps a model on" in done.stderr and "usage:" not in done.stderr
     assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("script,said", [
+    (None, "the Simulator could not be started"),
+    ("echo refused >&2; exit 1", "TOGSim reported no cycle count (exit 1"),
+    ("kill -SEGV $$", "TOGSim reported no cycle count (exit -11"),
+    ("echo 'ran, and says nothing of cycles'", "TOGSim reported no cycle count (exit 0"),
+    ("echo 'Total execution cycles: 7'; exit 1", "TOGSim reported no cycle count (exit 1"),
+    (r"printf '\377\376 refused\n' >&2; exit 1", "TOGSim reported no cycle count (exit 1"),
+])
+def test_a_simulator_that_is_absent_fails_or_reports_no_total_exits_6_with_no_report(script, said, tmp_path):
+    done = frontend(tmp_path, model(tmp_path, "Relu"), env=tree(tmp_path, script))
+    assert done.returncode == status.EXIT_TOOL_FAILED, done.stderr
+    assert done.stderr.startswith("error: node relu (Relu): ") and said in done.stderr
+    assert "NOT RUN" not in done.stdout and not (tmp_path / "out" / "report.json").exists()
+
+
+@simulator
+def test_a_config_the_simulator_itself_refuses_exits_6(tmp_path):
+    """The two keys the frontend reads make a machine it accepts; the Simulator needs the rest of the config."""
+    config = tmp_path / "systolic_ws_8x8_c1.yml"
+    config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\n")
+    done = frontend(tmp_path, model(tmp_path, "Relu"), config=config)
+    assert done.returncode == status.EXIT_TOOL_FAILED, done.stderr
+    assert "TOGSim reported no cycle count (exit " in done.stderr
+    assert not (tmp_path / "out" / "report.json").exists()
+
+
+@pytest.mark.parametrize("compiler,said", [
+    ("false", "kernel bias_act did not compile with"),
+    (os.path.join(os.sep, "no", "such", "compiler"), "kernel bias_act could not be compiled"),
+])
+def test_a_kernel_the_compiler_does_not_build_exits_6(compiler, said, tmp_path):
+    done = frontend(tmp_path, model(tmp_path, "Relu"), env={"CXX": compiler})
+    assert done.returncode == status.EXIT_TOOL_FAILED, done.stderr
+    assert said in done.stderr and not (tmp_path / "out" / "report.json").exists()
+
+
+def test_a_compiler_that_fails_with_words_that_are_not_text_exits_6(tmp_path):
+    compiler = tmp_path / "cxx"
+    compiler.write_text("#!/bin/sh\nprintf '\\377\\376 no such header\\n' >&2; exit 1\n")
+    compiler.chmod(0o755)
+    done = frontend(tmp_path, model(tmp_path, "Relu"), env={"CXX": str(compiler)})
+    assert done.returncode == status.EXIT_TOOL_FAILED, done.stderr
+    assert "kernel bias_act did not compile with" in done.stderr and "no such header" in done.stderr
+    assert not (tmp_path / "out" / "report.json").exists()
 
 
 @pytest.mark.parametrize("module,args", [(FRONTEND, ["model.onnx", "--config", CONFIG]),

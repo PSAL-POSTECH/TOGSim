@@ -8,6 +8,7 @@ EXIT_USAGE = 2
 EXIT_NODES_NOT_RUN = 3
 EXIT_BAD_INPUT = 4
 EXIT_UNSUPPORTED_MACHINE = 5
+EXIT_TOOL_FAILED = 6
 
 
 def fail(status: int, message: str) -> int:
