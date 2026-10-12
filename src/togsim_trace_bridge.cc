@@ -167,8 +167,9 @@ struct BuildState {
         if (t.kind == TraceRec::COMPUTE && t.tile_id >= tog.num_tile_ids())
           throw std::runtime_error(fmt::format(
               "[TOGSim] TOG {}: work-item {} (key {}) computes tile id {}, which the cycle table does "
-              "not hold (it has {} tile ids, 0 to {})", so_path, i, tog.item_key(i), t.tile_id,
-              tog.num_tile_ids(), (int64_t)tog.num_tile_ids() - 1));
+              "not hold ({})", so_path, i, tog.item_key(i), t.tile_id,
+              tog.num_tile_ids() ? fmt::format("it has {} tile ids, 0 to {}", tog.num_tile_ids(), tog.num_tile_ids() - 1)
+                                 : std::string("it has no line")));
         if (t.kind == TraceRec::COMPUTE && typed::is_typed(t.compute_type))
           typed::Units::warn_deprecated_once(so_path);
         if (t.kind != TraceRec::DMA) continue;

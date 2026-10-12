@@ -67,9 +67,21 @@ std::vector<uint64_t> tog_tensor_bases(const fs::path& dir, const std::vector<st
   return bases;
 }
 
-// Load a kernel's compiled TOG (.so) and bridge its replay to a TileGraph for
-// `partition_id`, whose cores its work-items round-robin over. The cycle-table TSV
-// gives per-tile latency; index dumps are read from runtime/indirect_access beside it.
+// The `cycle overlapping` lines of the cycle table `path`, line n for tile id n. A table that cannot be opened
+// throws: every TOG is replayed against a table, and there is no default for one that is missing. A table without
+// a line holds no tile id.
+void load_cycle_table(const std::string& path, std::vector<int64_t>& cyc, std::vector<int64_t>& ovl) {
+  std::ifstream ct(path);
+  if (!ct.is_open())
+    throw std::runtime_error("[TOGSim] cycle table " + path + " cannot be opened: the TOG's computes take their "
+                             "cycles from it");
+  int64_t c, o;
+  while (ct >> c >> o) { cyc.push_back(c); ovl.push_back(o); }
+}
+
+// Load a kernel's compiled TOG (.so) and bridge its replay to a TileGraph for `partition_id`, whose cores its
+// work-items round-robin over. The cycle table gives per-tile latency and must open; index dumps are read from
+// runtime/indirect_access beside the TOG.
 std::unique_ptr<TileGraph> build_tog_tilegraph(Simulator* simulator,
                                                const std::string& tog_so_path,
                                                const std::string& cycle_table_path,
@@ -82,14 +94,8 @@ std::unique_ptr<TileGraph> build_tog_tilegraph(Simulator* simulator,
   if (partition_cores.empty()) partition_cores.push_back(0);
   const auto tilings = tog_tensor_tilings(cfg, fs::path(tog_so_path).parent_path());
   std::vector<uint64_t> bases = tog_tensor_bases(fs::path(tog_so_path).parent_path(), tilings);
-  // Cycle table: load the per-tile_id TSV sidecar if present, else a flat stub.
   std::vector<int64_t> cyc, ovl;
-  std::ifstream ct(cycle_table_path);
-  if (ct.is_open()) {
-    int64_t c, o;
-    while (ct >> c >> o) { cyc.push_back(c); ovl.push_back(o); }
-  }
-  if (cyc.empty()) { cyc.assign(256, 128); ovl.assign(256, 0); }
+  load_cycle_table(cycle_table_path, cyc, ovl);
   // Shape args: the TOG's grid bounds, one per axis, when it was
   // compiled without them baked in. Same sidecar convention as the cycle table
   // -- absent means the TOG carries its own constants.
@@ -223,7 +229,7 @@ int main(int argc, char** argv) {
       "tog_so", "Path to a compiled TOG (.so)");
   cmd_parser.add_command_line_option<std::string>(
       "cycle_table", "Path to a 'cycle<TAB>overlapping' per-tile_id sidecar (TSV) "
-                     "for --tog_so; falls back to a flat stub if omitted");
+                     "for --tog_so, which requires it");
   cmd_parser.add_command_line_option<std::string>(
       "unit_table", "Path to a per-tile unit admission table (TSV: tile_id unit unit_of_work "
                     "capacity_per_cycle admitted) for --tog_so; prints each unit's utilization "
@@ -286,6 +292,10 @@ int main(int argc, char** argv) {
     if (simulator->get_config().systolic_array_split && unit_table_path.empty()) {
       spdlog::error("[TOGSim] systolic_array_split (on by default) reads each tile's Systolic rows; give "
                     "--unit_table, or set systolic_array_split: none");
+      exit(EXIT_FAILURE);
+    }
+    if (cycle_table_path.empty()) {
+      spdlog::error("[TOGSim] --tog_so needs --cycle_table: the TOG's computes take their cycles from it");
       exit(EXIT_FAILURE);
     }
     try {

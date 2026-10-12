@@ -1,4 +1,5 @@
-"""A compute names a tile id the cycle table holds: one beyond it is refused, not charged 0 cycles, in both modes."""
+"""A TOG is replayed against a cycle table: a run without one, or with one that does not open, is refused, and so is
+a compute that names a tile id the table does not hold, in both modes."""
 from togtest import MIB, Case, Failure, write_table
 
 TOG = "names_tile_id_tog.cpp"
@@ -6,8 +7,8 @@ TOG = "names_tile_id_tog.cpp"
 
 def refusal(tile_id, held):
     """The refusal of work-item 0 (key 7) naming `tile_id` against a table of `held` tile ids, after the TOG's path."""
-    return (f"work-item 0 (key 7) computes tile id {tile_id}, which the cycle table does not hold "
-            f"(it has {held} tile ids, 0 to {held - 1})")
+    has = f"it has {held} tile ids, 0 to {held - 1}" if held else "it has no line"
+    return f"work-item 0 (key 7) computes tile id {tile_id}, which the cycle table does not hold ({has})"
 
 
 def replay(t, cycles, *defines, units=None, **machine):
@@ -16,10 +17,14 @@ def replay(t, cycles, *defines, units=None, **machine):
     return t.simulate(t.tog(TOG, defines, tensors=(MIB, MIB)), t.machine(**machine), cycles, units)
 
 
-def session(t, cycles):
-    """--models_list: one LAUNCH_KERNEL of the TOG from <work dir>/k/, `cycles` as its tog_cycles.tsv."""
-    home = t.tog(TOG, tensors=(MIB, MIB), into="k").parent
-    write_table(home / "tog_cycles.tsv", [(c, 0) for c in cycles])
+def session(t, cycles, *defines, link=None):
+    """--models_list: one LAUNCH_KERNEL of the TOG from <work dir>/k/, `cycles` as its tog_cycles.tsv (None: the
+    directory has none), or tog_cycles.tsv a symlink to `link`."""
+    home = t.tog(TOG, defines, tensors=(MIB, MIB), into="k").parent
+    if link is not None:
+        (home / "tog_cycles.tsv").symlink_to(link)
+    elif cycles is not None:
+        write_table(home / "tog_cycles.tsv", [(c, 0) for c in cycles])
     stream = t.work_dir / "commands.txt"
     stream.write_text(f"LAUNCH_KERNEL,0,0,0,{home}/kernel,{home}/attributes,0\nDEVICE_SYNC,0,0,0,-,-,0\n")
     return t.execute("Simulator", ["--config", t.machine(systolic_array_split="none"), "--models_list", stream,
@@ -65,17 +70,61 @@ def tile_id_past_32_bits_refused(t):
     replay(t, [200, 300], "TILE_ID=4294967297ull").expect_refused(refusal(2**32 + 1, 2), exit=1)
 
 
-def stub(t, tile_id):
-    """--tog_so without --cycle_table: the flat stub, 128 cycles for tile ids 0 to 255."""
-    tog = t.tog(TOG, [f"TILE_ID={tile_id}"], tensors=(MIB, MIB))
-    return t.execute("Simulator", ["--config", t.machine(systolic_array_split="none"), "--tog_so", tog,
+def without(t, *table):
+    """--tog_so with `table` in place of a cycle table that opens: nothing, or --cycle_table and a path."""
+    tog = t.tog(TOG, tensors=(MIB, MIB))
+    return t.execute("Simulator", ["--config", t.machine(systolic_array_split="none"), "--tog_so", tog, *table,
                                    "--log_level", "trace"])
 
 
-def without_a_table_the_stub_holds_256_tile_ids(t):
-    """No cycle table is still allowed: tile id 255 runs its 128 cycles, and 256 is beyond the stub as beyond a table."""
-    expect_one_compute(stub(t, 255), 128)
-    stub(t, 256).expect_refused(refusal(256, 256), exit=1)
+def expect_refused_before_the_run(run, saying):
+    """The run was refused with exit 1 saying `saying`, and no instruction was traced."""
+    run.expect_refused(saying, exit=1)
+    if run.events():
+        run.fail("expected the refusal before anything was simulated, found instruction trace lines")
+
+
+def unopenable(path):
+    """The refusal of a cycle table at `path` that does not open."""
+    return f"[TOGSim] cycle table {path} cannot be opened"
+
+
+def no_cycle_table_refused(t):
+    """--tog_so without --cycle_table: there is no default table."""
+    expect_refused_before_the_run(without(t), "[TOGSim] --tog_so needs --cycle_table")
+
+
+def cycle_table_that_cannot_be_opened_refused(t):
+    """--cycle_table naming a file that is not there: the message names the path."""
+    absent = t.work_dir / "absent.tsv"
+    expect_refused_before_the_run(without(t, "--cycle_table", absent), unopenable(absent))
+
+
+def session_no_tog_cycles_refused(t):
+    """A launched kernel whose directory has no tog_cycles.tsv: the launch is refused, naming the path it wants."""
+    expect_refused_before_the_run(session(t, None), unopenable(t.work_dir / "k" / "tog_cycles.tsv"))
+
+
+def session_tog_cycles_that_cannot_be_opened_refused(t):
+    """A tog_cycles.tsv that is there and does not open (a symlink to nothing) is refused the same way."""
+    expect_refused_before_the_run(session(t, None, link=t.work_dir / "absent.tsv"),
+                                  unopenable(t.work_dir / "k" / "tog_cycles.tsv"))
+
+
+def empty_table_holds_no_tile_id(t):
+    """A table without a line is a table: a TOG with no compute replays against it, and a compute is refused by the
+    rule of every table, in both modes."""
+    if replay(t, [], "NO_COMPUTE").expect_ok().computes():
+        raise Failure("expected the NO_COMPUTE TOG to run no compute")
+    replay(t, [], "TILE_ID=0").expect_refused(refusal(0, 0), exit=1)
+    session(t, [], "TILE_ID=0").expect_refused(refusal(0, 0), exit=1)
+
+
+def session_that_launches_nothing_needs_no_table(t):
+    """A command stream without a LAUNCH_KERNEL loads no TOG and asks for no cycle table."""
+    stream = t.work_dir / "commands.txt"
+    stream.write_text("# nothing to launch\nDEVICE_SYNC,0,0,0,-,-,0\n")
+    t.execute("Simulator", ["--config", t.machine(systolic_array_split="none"), "--models_list", stream]).expect_ok()
 
 
 def unit_rows_beyond_the_cycle_table_are_ignored(t):
@@ -96,6 +145,11 @@ CASES = [
     Case("session.table_one_line_longer_runs", session_table_one_line_longer_runs),
     Case("refused.negative_tile_id", negative_tile_id_refused),
     Case("refused.tile_id_past_32_bits", tile_id_past_32_bits_refused),
-    Case("without_a_table_the_stub_holds_256_tile_ids", without_a_table_the_stub_holds_256_tile_ids),
+    Case("refused.no_cycle_table", no_cycle_table_refused),
+    Case("refused.cycle_table_that_cannot_be_opened", cycle_table_that_cannot_be_opened_refused),
+    Case("session.refused.no_tog_cycles", session_no_tog_cycles_refused),
+    Case("session.refused.tog_cycles_that_cannot_be_opened", session_tog_cycles_that_cannot_be_opened_refused),
+    Case("empty_table_holds_no_tile_id", empty_table_holds_no_tile_id),
+    Case("session.that_launches_nothing_needs_no_table", session_that_launches_nothing_needs_no_table),
     Case("unit_rows_beyond_the_cycle_table_are_ignored", unit_rows_beyond_the_cycle_table_are_ignored),
 ]
