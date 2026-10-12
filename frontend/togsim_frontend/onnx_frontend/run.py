@@ -1,5 +1,6 @@
 """Run an ONNX graph on TOGSim: each node's kernel is replayed on its own and the cycles are summed. A node that
-does not run is listed by name with the reason and left out of the total, and the exit status then says so."""
+does not run is listed by name with the reason and left out of the total, and the exit status then says so. The
+statuses are those of status.py."""
 from __future__ import annotations
 
 import argparse
@@ -7,51 +8,66 @@ import json
 import os
 import re
 import subprocess
-import sys
+
+import yaml
+from google.protobuf.message import DecodeError
 
 from .. import paths
 from ..acs import cycles as acs_cycles
 from ..acs import node_mapping
+from ..status import (EXIT_BAD_INPUT, EXIT_NODES_NOT_RUN, EXIT_OK, EXIT_TOOL_FAILED, EXIT_UNSUPPORTED_MACHINE,
+                      fail)
 from . import emit, graph, shapes, tiling
 from .config import read_hardware
 from .onnx_ops import resolve
 
 CYCLE_RE = re.compile(r"Total execution cycles:\s*(\d+)")
-#: Exit status when the config is a machine the tiles do not fit: nothing was run.
-EXIT_UNSUPPORTED_MACHINE = 2
-#: Exit status when a node did not run: the report is written, and its total does not cover the whole model.
-EXIT_NODES_NOT_RUN = 3
+
+
+class ToolError(RuntimeError):
+    """The compiler or the Simulator failed: the run cannot say what the node costs, whatever the node is."""
 
 
 def simulate(tog_dir: str, config: str) -> int:
     """Replay the kernel laid out in `tog_dir` and return its Total execution cycles; what TOGSim printed is kept
-    beside the kernel as togsim.log."""
+    beside the kernel as togsim.log, byte for byte. A Simulator that is absent, exits non-zero or prints no total
+    is a ToolError, whatever it printed."""
     tog_dir = os.path.abspath(tog_dir)
     cmd = [str(paths.simulator()), "--config", config,
            "--tog_so", os.path.join(tog_dir, "tog.so"),
            "--cycle_table", os.path.join(tog_dir, "tog_cycles.tsv"),
            "--unit_table", os.path.join(tog_dir, "tog_units.tsv")]
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    with open(os.path.join(tog_dir, "togsim.log"), "w") as fh:
+    try:
+        res = subprocess.run(cmd, capture_output=True)
+    except OSError as exc:
+        raise ToolError(f"the Simulator could not be started: {exc}") from None
+    with open(os.path.join(tog_dir, "togsim.log"), "wb") as fh:
         fh.write(res.stdout + res.stderr)
-    m = CYCLE_RE.search(res.stdout + res.stderr)
+    m = CYCLE_RE.search((res.stdout + res.stderr).decode(errors="replace"))
     if res.returncode != 0 or not m:
-        tail = (res.stderr or res.stdout)[-400:]
-        raise RuntimeError(f"TOGSim reported no cycle count (exit {res.returncode}): {tail}")
+        tail = (res.stderr or res.stdout).decode(errors="replace")[-400:]
+        raise ToolError(f"TOGSim reported no cycle count (exit {res.returncode}, log "
+                        f"{os.path.join(tog_dir, 'togsim.log')}): {tail}")
     return int(m.group(1))
 
 
 def prepare_node(node, kernel, shp, hw, out_dir) -> str:
-    """Build what one kernel run of `node` needs, in a directory named by the kernel and its constants: tog.so
-    compiled with the node's tile, the two sidecars, and the tables ACS writes: a row per tile id the kernel names
-    at this shape, a short last tile costed at what is left. A tile id the tables do not cover refuses the node."""
+    """Build what one kernel run of `node` needs, in a directory named by its kernel and constants: tog.so compiled
+    with the node's tile, the two sidecars, and ACS's tables, a row per tile id the kernel names at this shape, a
+    short last tile costed at what is left. An uncovered tile id refuses the node; a failed compile is a ToolError."""
     values = shapes.constants(node, kernel, shp, hw)
     macros = emit.defines(kernel, values)
     shape = emit.shape_args(kernel, values)
     build = "_".join(m.split("=")[1] for m in macros)
-    so = emit.compile_so(str(paths.kernel_source(kernel.stem)), str(paths.include_dir()),
-                         os.path.join(out_dir, ".kernels", f"{kernel.stem}_{build}.so" if build else
-                                      f"{kernel.stem}.so"), macros)
+    try:
+        so = emit.compile_so(str(paths.kernel_source(kernel.stem)), str(paths.include_dir()),
+                             os.path.join(out_dir, ".kernels", f"{kernel.stem}_{build}.so" if build else
+                                          f"{kernel.stem}.so"), macros)
+    except subprocess.CalledProcessError as exc:
+        raise ToolError(f"kernel {kernel.stem} did not compile with {macros} (exit {exc.returncode}): "
+                        f"{(exc.stderr or '')[-400:]}") from None
+    except OSError as exc:
+        raise ToolError(f"kernel {kernel.stem} could not be compiled: {exc}") from None
 
     tag = "_".join(str(v) for v in shape + [build] if str(v))
     tog_dir = os.path.join(out_dir, f"{kernel.stem}_{tag}" if tag else kernel.stem)
@@ -95,16 +111,20 @@ def main(argv=None) -> int:
                     help="skip the ORT fusion pass")
     args = ap.parse_args(argv)
 
-    hw = read_hardware(args.config, args.sa)
+    try:
+        hw = read_hardware(args.config, args.sa)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        return fail(EXIT_BAD_INPUT, f"config {args.config} cannot be read: {exc}")
     why = tiling.unsupported(hw)
     if why:
-        print(f"error: {args.config} (SA={hw.sa}, vpu_num_lanes={hw.vlane}) is not a machine the frontend maps a "
-              f"model on. Its systolic tiles are the same on every machine, and here:", file=sys.stderr)
-        for line in why:
-            print(f"  - {line}", file=sys.stderr)
-        return EXIT_UNSUPPORTED_MACHINE
+        return fail(EXIT_UNSUPPORTED_MACHINE, "\n  - ".join(
+            [f"{args.config} (SA={hw.sa}, vpu_num_lanes={hw.vlane}) is not a machine the frontend maps a model on. "
+             f"Its systolic tiles are the same on every machine, and here:", *why]))
+    try:
+        model, shp = graph.load(args.model, optimize_graph=not args.no_optimize)
+    except (OSError, DecodeError) as exc:
+        return fail(EXIT_BAD_INPUT, f"model {args.model} cannot be read: {exc}")
     os.makedirs(args.out, exist_ok=True)
-    model, shp = graph.load(args.model, optimize_graph=not args.no_optimize)
 
     print(f"config   : {os.path.basename(args.config)}")
     print(f"hardware : SA={hw.sa} lanes={hw.vlane} vlen={hw.vlen_bits}b "
@@ -133,8 +153,10 @@ def main(argv=None) -> int:
             for kernel in kernels:
                 node_cycles += run_node(node, kernel, shp, hw, args.config,
                                         args.out, done)
-        except (KeyError, ValueError, RuntimeError,
-                subprocess.CalledProcessError) as exc:
+        except ToolError as exc:
+            return fail(EXIT_TOOL_FAILED, f"node {name} ({node.op_type}): {exc}\nThe run stops here: no total is "
+                                          f"given and no report is written.")
+        except (KeyError, ValueError) as exc:
             reason = f"{node.op_type} ({type(exc).__name__})"
             unmapped[reason] = unmapped.get(reason, 0) + 1
             refused.append({"name": name, "op": node.op_type, "reason": str(exc)})
@@ -167,7 +189,7 @@ def main(argv=None) -> int:
         print(f"INCOMPLETE     : {len(refused)} node(s) did not run, so the total does not cover the whole model "
               f"(exit status {EXIT_NODES_NOT_RUN})")
         return EXIT_NODES_NOT_RUN
-    return 0
+    return EXIT_OK
 
 if __name__ == "__main__":
     raise SystemExit(main())

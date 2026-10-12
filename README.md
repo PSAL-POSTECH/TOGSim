@@ -179,12 +179,10 @@ The machine is the YAML file given to `--config`. `configs/` ships 19 of them, a
 | [docs/tutorial.md](docs/tutorial.md) | The model, and the six examples step by step. |
 | [docs/tog-abi.md](docs/tog-abi.md) | The TOG ABI reference. |
 | [docs/running.md](docs/running.md) | The command line, the command stream, how to read the output, troubleshooting and known limitations. |
-| [docs/machine.md](docs/machine.md) | The knobs of a machine config, and how to change and sweep them. |
-| [docs/config-keys.md](docs/config-keys.md) | Every machine config key. |
+| [docs/machine.md](docs/machine.md), [docs/config-keys.md](docs/config-keys.md) | The knobs of a machine config, and how to change and sweep them. Every machine config key. |
 | [docs/output-lines.md](docs/output-lines.md) | A whole log line by line, and the lines a script may rely on. |
 | [docs/compatibility.md](docs/compatibility.md) | What a compiler or a script may depend on, and how another repository pins TOGSim. |
-| [docs/kernels.md](docs/kernels.md) | The kernel library: fourteen hand-written kernels, their shape arguments and their tiles. |
-| [docs/frontend.md](docs/frontend.md) | The optional frontend layer: ACS, an analytic cycle model, and the ONNX frontend. |
+| [docs/kernels.md](docs/kernels.md), [docs/frontend.md](docs/frontend.md) | The kernel library: fourteen hand-written kernels, their shape arguments and their tiles. The optional frontend layer: ACS, an analytic cycle model, and the ONNX frontend. |
 | [docs/glossary.md](docs/glossary.md) | The terms. |
 
 ## Testing

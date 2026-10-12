@@ -64,7 +64,7 @@ def unsupported(hw: Hardware) -> list[str]:
                        f"{col_unit} (SA * vpu_num_lanes = {hw.sa} * {hw.vlane})")
     if hw.spad_bytes and hw.spad_bytes < SYSTOLIC_TILE_SPAD_BYTES:
         why.append(f"core_spad_size_kb states a spad of {hw.spad_bytes} bytes and the buffers of a Conv tile take "
-                   f"{SYSTOLIC_TILE_SPAD_BYTES}: TOGSim would stall the tile for ever")
+                   f"{SYSTOLIC_TILE_SPAD_BYTES}: TOGSim refuses a TOG that needs more of the spad at once")
     return why
 
 
