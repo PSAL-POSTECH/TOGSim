@@ -219,6 +219,22 @@ def test_the_spad_a_machine_needs_is_what_the_conv_kernel_states_for_the_largest
     assert conv == tiling.SYSTOLIC_TILE_SPAD_BYTES == 393216 and gemm < conv
 
 
+def test_the_second_pass_of_layernorm_and_global_avgpool_keeps_the_128_row_tile_of_its_kernel(tmp_path):
+    """The statistics pass and the scale pass run a tile of their own, TM_STATS and TC_SCALE. The frontend names it
+    to predict its short last tile, and names the kernel's default: the kernel states the spad it does without it."""
+    layernorm, avgpool = OPS["LayerNormalization"][0], OPS["GlobalAveragePool"][0]
+    node = helper.make_node("LayerNormalization", ["x"], ["y"], name="ln")
+    assert shapes.constants(node, layernorm, {"x": [64, 256]}, HW)["TM_STATS"] == tiling.SECOND_PASS_ROWS == 128
+    node = helper.make_node("GlobalAveragePool", ["x"], ["y"], name="gap")
+    assert shapes.constants(node, avgpool, {"x": [1, 64, 16, 16]}, HW)["TC_SCALE"] == 128
+    for stem, tile, second in (("layernorm", ["TM=8", "TN=64"], "TM_STATS=128"),
+                               ("global_avgpool", ["TC=8", "THW=64"], "TC_SCALE=128")):
+        assert stated_spad_bytes(tmp_path / "named", stem, tile + [second]) == \
+            stated_spad_bytes(tmp_path / "default", stem, tile)
+        assert stated_spad_bytes(tmp_path / "other", stem, tile + [second[:-3] + "64"]) != \
+            stated_spad_bytes(tmp_path / "default", stem, tile)
+
+
 def test_array_dim_comes_from_the_config_name():
     assert array_dim_from_name("systolic_ws_8x8_c1_simple_noc.yml") == 8
     assert array_dim_from_name("systolic_ws_128x128_c2_booksim_tpuv3.yml") == 128

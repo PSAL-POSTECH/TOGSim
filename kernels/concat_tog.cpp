@@ -1,6 +1,6 @@
 // Concatenation of an A_ROWS x D and a B_ROWS x D tensor along the rows, by DMA alone: each TROW x TD tile is
-// loaded and stored where it lands. shape_args: A_ROWS B_ROWS D (example 128 128 256). The tile is compile-time
-// (-DTROW= -DTD=): the spad buffer sizes state it.
+// loaded and stored where it lands, a short last tile as what is left. shape_args: A_ROWS B_ROWS D (example 128 128
+// 256). The tile is compile-time (-DTROW= -DTD=): the spad buffer sizes state it.
 #include "togsim_runtime.h"
 
 #include "kernel_shape.h"
@@ -21,8 +21,6 @@ static const int32_t ARG_OUT = 2;
 static const int64_t BUF_A[1] = {0};
 static const int64_t BUF_B[1] = {1};
 
-static const int64_t TILE[2] = {TROW, TD};
-
 static const int32_t SYNC = 0;
 static const int32_t DENSE = 0;
 
@@ -34,9 +32,11 @@ extern "C" const int64_t togsim_spad_buffer_bytes[2] = {TROW * TD * KERNEL_ELEM_
 static void concat_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   (void)n_iv;
   const int64_t d0 = iv[0], A_ROWS = iv[1], B_ROWS = iv[2], D = iv[3];
+  const int64_t td = kernel_extent(D, d0, TD);
   const int64_t STRIDE[2] = {D, 1};
 
   for (int64_t r = 0; r < A_ROWS; r += TROW) {
+    const int64_t TILE[2] = {kernel_extent(A_ROWS, r, TROW), td};
     togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_A, (uint64_t)(r * D + d0),
                2, TILE, STRIDE, ELEM_BITS,
                SYNC, SEM_NONE, nullptr, 0, BUF_A, 1, DENSE);
@@ -46,6 +46,7 @@ static void concat_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   }
 
   for (int64_t r = 0; r < B_ROWS; r += TROW) {
+    const int64_t TILE[2] = {kernel_extent(B_ROWS, r, TROW), td};
     togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_B, (uint64_t)(r * D + d0),
                2, TILE, STRIDE, ELEM_BITS,
                SYNC, SEM_NONE, nullptr, 0, BUF_B, 1, DENSE);

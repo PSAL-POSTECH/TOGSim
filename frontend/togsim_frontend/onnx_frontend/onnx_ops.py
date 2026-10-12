@@ -35,11 +35,11 @@ OPS: dict[str, list[KernelRef]] = {
 
     "Softmax": [KernelRef("softmax", REDUCING, ("M", "N"), ("TM", "TN"))],
 
-    "LayerNormalization": [KernelRef("layernorm", REDUCING, ("M", "N"), ("TM", "TN"))],
+    "LayerNormalization": [KernelRef("layernorm", REDUCING, ("M", "N"), ("TM", "TN", "TM_STATS"))],
 
     "EmbedLayerNormalization": [KernelRef("embed_layernorm", REDUCING, ("SEQ", "DIM"), ("TSEQ", "TDIM"))],
 
-    "GlobalAveragePool": [KernelRef("global_avgpool", REDUCING, ("C", "HW"), ("TC", "THW"))],
+    "GlobalAveragePool": [KernelRef("global_avgpool", REDUCING, ("C", "HW"), ("TC", "THW", "TC_SCALE"))],
 
     "Relu":  [KernelRef("bias_act", POINTWISE, ("M", "N"), ("TM", "TN"))],
     "Add":   [KernelRef("bias_act", POINTWISE, ("M", "N"), ("TM", "TN"))],

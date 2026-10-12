@@ -23,9 +23,6 @@
 
 static const int32_t ELEM_BITS = KERNEL_ELEM_BITS;
 
-static const int64_t W_SUBTILES = KERNEL_CEIL(TILE_K, SA);
-static const int64_t X_SUBTILES = KERNEL_CEIL(TILE_M, SA);
-
 static const int32_t ARG_X   = 0;
 static const int32_t ARG_W   = 1;
 static const int32_t ARG_OUT = 2;
@@ -35,10 +32,6 @@ static const int64_t BUF_W[1]   = {1};
 static const int64_t BUF_X[1]   = {2};
 
 static const int64_t MM_READ[3] = {0, 1, 2};
-
-static const int64_t TILE_X[4]   = {1, 1, SA, TILE_K};
-static const int64_t TILE_W[4]   = {1, 1, TILE_N, SA};
-static const int64_t TILE_OUT[4] = {1, TILE_N, TILE_I_H, TILE_M};
 
 static const int32_t SYNC  = 0;
 static const int32_t ASYNC = 1;
@@ -50,8 +43,14 @@ static const uint64_t SEM_W    = 2;
 
 static const int32_t CT_SEGMENT = 0;
 
+static const int64_t  NODES        = 2;
 static const uint64_t TID_ACC_INIT = 0;
 static const uint64_t TID_MATMUL   = 1;
+
+static const int32_t AXIS_O_C = 0;
+static const int32_t AXIS_O_H = 1;
+static const int32_t AXIS_O_W = 2;
+static const int32_t AXIS_I_C = 3;
 
 extern "C" const int32_t togsim_spad_buffer_count = 3;
 extern "C" const int64_t togsim_spad_buffer_bytes[3] = {
@@ -64,7 +63,8 @@ static const int32_t CONV_ARGS = 16;
 static const int32_t CONV_EXTENTS = 12;
 
 // One output tile at (oc0, oh0, ow0). A kernel position and TILE_K input channels is one compute, fed the weights
-// and the one input pixel each output of the tile reads there: S_H rows and S_W columns apart.
+// and the one input pixel each output of the tile reads there: S_H rows and S_W columns apart. A tile short of
+// outputs or channels loads, in SA-wide pieces, only what is left, and computes under the tile id of its variant.
 static void conv_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   (void)n_iv;
   const int64_t oc0 = iv[0], oh0 = iv[1], ow0 = iv[2];
@@ -72,36 +72,44 @@ static void conv_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   const int64_t S_H = iv[11], S_W = iv[12], D_H = iv[13], D_W = iv[14];
   const int64_t X_H = I_H + iv[15] + iv[17], X_W = I_W + iv[16] + iv[18];
   const int64_t X_ROW = X_W * I_C;
+  const int64_t tn = kernel_extent(O_C, oc0, TILE_N), th = kernel_extent(O_H, oh0, TILE_I_H);
+  const int64_t tw = kernel_extent(O_W, ow0, TILE_M);
+  const int64_t out_short = kernel_short(tn, TILE_N, AXIS_O_C) | kernel_short(th, TILE_I_H, AXIS_O_H) |
+                            kernel_short(tw, TILE_M, AXIS_O_W);
+  const int64_t TILE_OUT[4]   = {1, tn, th, tw};
   const int64_t STRIDE_X[4]   = {X_H * X_ROW, S_H * X_ROW, S_W * I_C, 1};
   const int64_t STRIDE_W[4]   = {I_C * O_C * K_W, I_C * O_C, I_C, 1};
   const int64_t STRIDE_OUT[4] = {0, O_H * O_W, O_W, 1};
 
-  togsim_compute(ctx, TID_ACC_INIT, CT_SEGMENT, 0, nullptr,
+  togsim_compute(ctx, kernel_tile_id(out_short, NODES, TID_ACC_INIT), CT_SEGMENT, 0, nullptr,
                  nullptr, 0, BUF_ACC, 1);
 
   for (int64_t kh = 0; kh < K_H; ++kh) {
     for (int64_t kw = 0; kw < K_W; ++kw) {
       for (int64_t ic0 = 0; ic0 < I_C; ic0 += TILE_K) {
+        const int64_t tk = kernel_extent(I_C, ic0, TILE_K);
         const int64_t x_off = (oh0 * S_H + kh * D_H) * X_ROW + (ow0 * S_W + kw * D_W) * I_C + ic0;
         const int64_t w_off = (kh * K_W + kw) * O_C * I_C + oc0 * I_C + ic0;
 
-        for (int64_t s = 0; s < W_SUBTILES; ++s) {
-          togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_W, (uint64_t)(w_off + s * SA),
+        for (int64_t s = 0; s < tk; s += SA) {
+          const int64_t TILE_W[4] = {1, 1, tn, kernel_extent(tk, s, SA)};
+          togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_W, (uint64_t)(w_off + s),
                      4, TILE_W, STRIDE_W, ELEM_BITS,
                      ASYNC, SEM_W, nullptr, 0, BUF_W, 1, DENSE);
         }
-        for (int64_t r = 0; r < TILE_I_H; ++r) {
-          for (int64_t s = 0; s < X_SUBTILES; ++s) {
+        for (int64_t r = 0; r < th; ++r) {
+          for (int64_t s = 0; s < tw; s += SA) {
+            const int64_t TILE_X[4] = {1, 1, kernel_extent(tw, s, SA), tk};
             togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X,
-                       (uint64_t)(x_off + r * S_H * X_ROW + s * SA * S_W * I_C),
+                       (uint64_t)(x_off + r * S_H * X_ROW + s * S_W * I_C),
                        4, TILE_X, STRIDE_X, ELEM_BITS,
                        ASYNC, SEM_X, nullptr, 0, BUF_X, 1, DENSE);
           }
         }
-        togsim_memory_barrier(ctx, SEM_W, W_SUBTILES * TILE_N * SA);
-        togsim_memory_barrier(ctx, SEM_X, TILE_I_H * X_SUBTILES * SA * TILE_K);
-        togsim_compute(ctx, TID_MATMUL, CT_SEGMENT, 0, nullptr,
-                       MM_READ, 3, BUF_ACC, 1);
+        togsim_memory_barrier(ctx, SEM_W, tn * tk);
+        togsim_memory_barrier(ctx, SEM_X, th * tw * tk);
+        togsim_compute(ctx, kernel_tile_id(out_short | kernel_short(tk, TILE_K, AXIS_I_C), NODES, TID_MATMUL),
+                       CT_SEGMENT, 0, nullptr, MM_READ, 3, BUF_ACC, 1);
       }
     }
   }

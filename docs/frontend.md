@@ -12,10 +12,17 @@ own tests and its own CI job. Like the [kernel library](kernels.md), it comes fr
   tile costs `ceil(elements / (lanes * elements per lane))` cycles per elementwise instruction; a
   systolic block costs the rows its matmuls feed (one per cycle) plus the `2*SA - 2` stages the
   last one drains through, and those rows are its `Systolic` rows in the unit table. The
-  `overlapping` column is always `0`.
+  `overlapping` column is always `0`. A short last tile is costed by the same formulas at the
+  extents it has: a vector tile by its elements, a block by `depth * ceil(columns / (SA * lanes))`
+  preloads of its rows. So a block 3 channels deep is 3 preloads where an 8-deep one is 8 (the
+  formula counts a preload per depth step and rounds nothing to `SA` there), 13 rows are fed as
+  13 (a matmul of 8 and one of 5), and columns short of `SA * lanes` still take one preload per
+  depth step. Run on its own (`python3 -m togsim_frontend.acs`), ACS writes the rows of the whole
+  tile only, the tables of a shape the tile divides.
 - **The ONNX frontend** (`togsim_frontend.onnx_frontend`). It loads a graph, infers its shapes,
   maps each node to a kernel (some operators to none, fused ones to several), compiles the kernel
-  with the node's tile, writes the node's shape arguments and the ACS tables, replays it with
+  with the node's tile, writes the node's shape arguments and the ACS tables (a row per tile id
+  the kernel names at that shape, the short variants at what is left), replays it with
   `--tog_so`, and sums the nodes' cycles. Each node runs on its own: the total is a sum of
   isolated kernels, not one session.
 
@@ -81,11 +88,23 @@ Metadata operators (Reshape, Transpose, ...) have no work and are counted as no-
 
 A Conv passes its `strides`, `dilations` and `pads` to the kernel as shape arguments, per axis
 and per side (`auto_pad` is turned into the pads it stands for), and sizes the input tensor as
-the padded input, so its loads are at the addresses that convolution reads. Its tile is still cut
-from the output alone: a tile the output does not divide, or a Conv of fewer input channels than
-`SA` (a 3-channel stem), moves past the end of a row, a pixel or a filter, as any kernel does on
-a shape its tile does not divide. The cost ACS gives a conv tile does not depend on the stride,
-the dilation or the pads: a compute is the tile's outputs by one kernel position's channels.
+the padded input, so its loads are at the addresses that convolution reads. The cost ACS gives a
+conv tile does not depend on the stride, the dilation or the pads: a compute is the tile's outputs
+by one kernel position's channels.
+
+## Shapes the tiles do not divide
+
+The tiles stay the fixed ones above, whatever the shape: a
+Relu of 128 rows in tiles of 42 ends in a tile of 2 rows, a Conv of 112 output columns in tiles of
+32 in one of 16, a 3-channel stem runs blocks 3 deep under the 8-deep tile, a Gemm of 5 rows has
+its short tile alone. The frontend predicts the tile ids the kernel names at the node's shape
+(`acs/node_mapping.py` lists each kernel's axes and the axes each node carries), has ACS cost each
+at its extents, and refuses the node if a predicted id has no cycle line or no unit rows. The
+tables have a line of zeros and no unit rows for an id no tile of the shape has, so a compute the
+prediction missed is a TOGSim warning or refusal, not a silent cost. ACS takes one tile per
+kernel: the nodes of layernorm's statistics pass and of global_avgpool's scale pass, which run
+tiles of their own (`TM_STATS`, `TC_SCALE`, 128 rows), are costed by the kernel's main tile as
+they were, whole or short.
 
 ## Tests
 

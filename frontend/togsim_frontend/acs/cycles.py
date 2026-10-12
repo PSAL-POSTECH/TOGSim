@@ -1,6 +1,6 @@
-"""The cost of a kernel's compute nodes, as the cycle table and the unit table TOGSim reads. A node is one compute
-per tile: its cycles go in the first column, the overlapping column is always 0, and the Systolic rows it holds go
-to the unit table, where systolic_array_split spreads them over a core's arrays. Estimates, not gem5 measurements."""
+"""The cost of a kernel's compute nodes, as the cycle table and the unit table TOGSim reads: a compute's cycles (the
+overlapping column is always 0) and the Systolic rows systolic_array_split spreads over a core's arrays. A short
+last tile is a tile id of its own, costed by the same formulas at what is left. Estimates, not gem5 measurements."""
 from __future__ import annotations
 
 import math
@@ -33,10 +33,11 @@ def systolic_instructions(tile: dict, hw: Hardware) -> tuple[int, int]:
 
 
 def systolic_cost(tile: dict, hw: Hardware) -> Cost:
-    """A block's matmuls each feed min(SA, rows) rows, one per cycle; a preload hides behind the matmul before it,
-    and the last matmul drains through the array's 2*SA - 2 stages. The rows are what the split divides."""
-    _, matmuls = systolic_instructions(tile, hw)
-    fed = matmuls * min(hw.sa, int(tile.get("rows", hw.sa)))
+    """The matmuls under a preload feed the block's rows, one per cycle (SA each, the last what is left); a preload
+    hides behind the matmul before it, and the last matmul drains through the array's 2*SA - 2 stages. The rows
+    are what the split divides."""
+    preloads, _ = systolic_instructions(tile, hw)
+    fed = preloads * int(tile.get("rows", hw.sa))
     return Cost(fed + 2 * hw.sa - 2, systolic_rows=fed)
 
 
@@ -67,21 +68,28 @@ def set_cost_function(fn) -> None:
     _cost_function = fn
 
 
-def costs(kernel_desc, tile: dict, hw: Hardware) -> list[Cost]:
-    """One Cost per compute node, in tile_id order. A kernel without a compute node (concat, flatten) gets one
-    zero tile: the unit table has to name the array unit for systolic_array_split to accept it."""
-    return [Cost(*_cost_function(node, tile, hw)) for node in kernel_desc.nodes] or [Cost(0)]
+def costs(kernel_desc, tiles: dict, hw: Hardware) -> dict[int, Cost]:
+    """The Cost of each tile id. `tiles` is the kernel's whole tile, for the ids of its nodes, or {tile id: the
+    tile of its variant} (node + nodes * variant). A kernel without a compute node (concat, flatten) gets one zero
+    tile: the unit table has to name the array unit for systolic_array_split to accept it."""
+    nodes = kernel_desc.nodes
+    if not (tiles and all(isinstance(tile_id, int) for tile_id in tiles)):
+        tiles = {tile_id: tiles for tile_id in range(len(nodes))}
+    return {tile_id: Cost(*_cost_function(nodes[tile_id % len(nodes)], tile, hw))
+            for tile_id, tile in sorted(tiles.items())} or {0: Cost(0)}
 
 
-def build_table(kernel_desc, tile: dict, hw: Hardware) -> list[tuple[int, int]]:
-    """The cycle table rows, (cycles, overlapping): overlapping is always 0, a compute holds its core to its end."""
-    return [(cost.cycles, 0) for cost in costs(kernel_desc, tile, hw)]
+def build_table(kernel_desc, tiles: dict, hw: Hardware) -> list[tuple[int, int]]:
+    """The cycle table rows, (cycles, overlapping), line i for tile id i: overlapping is always 0, a compute holds
+    its core to its end. A tile id below the last that no tile of the shape has is a line of zeros."""
+    by_id = costs(kernel_desc, tiles, hw)
+    return [(by_id[tile_id].cycles if tile_id in by_id else 0, 0) for tile_id in range(max(by_id) + 1)]
 
 
-def build_units(kernel_desc, tile: dict, hw: Hardware) -> list[tuple]:
-    """The unit table rows, (tile_id, unit, unit_of_work, capacity_per_cycle, admitted), two per tile."""
+def build_units(kernel_desc, tiles: dict, hw: Hardware) -> list[tuple]:
+    """The unit table rows, (tile_id, unit, unit_of_work, capacity_per_cycle, admitted), two per tile id costed."""
     rows = []
-    for tile_id, cost in enumerate(costs(kernel_desc, tile, hw)):
+    for tile_id, cost in costs(kernel_desc, tiles, hw).items():
         rows.append((tile_id, *SYSTOLIC_UNIT, cost.systolic_rows))
         rows.append((tile_id, *VECTOR_UNIT, cost.vector_cycles))
     return rows
