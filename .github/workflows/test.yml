@@ -1,0 +1,59 @@
+name: test
+
+# Build this repository with conan and cmake on ubuntu 22.04 and run every test.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: [self-hosted, slurm, x86_64]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    container:
+      image: ubuntu:22.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      CONAN_VERSION: 1.56.0
+      HOST_CMAKE_VERSION: 3.26.4
+
+    steps:
+      # The runner's containers map one uid, so apt cannot switch to its sandbox user.
+      - name: Install the toolchain
+        run: |
+          echo 'APT::Sandbox::User "root";' > /etc/apt/apt.conf.d/99-no-sandbox
+          apt-get update
+          apt-get install -y --no-install-recommends g++ make git python3 python3-pip ca-certificates
+          python3 -m pip install --no-cache-dir "conan==$CONAN_VERSION" "cmake==$HOST_CMAKE_VERSION"
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build
+        run: |
+          conan profile new default --detect --force
+          conan profile update settings.compiler.libcxx=libstdc++ default
+          mkdir -p build && cd build
+          conan install .. --build=missing
+          cmake ..
+          make -j"$(nproc)"
+
+      - name: Test
+        run: python3 tests/run.py --workdir "$GITHUB_WORKSPACE/build/test-tmp"
+
+      - if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: build/test-tmp
+          retention-days: 7
