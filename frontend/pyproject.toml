@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "togsim-frontend"
+version = "0.1.0"
+description = "ONNX frontend and analytic cycle tables (ACS) for the TOGSim kernel library"
+requires-python = ">=3.9"
+dependencies = ["onnx", "pyyaml"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+optimize = ["onnxruntime"]
+
+[project.scripts]
+togsim-onnx = "togsim_frontend.onnx_frontend.run:main"
+togsim-acs = "togsim_frontend.acs.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["togsim_frontend*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

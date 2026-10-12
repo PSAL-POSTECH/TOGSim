@@ -27,6 +27,7 @@ that selects nothing). A failing case says what it expected, what it saw and whe
 | `tests/cycle_table/` | A run without a cycle table, or with a `tile_id` the table does not hold, is refused. |
 | `tests/cycles/` | `Total execution cycles` of four hand-written TOGs on tpuv6e, as goldens. |
 | `tests/examples/` | `examples/run.sh <name>` prints `examples/<name>/expected.txt`; the fenced blocks of the READMEs and of `docs/` quote only lines of those files and of the examples' sources; every row of the README's refusal table is a refusal the mistakes example prints. |
+| `tests/kernels/` | Each kernel of [`kernels/`](../docs/kernels.md) at its example shape: its `MOVIN`/`MOVOUT`/`COMP`/`MEMORY_BAR` counts and its `Total execution cycles`, as goldens; that gemm, conv and attention read their shape arguments; the shape arguments a kernel refuses (exit `1`). No run that checks instruction counts logs a warn-level line: the tables and `tog_tensors.txt` cover every tile id and `arg_id` the kernel names. |
 | `tests/outputs/` | The shape of the lines a run logs, against golden files. |
 | `tests/semaphore/` | A barrier waits for every load of its semaphore; a broken contract is refused, with `--models_list` and a spad size at the launch. |
 | `tests/session/` | `--models_list` with two kernels, on one partition and on two. Two kernels at once on one core free only their own scratchpad bytes. |
