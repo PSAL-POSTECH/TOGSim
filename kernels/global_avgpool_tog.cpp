@@ -1,6 +1,6 @@
 // Global average pooling of C channels of HW elements each: a sum pass over TC x THW tiles, then the scale pass.
 // shape_args: C HW (example 256 64). The tiles are compile-time (-DTC= -DTHW= -DTC_SCALE=): the spad buffer sizes
-// state them.
+// state them. A last tile short on C (of either pass) or HW moves and computes what is left, under its own tile id.
 #include "togsim_runtime.h"
 
 #include "kernel_shape.h"
@@ -25,10 +25,6 @@ static const int64_t BUF_X[1]   = {0};
 static const int64_t BUF_SUM[1] = {1};
 static const int64_t BUF_OUT[1] = {2};
 
-static const int64_t TILE[2]       = {TC, THW};
-static const int64_t TILE_ROW[1]   = {TC};
-static const int64_t TILE_SCALE[1] = {TC_SCALE};
-
 static const int64_t STRIDE_1D[1] = {1};
 
 static const int32_t SYNC = 0;
@@ -41,6 +37,11 @@ static const int32_t CT_VECTOR = 0;
 static const uint64_t TID_REDUCE = 0;
 static const uint64_t TID_WRITE  = 1;
 static const uint64_t TID_SCALE  = 2;
+static const int64_t  NODES      = 3;
+
+static const int32_t AXIS_C       = 0;
+static const int32_t AXIS_HW      = 1;
+static const int32_t AXIS_C_SCALE = 2;
 
 extern "C" const int32_t togsim_spad_buffer_count = 3;
 extern "C" const int64_t togsim_spad_buffer_bytes[3] = {
@@ -48,18 +49,24 @@ extern "C" const int64_t togsim_spad_buffer_bytes[3] = {
 
 static void sum_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   (void)n_iv;
-  const int64_t c0 = iv[0], HW = iv[1];
+  const int64_t c0 = iv[0], C = iv[1], HW = iv[2];
+  const int64_t tc = kernel_extent(C, c0, TC);
+  const int64_t c_short = kernel_short(tc, TC, AXIS_C);
+  const int64_t TILE_ROW[1] = {tc};
   const int64_t STRIDE_2D[2] = {HW, 1};
 
   for (int64_t hw0 = 0; hw0 < HW; hw0 += THW) {
+    const int64_t thw = kernel_extent(HW, hw0, THW);
+    const int64_t variant = c_short | kernel_short(thw, THW, AXIS_HW);
+    const int64_t TILE[2] = {tc, thw};
     togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X, (uint64_t)(c0 * HW + hw0),
                2, TILE, STRIDE_2D, ELEM_BITS,
                SYNC, SEM_NONE, nullptr, 0, BUF_X, 1, DENSE);
-    togsim_compute(ctx, TID_REDUCE, CT_VECTOR, 0, nullptr,
+    togsim_compute(ctx, kernel_tile_id(variant, NODES, TID_REDUCE), CT_VECTOR, 0, nullptr,
                    BUF_X, 1, nullptr, 0);
   }
 
-  togsim_compute(ctx, TID_WRITE, CT_VECTOR, 0, nullptr,
+  togsim_compute(ctx, kernel_tile_id(c_short, NODES, TID_WRITE), CT_VECTOR, 0, nullptr,
                  nullptr, 0, BUF_SUM, 1);
   togsim_dma(ctx, TOGSIM_DMA_STORE, ARG_SUM, (uint64_t)c0,
              1, TILE_ROW, STRIDE_1D, ELEM_BITS,
@@ -68,12 +75,15 @@ static void sum_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
 
 static void scale_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   (void)n_iv;
-  const int64_t c0 = iv[0];
+  const int64_t c0 = iv[0], C = iv[1];
+  const int64_t tc = kernel_extent(C, c0, TC_SCALE);
+  const int64_t variant = kernel_short(tc, TC_SCALE, AXIS_C_SCALE);
+  const int64_t TILE_SCALE[1] = {tc};
   togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_SUM, (uint64_t)c0,
              1, TILE_SCALE, STRIDE_1D, ELEM_BITS,
              SYNC, SEM_NONE, nullptr, 0, BUF_SUM, 1, DENSE);
 
-  togsim_compute(ctx, TID_SCALE, CT_VECTOR, 0, nullptr,
+  togsim_compute(ctx, kernel_tile_id(variant, NODES, TID_SCALE), CT_VECTOR, 0, nullptr,
                  BUF_SUM, 1, BUF_OUT, 1);
   togsim_dma(ctx, TOGSIM_DMA_STORE, ARG_OUT, (uint64_t)c0,
              1, TILE_SCALE, STRIDE_1D, ELEM_BITS,
@@ -89,11 +99,11 @@ extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n) {
   int64_t key = 0;
 
   for (int64_t c0 = 0; c0 < C; c0 += TC) {
-    int64_t iv[2] = {c0, HW};
-    togsim_dispatch(ctx, sum_tile, iv, 2, key++);
+    int64_t iv[3] = {c0, C, HW};
+    togsim_dispatch(ctx, sum_tile, iv, 3, key++);
   }
   for (int64_t c0 = 0; c0 < C; c0 += TC_SCALE) {
-    int64_t iv[1] = {c0};
-    togsim_dispatch(ctx, scale_tile, iv, 1, key++);
+    int64_t iv[2] = {c0, C};
+    togsim_dispatch(ctx, scale_tile, iv, 2, key++);
   }
 }

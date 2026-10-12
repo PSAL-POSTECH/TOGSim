@@ -1,6 +1,6 @@
 // Max pooling over a 2 x 2 window with stride 2, into a ROWS x COLS output, one TROW x TCOL tile per work-item:
-// the four window taps are four strided loads of the 2 COLS-wide input. shape_args: ROWS COLS (example 1024 16).
-// The tile is compile-time (-DTROW= -DTCOL=): the spad buffer sizes state it.
+// the four window taps are four strided loads of the 2 COLS-wide input; a short last tile has its own tile id.
+// shape_args: ROWS COLS (example 1024 16). The tile is compile-time (-DTROW= -DTCOL=): the spad sizes state it.
 #include "togsim_runtime.h"
 
 #include "kernel_shape.h"
@@ -25,8 +25,6 @@ static const int64_t BUF_OUT[1] = {4};
 
 static const int64_t VEC_READ[4] = {0, 1, 2, 3};
 
-static const int64_t TILE[2] = {TROW, TCOL};
-
 static const int32_t SYNC = 0;
 static const int32_t DENSE = 0;
 
@@ -34,7 +32,11 @@ static const uint64_t SEM_NONE = 0;
 
 static const int32_t CT_VECTOR = 0;
 
+static const int64_t  NODES = 1;
 static const uint64_t TID_MAX = 0;
+
+static const int32_t AXIS_ROWS = 0;
+static const int32_t AXIS_COLS = 1;
 
 #define TILE_BYTES (TROW * TCOL * KERNEL_ELEM_BYTES)
 extern "C" const int32_t togsim_spad_buffer_count = 5;
@@ -42,7 +44,10 @@ extern "C" const int64_t togsim_spad_buffer_bytes[5] = {TILE_BYTES, TILE_BYTES, 
 
 static void maxpool_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   (void)n_iv;
-  const int64_t r0 = iv[0], c0 = iv[1], COLS = iv[2];
+  const int64_t r0 = iv[0], c0 = iv[1], ROWS = iv[2], COLS = iv[3];
+  const int64_t trow = kernel_extent(ROWS, r0, TROW), tcol = kernel_extent(COLS, c0, TCOL);
+  const int64_t variant = kernel_short(trow, TROW, AXIS_ROWS) | kernel_short(tcol, TCOL, AXIS_COLS);
+  const int64_t TILE[2] = {trow, tcol};
   const int64_t IN_W = 2 * COLS, IN_ROW_STRIDE = 2 * IN_W;
   const int64_t STRIDE_IN[2]  = {IN_ROW_STRIDE, 2};
   const int64_t STRIDE_OUT[2] = {COLS, 1};
@@ -59,7 +64,7 @@ static void maxpool_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X, (uint64_t)(base + IN_W + 1),
              2, TILE, STRIDE_IN, ELEM_BITS,
              SYNC, SEM_NONE, nullptr, 0, BUF_W3, 1, DENSE);
-  togsim_compute(ctx, TID_MAX, CT_VECTOR, 0, nullptr,
+  togsim_compute(ctx, kernel_tile_id(variant, NODES, TID_MAX), CT_VECTOR, 0, nullptr,
                  VEC_READ, 4, BUF_OUT, 1);
   togsim_dma(ctx, TOGSIM_DMA_STORE, ARG_OUT, (uint64_t)(r0 * COLS + c0),
              2, TILE, STRIDE_OUT, ELEM_BITS,
@@ -75,8 +80,8 @@ extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n) {
   int64_t key = 0;
   for (int64_t r0 = 0; r0 < ROWS; r0 += TROW) {
     for (int64_t c0 = 0; c0 < COLS; c0 += TCOL) {
-      int64_t iv[3] = {r0, c0, COLS};
-      togsim_dispatch(ctx, maxpool_tile, iv, 3, key++);
+      int64_t iv[4] = {r0, c0, ROWS, COLS};
+      togsim_dispatch(ctx, maxpool_tile, iv, 4, key++);
     }
   }
 }

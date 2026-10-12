@@ -27,8 +27,11 @@ TOTAL = re.compile(r"Total execution cycles: (\d+)")
 
 def standalone(tog_dir, stem, macros=(), shape=None, tensors=(MIB,) * 8, cycles=(), units=None, config=CONFIG,
                log_level="info"):
-    """Compile kernels/<stem>_tog.cpp with g++ and replay it from `tog_dir`, laid out by hand: the run's log."""
+    """Compile kernels/<stem>_tog.cpp with g++ and replay it from `tog_dir`, laid out by hand: the run's log.
+    `cycles` lists the cycles of tile 0, 1, ..., or is {tile id: cycles} with zeros for the ids between."""
     tog_dir.mkdir(parents=True)
+    if isinstance(cycles, dict):
+        cycles = [cycles.get(i, 0) for i in range(max(cycles) + 1)]
     subprocess.run(["g++", "-shared", "-fPIC", "-std=gnu++17", "-O1", "-I", str(paths.include_dir()),
                     *[f"-D{m}" for m in macros], str(paths.kernel_source(stem)), "-o", str(tog_dir / "tog.so")],
                    check=True)
@@ -47,9 +50,10 @@ def standalone(tog_dir, stem, macros=(), shape=None, tensors=(MIB,) * 8, cycles=
 
 
 def units_of(cycles, systolic_rows=None):
-    """The unit table ACS writes for tiles of `cycles`: tile i holds systolic_rows[i] rows, or the vector unit."""
+    """The unit table ACS writes for tiles of `cycles` (a list, or {tile id: cycles}): tile i holds
+    systolic_rows[i] rows, or the vector unit."""
     rows = systolic_rows or {}
-    return [row for i, c in enumerate(cycles)
+    return [row for i, c in (cycles.items() if isinstance(cycles, dict) else enumerate(cycles))
             for row in ((i, "Systolic", "rows", 1, rows.get(i, 0)), (i, "Vpu", "cycles", 1, 0 if i in rows else c))]
 
 
@@ -192,8 +196,9 @@ def test_a_conv_relu_graph_totals_its_nodes_replayed_alone(tmp_path):
     assert report["total_cycles"] == conv + bias_act
 
 
-#: The tables ACS writes for a conv tile of 8 x 16 outputs: 64 or 128 filters over 64 channels, and 64 over 8.
-CONV_64, CONV_128, CONV_8_DEEP = ([128, 8206], {1: 8192}), ([256, 16398], {1: 16384}), ([128, 1038], {1: 1024})
+#: The tables ACS writes for a conv tile of 8 x 16 outputs: 64 or 128 filters over 64 channels, and 64 over the 3
+#: of an image, short of the 8-deep block: its matmul is tile id 1 + 2 * 8, three preloads of 128 rows.
+CONV_64, CONV_128, CONV_3_DEEP = ([128, 8206], {1: 8192}), ([256, 16398], {1: 16384}), ({0: 128, 17: 398}, {17: 384})
 #: A Conv: its attributes, input and weight shapes, the output's rows and columns; then the kernel run it has to
 #: be, written out by hand: the TILE_N and TILE_K macros, the shape arguments after I_C I_H I_W O_C and the tables.
 CONVS = {
@@ -204,7 +209,7 @@ CONVS = {
     "1x1_stride_2": (dict(strides=[2, 2]), [1, 64, 32, 32], [128, 64, 1, 1], (16, 16),
                      (128, 64), (16, 16, 1, 1, 2, 2, 1, 1, 0, 0, 0, 0), CONV_128),
     "7x7_stride_2_pad_3_of_3_channels": (dict(strides=[2, 2], pads=[3, 3, 3, 3]), [1, 3, 32, 32], [64, 3, 7, 7],
-                                         (16, 16), (64, 8), (16, 16, 7, 7, 2, 2, 1, 1, 3, 3, 3, 3), CONV_8_DEEP),
+                                         (16, 16), (64, 8), (16, 16, 7, 7, 2, 2, 1, 1, 3, 3, 3, 3), CONV_3_DEEP),
     "stride_2x1_pads_0_1_1_2": (dict(strides=[2, 1], pads=[0, 1, 1, 2]), [1, 64, 32, 15], [64, 64, 3, 3], (16, 16),
                                 (64, 64), (16, 16, 3, 3, 2, 1, 1, 1, 0, 1, 1, 2), CONV_64),
     "dilation_2x3": (dict(dilations=[2, 3], pads=[2, 3, 2, 3]), [1, 64, 16, 16], [64, 64, 3, 3], (16, 16),
@@ -278,3 +283,4 @@ def test_a_fully_mapped_graph_exits_zero_and_refuses_nothing(tmp_path, capsys):
     report = run_frontend(model, tmp_path / "out", status=0)
     assert report["refused"] == [] and report["unmapped"] == {} and report["nodes_run"] == 1
     assert "INCOMPLETE" not in capsys.readouterr().out
+

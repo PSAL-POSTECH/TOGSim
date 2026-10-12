@@ -67,23 +67,48 @@ def example(kernel):
     return lambda t: expect_insts(replay(t, kernel, **how), how["insts"]).expect_total_cycles(how["total"])
 
 
+TILE_ID_CYCLES = 100
+
+
+def replay_ids(t, kernel, tensors, ids, shape, defines=()):
+    """`kernel` at `shape` against tables that hold the tile ids `ids` and no other: tile id i runs 100 + i cycles on
+    the vector unit, so the cycles of a compute name its tile id. An id beyond the last is refused by TOGSim, one
+    below it that is not listed has a line of zeros and no unit rows, which TOGSim warns about."""
+    cycles = [TILE_ID_CYCLES + i if i in ids else 0 for i in range(max(ids, default=0) + 1)]
+    units = [row for i in sorted(ids) or [0]
+             for row in ((i, "Systolic", "rows", 1, 0), (i, "Vpu", "cycles", 1, cycles[i]))]
+    tog = t.tog(KERNELS / f"{kernel}_tog.cpp", defines, tensors=tensors, shape=shape)
+    return t.simulate(tog, t.machine(), cycles, units, log_level="trace")
+
+
+def expect_ids(run, ids):
+    """The tile ids the computes of the run named, read from the cycles of every COMP issued, are `ids`."""
+    seen = {int(e.fields["compute_cycle"]) - TILE_ID_CYCLES
+            for e in run.events() if e.tag == "INST_ISSUED" and e.opcode == "COMP"}
+    if seen != set(ids):
+        run.fail(f"expected computes of tile ids {sorted(ids)}, got {sorted(seen)}")
+    return run
+
+
 def gemm_reads_its_shape_arguments(t):
     """M K N = 100 200 300 in 32 x 256 tiles of 64-deep K blocks is 4 x 2 work-items of 4 blocks: two loads and two
-    barriers per block, a compute per block and one per work-item, a store per work-item."""
+    barriers per block, a compute per block and one per work-item, a store per work-item. Each axis has whole
+    tiles and a short last one: acc_init in the 4 variants of M and N, matmul in the 8 of M, N and K."""
     work_items, blocks = 4 * 2, 4
     expected = (work_items * blocks * 2, work_items, work_items * (blocks + 1), work_items * blocks * 2)
-    expect_insts(replay(t, "gemm", (80000, 240000, 120000), GEMM["cycles"], GEMM["rows"], shape=(100, 200, 300)),
-                 expected)
+    ids = {0, 2, 4, 6} | set(range(1, 16, 2))
+    expect_ids(expect_insts(replay_ids(t, "gemm", (80000, 240000, 120000), ids, (100, 200, 300)), expected), ids)
 
 
 def conv_reads_its_shape_and_its_tile(t):
     """A 3 -> 64 channel 3 x 3 convolution of a 32 x 32 image with -DTILE_K=8: 8 work-items (4 x 2 output tiles of
-    8 x 16), each 9 kernel positions of 1 weight and 16 input loads, 2 barriers and a compute."""
+    8 x 16), each 9 kernel positions of 1 weight and 16 input loads, 2 barriers and a compute. The 3 channels are
+    short of the 8-deep block, so the matmul is tile id 1 + 2 * 8."""
     work_items, positions = 8, 9
     expected = (work_items * positions * 17, work_items, work_items * (positions + 1), work_items * positions * 2)
     tensors = (34 * 34 * 3 * 4, 9 * 64 * 3 * 4, 64 * 32 * 32 * 4)
-    expect_insts(replay(t, "conv", tensors, [16, 8214], {1: 8192}, shape=(3, 32, 32, 64, 32, 32, 3, 3) + (1,) * 8,
-                        defines=("TILE_K=8",)), expected)
+    run = replay_ids(t, "conv", tensors, {0, 17}, (3, 32, 32, 64, 32, 32, 3, 3) + (1,) * 8, ("TILE_K=8",))
+    expect_ids(expect_insts(run, expected), {0, 17})
 
 
 CONV_TILE = dict(rows=8, cols=16, channels=64, sa=8)
@@ -96,9 +121,11 @@ def conv_tensors(shape):
     return ((i_h + p_t + p_b) * (i_w + p_l + p_r) * i_c * 4, k_h * k_w * o_c * i_c * 4, o_c * o_h * o_w * 4)
 
 
-def moved(run, tensors):
+def moved(run, tensors, elem_bytes=None):
     """Per tensor argument, {element offset: times a DMA of the run moved it}, from the address, size and stride of
-    every MOVIN and MOVOUT issued (trace level). TOGSim lays the tensors back to back, each start 16 KiB aligned."""
+    every MOVIN and MOVOUT issued (trace level). TOGSim lays the tensors back to back, each start 16 KiB aligned;
+    an element is 4 bytes unless `elem_bytes` gives the tensor's."""
+    elem_bytes = elem_bytes or (4,) * len(tensors)
     bases, at = [], 0
     for size in tensors:
         bases.append(at)
@@ -110,49 +137,74 @@ def moved(run, tensors):
         dram = int(e.fields["dram"], 16)
         arg = max(i for i, base in enumerate(bases) if base <= dram)
         extent, stride = ([int(n) for n in e.fields[key].strip("[]").split(",")] for key in ("size", "stride"))
-        first = (dram - bases[arg]) // 4
+        first = (dram - bases[arg]) // elem_bytes[arg]
         seen[arg].update(first + sum(i * step for i, step in zip(index, stride))
                          for index in itertools.product(*map(range, extent)))
     return seen
 
 
-def convolved(shape, tiles, depth):
-    """What a convolution of `shape` moves, as `moved` counts it: an input element once per output and kernel
-    position that reads it, a weight once per output tile, an output element once. `depth` is the channels a
-    load spans from one pixel or filter: I_C, or the tile's when I_C is under it."""
+def cut(dim, tile):
+    """The extents of the tiles an axis `dim` long is walked in, `tile` at a time: the last is what is left."""
+    return [min(tile, dim - at) for at in range(0, dim, tile)]
+
+
+def expect_moved(run, tensors, expected, names, elem_bytes=None):
+    """No DMA of the run ends past its tensor, and per tensor the elements moved are `expected`, offsets with the
+    times each is moved."""
+    elem_bytes = elem_bytes or (4,) * len(tensors)
+    seen = moved(run, tensors, elem_bytes)
+    beyond = tuple(max(0, max(got, default=-1) + 1 - size // width)
+                   for got, size, width in zip(seen, tensors, elem_bytes))
+    if any(beyond):
+        run.fail(f"expected every DMA inside its tensor, got DMAs ending {beyond} elements past {names}")
+    for name, got, want in zip(names, seen, expected):
+        if got != want:
+            off = sorted((got - want) + (want - got))
+            run.fail(f"{name}: the DMAs moved {sum(got.values())} elements, this shape moves {sum(want.values())}; "
+                     f"{len(off)} element offsets differ, the first {off[:4]}")
+    return run
+
+
+def convolved(shape, planes):
+    """What a convolution of `shape` moves, as `moved` counts it: an input element once per output, kernel position
+    and tile of 64 filters that reads it, a weight once per tile of its output plane (`planes` of them), an output
+    element once."""
     i_c, i_h, i_w, o_c, o_h, o_w, k_h, k_w, s_h, s_w, d_h, d_w, p_t, p_l, p_b, p_r = shape
     x_w = i_w + p_l + p_r
     x = Counter(((oh * s_h + kh * d_h) * x_w + ow * s_w + kw * d_w) * i_c + c
                 for oh in range(o_h) for ow in range(o_w) for kh in range(k_h) for kw in range(k_w)
-                for c in range(depth))
-    w = Counter(filt * i_c + c for filt in range(k_h * k_w * o_c) for c in range(depth) for _ in range(tiles))
-    return [x, w, Counter(range(o_c * o_h * o_w))]
+                for c in range(i_c) for _ in cut(o_c, 64))
+    return [x, times(k_h * k_w * o_c * i_c, planes), times(o_c * o_h * o_w)]
 
 
-def conv_moves(shape, total, tile_k=CONV_TILE["channels"], past=(0, 0, 0)):
-    """conv at `shape` (O_C a multiple of 64, O_H of 8 and O_W of 16: whole tiles) in TILE_K=`tile_k` blocks issues
-    the DMAs of its tiles, moves exactly the elements a convolution of that shape reads and writes, ends `past`
-    elements beyond each tensor, and replays to `total`, a golden."""
+def conv_moves(shape, total, tile_k=CONV_TILE["channels"], tile_m=CONV_TILE["cols"], ids=None, block=1):
+    """conv at `shape` (-DTILE_K=`tile_k` -DTILE_M=`tile_m`) issues the DMAs of its tiles, SA-wide pieces of what
+    each has, moves exactly the elements a convolution of that shape does, none past a tensor, and replays to `total`,
+    a golden: at the example's costs with a block as tile id `block`, or naming exactly the tile ids `ids`."""
     def case(t):
         i_c, _, _, o_c, o_h, o_w, k_h, k_w = shape[:8]
-        tiles = (o_c // 64) * (o_h // CONV_TILE["rows"]) * (o_w // CONV_TILE["cols"])
-        blocks = k_h * k_w * -(-i_c // tile_k)
-        loads = tile_k // CONV_TILE["sa"] + CONV_TILE["rows"] * CONV_TILE["cols"] // CONV_TILE["sa"]
+        sa = CONV_TILE["sa"]
+        planes = [(th, tw) for th in cut(o_h, CONV_TILE["rows"]) for tw in cut(o_w, tile_m)]
+        tiles = [plane for _ in cut(o_c, 64) for plane in planes]
+        blocks = cut(i_c, tile_k)
+        loads = k_h * k_w * sum(-(-tk // sa) + th * -(-tw // sa) for th, tw in tiles for tk in blocks)
+        computes = k_h * k_w * len(blocks)
         tensors = conv_tensors(shape)
-        run = replay(t, "conv", tensors, [16, 8214], {1: 8192}, shape=shape, defines=(f"TILE_K={tile_k}",),
-                     log_level="trace")
-        expect_insts(run, (tiles * blocks * loads, tiles, tiles * (blocks + 1), tiles * blocks * 2))
-        seen, expected = moved(run, tensors), convolved(shape, tiles, max(i_c, tile_k))
-        for name, got, want, size in zip(("the input", "the weights", "the output"), seen, expected, tensors):
-            if got != want:
-                off = sorted((got - want) + (want - got))
-                run.fail(f"{name}: the DMAs moved {sum(got.values())} elements, a convolution of this shape moves "
-                         f"{sum(want.values())}; {len(off)} element offsets differ, the first {off[:4]}")
-        beyond = tuple(max(0, max(got) + 1 - size // 4) for got, size in zip(seen, tensors))
-        if beyond != past:
-            run.fail(f"expected the DMAs to end {past} elements past (input, weights, output), got {beyond}")
+        defines = (f"TILE_K={tile_k}", f"TILE_M={tile_m}")
+        run = replay_ids(t, "conv", tensors, ids, shape, defines) if ids else replay(
+            t, "conv", tensors, [16] + [0] * (block - 1) + [8214], {block: 8192}, shape=shape, defines=defines,
+            log_level="trace")
+        expect_insts(run, (loads, len(tiles), len(tiles) * (computes + 1), len(tiles) * computes * 2))
+        expect_moved(run, tensors, convolved(shape, len(planes)), ("the input", "the weights", "the output"))
+        if ids:
+            expect_ids(run, ids)
         run.expect_total_cycles(total)
     return case
+
+
+def times(elements, count=1):
+    """{offset: count} for the first `elements` offsets of a tensor: each moved `count` times."""
+    return Counter({offset: count for offset in range(elements)})
 
 
 def attention_shares_a_kv_head(t):
@@ -188,7 +240,7 @@ CASES = [Case(f"example.{kernel}", example(kernel)) for kernel in EXAMPLE] + [
     Case("conv.stride_2x1_pads_0_1_1_2", conv_moves((64, 32, 15, 64, 16, 16, 3, 3, 2, 1, 1, 1, 0, 1, 1, 2), 74731)),
     Case("conv.dilation_2x3_pads_2_3_2_3", conv_moves((64, 16, 16, 64, 16, 16, 3, 3, 1, 1, 2, 3, 2, 3, 2, 3), 74764)),
     Case("conv.7x7_stride_2_pad_3_of_3_channels", conv_moves(
-        (3, 32, 32, 64, 16, 16, 7, 7, 2, 2, 1, 1, 3, 3, 3, 3), 404705, tile_k=8, past=(0, 5, 0))),
+        (3, 32, 32, 64, 16, 16, 7, 7, 2, 2, 1, 1, 3, 3, 3, 3), 404705, tile_k=8, block=17)),
     Case("refused.conv_row_past_the_padded_input", refused(
         (64, 16, 16, 64, 16, 16, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1),
         "kernel conv: output row 15 reads input row 32, and the padded input has 18 rows", "conv")),

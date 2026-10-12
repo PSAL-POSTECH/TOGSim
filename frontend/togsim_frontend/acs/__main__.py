@@ -1,4 +1,5 @@
-"""`python -m togsim_frontend.acs <kernel>`: write tog_cycles.tsv and tog_units.tsv for one kernel of kernels/."""
+"""`python -m togsim_frontend.acs <kernel>`: write tog_cycles.tsv and tog_units.tsv for one kernel of kernels/, its
+whole tile: the tables of a shape the tile divides. The frontend adds the rows of the short last tiles of a shape."""
 from __future__ import annotations
 
 import argparse
@@ -65,7 +66,7 @@ def main(argv=None) -> int:
     print(f"tile     : {' '.join(f'{k}={v}' for k, v in tile.items())}")
     print(f"tables   : {table} {units}")
     print(f"  {'node':<14} {'type':<8} {'cycles':>7} {'rows':>7}")
-    for cost, node in zip(costs, desc.nodes):
+    for cost, node in zip(costs.values(), desc.nodes):
         print(f"  {node.name:<14} {node.compute_type:<8} {cost.cycles:>7} {cost.systolic_rows:>7}")
     return 0
 

@@ -3,8 +3,8 @@ and hardware macros, the byte size of each tensor argument and the tile ACS cost
 from __future__ import annotations
 
 from .onnx_ops import KernelRef, POINTWISE, REDUCING, SYSTOLIC
-from .tiling import (ATTENTION_KEYS, ATTENTION_QUERIES, CONV_TILE_ROWS, Hardware, check_systolic, pointwise_tile,
-                     reducing_tile, systolic_tile)
+from .tiling import (ATTENTION_KEYS, ATTENTION_QUERIES, CONV_TILE_ROWS, SECOND_PASS_ROWS, Hardware, check_systolic,
+                     pointwise_tile, reducing_tile, systolic_tile)
 
 
 def rows_cols(shape: list[int]) -> tuple[int, int]:
@@ -138,7 +138,7 @@ def constants(node, kernel: KernelRef, shapes: dict, hw: Hardware) -> dict[str, 
         c = x[1] if len(x) >= 2 else x[0]
         hw_elems = (x[2] * x[3]) if len(x) == 4 else 1
         tc, thw = reducing_tile(c, hw_elems, hw)
-        out.update(C=c, HW=hw_elems, TC=tc, THW=thw)
+        out.update(C=c, HW=hw_elems, TC=tc, THW=thw, TC_SCALE=SECOND_PASS_ROWS)
 
     elif kernel.stem == "concat":
         a_rows, d = rows_cols(shapes[node.input[0]])
@@ -168,6 +168,8 @@ def constants(node, kernel: KernelRef, shapes: dict, hw: Hardware) -> dict[str, 
             out[tiles[0]] = tm
         if len(tiles) > 1:
             out[tiles[1]] = tn
+        if len(tiles) > 2:
+            out[tiles[2]] = SECOND_PASS_ROWS
 
     for name in kernel.hw_names:
         out[name] = hw.sa if name == "SA" else hw.vlane

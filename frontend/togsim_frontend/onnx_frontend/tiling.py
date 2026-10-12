@@ -9,6 +9,8 @@ TILE_ROWS, TILE_COLS, TILE_DEPTH = 32, 256, 64
 CONV_TILE_ROWS = 8
 #: The tile of an Attention: queries x keys.
 ATTENTION_QUERIES, ATTENTION_KEYS = 8, 64
+#: The rows of the tile of a second pass: layernorm's statistics, global_avgpool's scale. What the kernels default to.
+SECOND_PASS_ROWS = 128
 ELEM_BYTES = 4
 #: The spad buffers of the largest systolic tile, conv's: the accumulator, the weights and the input.
 SYSTOLIC_TILE_SPAD_BYTES = (TILE_COLS * CONV_TILE_ROWS * TILE_ROWS + TILE_DEPTH * TILE_COLS

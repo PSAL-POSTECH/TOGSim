@@ -1,6 +1,6 @@
 // Layer normalization of (x + skip) over the rows of an M x N tensor: a statistics pass, then the normalize pass.
 // shape_args: M N (example 128 256). The tiles are compile-time (-DTM= -DTN= -DTM_STATS=): the spad buffer sizes
-// state them.
+// state them. A last tile short on M (of either pass) or N moves and computes what is left, under its own tile id.
 #include "togsim_runtime.h"
 
 #include "kernel_shape.h"
@@ -36,10 +36,6 @@ static const int64_t BUF_OUT[1]  = {6};
 static const int64_t READ_X_SKIP[2] = {0, 4};
 static const int64_t READ_ALL[6]    = {0, 1, 2, 3, 4, 5};
 
-static const int64_t TILE[2]       = {TM, TN};
-static const int64_t TILE_STATS[2] = {TM_STATS, TN};
-static const int64_t TILE_ROW[1]   = {TM_STATS};
-
 static const int64_t STRIDE_1D[1]  = {1};
 static const int64_t STRIDE_ROW[2] = {1, 0};
 static const int64_t STRIDE_COL[2] = {0, 1};
@@ -55,6 +51,11 @@ static const uint64_t TID_REDUCE     = 0;
 static const uint64_t TID_WRITE_MEAN = 1;
 static const uint64_t TID_WRITE_VAR  = 2;
 static const uint64_t TID_NORM       = 3;
+static const int64_t  NODES          = 4;
+
+static const int32_t AXIS_M       = 0;
+static const int32_t AXIS_N       = 1;
+static const int32_t AXIS_M_STATS = 2;
 
 #define LARGER_TILE_BYTES (KERNEL_MAX(TM, TM_STATS) * TN * KERNEL_ELEM_BYTES)
 extern "C" const int32_t togsim_spad_buffer_count = 7;
@@ -64,26 +65,32 @@ extern "C" const int64_t togsim_spad_buffer_bytes[7] = {
 
 static void stats_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   (void)n_iv;
-  const int64_t m0 = iv[0], N = iv[1];
+  const int64_t m0 = iv[0], M = iv[1], N = iv[2];
+  const int64_t tm = kernel_extent(M, m0, TM_STATS);
+  const int64_t m_short = kernel_short(tm, TM_STATS, AXIS_M_STATS);
+  const int64_t TILE_ROW[1] = {tm};
   const int64_t STRIDE_2D[2] = {N, 1};
 
   for (int64_t n0 = 0; n0 < N; n0 += TN) {
+    const int64_t tn = kernel_extent(N, n0, TN);
+    const int64_t variant = m_short | kernel_short(tn, TN, AXIS_N);
+    const int64_t TILE_STATS[2] = {tm, tn};
     togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X, (uint64_t)(m0 * N + n0),
                2, TILE_STATS, STRIDE_2D, ELEM_BITS,
                SYNC, SEM_NONE, nullptr, 0, BUF_X, 1, DENSE);
     togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_SKIP, (uint64_t)(m0 * N + n0),
                2, TILE_STATS, STRIDE_2D, ELEM_BITS,
                SYNC, SEM_NONE, nullptr, 0, BUF_SKIP, 1, DENSE);
-    togsim_compute(ctx, TID_REDUCE, CT_VECTOR, 0, nullptr,
+    togsim_compute(ctx, kernel_tile_id(variant, NODES, TID_REDUCE), CT_VECTOR, 0, nullptr,
                    READ_X_SKIP, 2, nullptr, 0);
   }
 
-  togsim_compute(ctx, TID_WRITE_MEAN, CT_VECTOR, 0, nullptr,
+  togsim_compute(ctx, kernel_tile_id(m_short, NODES, TID_WRITE_MEAN), CT_VECTOR, 0, nullptr,
                  nullptr, 0, BUF_MEAN, 1);
   togsim_dma(ctx, TOGSIM_DMA_STORE, ARG_MEAN, (uint64_t)m0,
              1, TILE_ROW, STRIDE_1D, ELEM_BITS,
              SYNC, SEM_NONE, BUF_MEAN, 1, nullptr, 0, DENSE);
-  togsim_compute(ctx, TID_WRITE_VAR, CT_VECTOR, 0, nullptr,
+  togsim_compute(ctx, kernel_tile_id(m_short, NODES, TID_WRITE_VAR), CT_VECTOR, 0, nullptr,
                  nullptr, 0, BUF_VAR, 1);
   togsim_dma(ctx, TOGSIM_DMA_STORE, ARG_VAR, (uint64_t)m0,
              1, TILE_ROW, STRIDE_1D, ELEM_BITS,
@@ -92,7 +99,10 @@ static void stats_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
 
 static void norm_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   (void)n_iv;
-  const int64_t m0 = iv[0], n0 = iv[1], N = iv[2];
+  const int64_t m0 = iv[0], n0 = iv[1], M = iv[2], N = iv[3];
+  const int64_t tm = kernel_extent(M, m0, TM), tn = kernel_extent(N, n0, TN);
+  const int64_t variant = kernel_short(tm, TM, AXIS_M) | kernel_short(tn, TN, AXIS_N);
+  const int64_t TILE[2] = {tm, tn};
   const int64_t STRIDE_2D[2] = {N, 1};
   togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X, (uint64_t)(m0 * N + n0),
              2, TILE, STRIDE_2D, ELEM_BITS,
@@ -113,7 +123,7 @@ static void norm_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
              2, TILE, STRIDE_COL, ELEM_BITS,
              SYNC, SEM_NONE, nullptr, 0, BUF_B, 1, DENSE);
 
-  togsim_compute(ctx, TID_NORM, CT_VECTOR, 0, nullptr,
+  togsim_compute(ctx, kernel_tile_id(variant, NODES, TID_NORM), CT_VECTOR, 0, nullptr,
                  READ_ALL, 6, BUF_OUT, 1);
   togsim_dma(ctx, TOGSIM_DMA_STORE, ARG_OUT, (uint64_t)(m0 * N + n0),
              2, TILE, STRIDE_2D, ELEM_BITS,
@@ -129,13 +139,13 @@ extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n) {
   int64_t key = 0;
 
   for (int64_t m0 = 0; m0 < M; m0 += TM_STATS) {
-    int64_t iv[2] = {m0, N};
-    togsim_dispatch(ctx, stats_tile, iv, 2, key++);
+    int64_t iv[3] = {m0, M, N};
+    togsim_dispatch(ctx, stats_tile, iv, 3, key++);
   }
   for (int64_t m0 = 0; m0 < M; m0 += TM) {
     for (int64_t n0 = 0; n0 < N; n0 += TN) {
-      int64_t iv[3] = {m0, n0, N};
-      togsim_dispatch(ctx, norm_tile, iv, 3, key++);
+      int64_t iv[4] = {m0, n0, M, N};
+      togsim_dispatch(ctx, norm_tile, iv, 4, key++);
     }
   }
 }
