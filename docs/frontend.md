@@ -72,8 +72,9 @@ a config is accepted when all of these hold:
 - `SA * vpu_num_lanes`, the columns of one matmul instruction, divides a tile's columns: it
   divides 64 (and so 256).
 - `core_spad_size_kb`, if the config states it, is at least 384, the spad buffers of the largest
-  tile (a Conv's). TOGSim never issues a tile whose buffers exceed the spad, so a smaller one
-  would not finish.
+  tile (a Conv's). TOGSim refuses a TOG with a work-item that needs more of the spad
+  [at once](tog-abi.md#buffers-and-the-scratchpad) than a core has, so with a smaller one a node
+  of that tile would not replay.
 
 Of `configs/`, `systolic_ws_8x8_c1_simple_noc_tpuv3.yml` is accepted. The 32x32, 128x128 and
 256x256 (tpuv6e) configs are refused: one matmul instruction is 1024, 16384 and 65536 columns
