@@ -217,7 +217,7 @@ SHORT = {
     "attention": dict(shape=(2, 2, 100), tensors=(2 * 100 * 64 * 4,) * 4,
                       ids=set(range(8)) | set(range(9, 17)) | set(range(18, 26)) | set(range(27, 35)) | {8, 17},
                       insts=(156, 26, 442, 156), total=50454,
-                      moves=[times(12800, 2), times(12800, 13), times(12800, 13), times(12800)]),
+                      moves=[times(12800), times(12800, 13), times(12800, 13), times(12800)]),
     "bias_act": dict(shape=(130, 100), tensors=(52000, 400, 52000), ids={0, 1, 2, 3}, insts=(8, 4, 4, 0), total=1078,
                      moves=[times(13000), times(100, 130), times(13000)]),
     "bias_gelu": dict(shape=(130, 100), tensors=(52000, 400, 52000), ids={0, 1, 2, 3}, insts=(8, 4, 4, 0), total=1078,
