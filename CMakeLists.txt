@@ -26,3 +26,6 @@ target_include_directories(Simulator PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_include_directories(Simulator PUBLIC ${PROJECT_SOURCE_DIR}/include/scheduler)
 target_include_directories(Simulator PUBLIC ${PROJECT_SOURCE_DIR}/src)
 target_link_libraries(Simulator booksim2 ramulator yaml-cpp ${CONAN_LIBS} stdc++fs)
+
+# Build the unit test the test runner executes (tests/run.py)
+add_subdirectory("${PROJECT_SOURCE_DIR}/tests/unit")

@@ -1,10 +1,6 @@
-// A load into spad buffer 1 that the TOG does not size: UNSIZED_CASE 0 states a table too
-// short for it, 1 states no table at all. TOGSim refuses both instead of guessing from the DMAs.
+// A load into spad buffer 1 that the TOG does not size: its table is too short for it, or with
+// -DNO_TABLE there is no table at all. TOGSim refuses both instead of guessing from the DMAs.
 #include "togsim_runtime.h"
-
-#ifndef UNSIZED_CASE
-#define UNSIZED_CASE 0
-#endif
 
 static void unsized_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   (void)iv; (void)n_iv;
@@ -20,7 +16,7 @@ extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape
   togsim_dispatch(ctx, unsized_tile, iv, 1, 0);
 }
 
-#if UNSIZED_CASE == 0
+#if !defined(NO_TABLE)
 extern "C" const int32_t togsim_spad_buffer_count = 1;
 extern "C" const int64_t togsim_spad_buffer_bytes[1] = {0};
 #endif

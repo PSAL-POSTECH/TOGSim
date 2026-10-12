@@ -1,5 +1,6 @@
-// Two work-items; in each, one load feeds a cross-lane compute (tile 0) and a vector compute (tile 1)
-// that do not depend on each other: they ran side by side on the XLU and VPU; a core runs one at a time.
+// DEPRECATED typed grouping (compute_type 3). Two work-items; in each, one load feeds a cross-lane compute
+// (tile 0) and a vector compute (tile 1) that do not depend on each other: they ran side by side on the XLU
+// and VPU; a core runs one at a time.
 #include "togsim_runtime.h"
 
 #define ROWS 64
