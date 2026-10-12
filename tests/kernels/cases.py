@@ -47,7 +47,9 @@ def insts(run):
 
 
 def expect_insts(run, expected):
-    run.expect_ok()
+    """The run finished with those (MOVIN, MOVOUT, COMP, MEMORY_BAR) counts and without a warning: its tables
+    and tog_tensors.txt cover every tile id and arg_id the kernel names."""
+    run.expect_no_warning("")
     if insts(run) != expected:
         run.fail(f"expected (MOVIN, MOVOUT, COMP, MEMORY_BAR) inst_count {expected}, got {insts(run)}")
     return run

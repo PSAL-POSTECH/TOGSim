@@ -15,6 +15,8 @@ from onnx import TensorProto, helper
 from togsim_frontend import paths
 from togsim_frontend.acs.node_mapping import KERNELS
 from togsim_frontend.onnx_frontend import run as frontend
+from togsim_frontend.onnx_frontend.config import read_hardware
+from togsim_frontend.onnx_frontend.onnx_ops import OPS
 
 pytestmark = pytest.mark.skipif(not paths.simulator().is_file() and not os.environ.get("TOGSIM_REQUIRE_SIMULATOR"),
                                 reason=f"{paths.simulator()} is absent: build the simulator first")
@@ -87,10 +89,64 @@ def save(tmp_path, nodes, inputs, outputs, initializers):
     return path
 
 
+def warnings(out):
+    """The warn-level lines TOGSim logged in the runs under `out`, each with the run it came from."""
+    logs = sorted(out.rglob("togsim.log"))
+    assert logs, f"no run under {out} kept a togsim.log"
+    return [f"{log.parent.name}: {line}" for log in logs for line in log.read_text().splitlines()
+            if "[warning]" in line]
+
+
 def run_frontend(model, out, status=0):
-    """Run the frontend on `model`, expecting its exit status to be `status`: the report it wrote."""
+    """Run the frontend on `model`, expecting its exit status to be `status`: the report it wrote. No run of it
+    may have made TOGSim warn."""
     assert frontend.main([str(model), "--config", str(CONFIG), "--out", str(out), "--no-optimize"]) == status
-    return json.loads((out / "report.json").read_text())
+    report = json.loads((out / "report.json").read_text())
+    assert not report["nodes_run"] or warnings(out) == []
+    return report
+
+
+IMAGE, MATRIX = [1, 64, 16, 16], [64, 256]
+#: An operator's input shapes and attributes, for one node of each operator the frontend maps.
+NODE = {
+    "Gemm": ([[64, 128], [128, 256]], {}), "MatMul": ([[64, 128], [128, 256]], {}),
+    "Conv": ([IMAGE, [64, 64, 3, 3]], dict(kernel_shape=[3, 3], pads=[1, 1, 1, 1])),
+    "Attention": ([[1, 128, 512]], dict(num_heads=8)), "MultiHeadAttention": ([[1, 128, 512]], dict(num_heads=8)),
+    "Softmax": ([MATRIX], {}), "LayerNormalization": ([MATRIX], {}), "EmbedLayerNormalization": ([[128, 64]], {}),
+    "GlobalAveragePool": ([IMAGE], {}), "Relu": ([MATRIX], {}), "Add": ([MATRIX, MATRIX], {}), "Gelu": ([MATRIX], {}),
+    "MaxPool": ([IMAGE], dict(kernel_shape=[2, 2], strides=[2, 2])),
+    "AveragePool": ([IMAGE], dict(kernel_shape=[2, 2], strides=[2, 2])),
+    "Concat": ([MATRIX, MATRIX], {}), "Flatten": ([IMAGE], {}),
+}
+
+
+@pytest.mark.parametrize("op", sorted(OPS))
+def test_a_node_of_each_mapped_operator_replays_without_a_togsim_warning(op, tmp_path):
+    """As the frontend lays the node out: its tog_tensors.txt lists every arg_id the kernel's DMAs name, and the
+    tables ACS wrote have unit rows for every tile id it computes. Either miss is a warning in TOGSim's log."""
+    assert sorted(NODE) == sorted(OPS)
+    shapes, attributes = NODE[op]
+    inputs = {f"in{i}": shape for i, shape in enumerate(shapes)}
+    node = helper.make_node(op, list(inputs), ["out"], name=op.lower(), **attributes)
+    hw = read_hardware(str(CONFIG))
+    for kernel in OPS[op]:
+        tog_dir = frontend.prepare_node(node, kernel, inputs, hw, str(tmp_path))
+        assert frontend.simulate(tog_dir, str(CONFIG)) > 0
+    assert warnings(tmp_path) == []
+
+
+def test_a_run_with_a_tensor_or_a_unit_row_missing_is_seen_as_a_warning(tmp_path):
+    """The check above reads something: a Relu laid out by the frontend, then with its last tensor and its unit
+    rows taken away, makes TOGSim log the two warnings."""
+    node = helper.make_node("Relu", ["x"], ["y"], name="relu")
+    tog_dir = frontend.prepare_node(node, OPS["Relu"][0], {"x": MATRIX}, read_hardware(str(CONFIG)), str(tmp_path))
+    tensors = (tmp_path / tog_dir / "tog_tensors.txt")
+    tensors.write_text("".join(tensors.read_text().splitlines(keepends=True)[:-1]))
+    (tmp_path / tog_dir / "tog_units.tsv").write_text("1\tSystolic\trows\t1\t0\n")
+    frontend.simulate(tog_dir, str(CONFIG))
+    said = warnings(tmp_path)
+    assert len(said) == 2 and any("its DMAs name arg_id 2" in line for line in said)
+    assert any("the unit table has no rows for tile ids 0" in line for line in said)
 
 
 def total(log):

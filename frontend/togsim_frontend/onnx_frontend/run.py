@@ -24,13 +24,16 @@ EXIT_NODES_NOT_RUN = 3
 
 
 def simulate(tog_dir: str, config: str) -> int:
-    """Replay the kernel laid out in `tog_dir` and return its Total execution cycles."""
+    """Replay the kernel laid out in `tog_dir` and return its Total execution cycles; what TOGSim printed is kept
+    beside the kernel as togsim.log."""
     tog_dir = os.path.abspath(tog_dir)
     cmd = [str(paths.simulator()), "--config", config,
            "--tog_so", os.path.join(tog_dir, "tog.so"),
            "--cycle_table", os.path.join(tog_dir, "tog_cycles.tsv"),
            "--unit_table", os.path.join(tog_dir, "tog_units.tsv")]
     res = subprocess.run(cmd, capture_output=True, text=True)
+    with open(os.path.join(tog_dir, "togsim.log"), "w") as fh:
+        fh.write(res.stdout + res.stderr)
     m = CYCLE_RE.search(res.stdout + res.stderr)
     if res.returncode != 0 or not m:
         tail = (res.stderr or res.stdout)[-400:]
