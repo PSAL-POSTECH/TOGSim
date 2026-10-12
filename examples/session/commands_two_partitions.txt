@@ -1,0 +1,4 @@
+# command_type,kernel_id,device_index,stream_index,tog_path,attribute_path,timestamp
+LAUNCH_KERNEL,0,0,0,examples/session/k0/tog.so,-,0
+LAUNCH_KERNEL,1,0,1,examples/session/k1/tog.so,-,0
+DEVICE_SYNC,0,0,0,-,-,0

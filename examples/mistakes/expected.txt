@@ -1,0 +1,114 @@
+== mistakes
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/mistakes/refused_tog.cpp -o examples/mistakes/valid.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+[info] Core [0] : Systolic utilization(%): 23.23, active_cycles: 256, idle_cycles: 846
+[info] Core [0] : Vpu utilization(%): 9.07, active_cycles: 100, idle_cycles: 1002
+[info] Total execution cycles: 1102
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DOTHER_ABI examples/mistakes/refused_tog.cpp -o examples/mistakes/OTHER_ABI.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/OTHER_ABI.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+togsim: refusing TOG examples/mistakes/OTHER_ABI.so: it was built against TOG ABI 15, TOGSim expects ABI 16; rebuild the TOG
+exit 1
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DNO_VERSION examples/mistakes/refused_tog.cpp -o examples/mistakes/NO_VERSION.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/NO_VERSION.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+togsim: refusing TOG examples/mistakes/NO_VERSION.so: it embeds no togsim_abi_version (built without togsim_runtime.h); TOGSim expects ABI 16
+exit 1
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DNO_KERNEL examples/mistakes/refused_tog.cpp -o examples/mistakes/NO_KERNEL.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/NO_KERNEL.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+togsim: dlsym togsim_kernel failed: examples/mistakes/NO_KERNEL.so: undefined symbol: togsim_kernel
+exit 1
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DNO_BUFFER_TABLE examples/mistakes/refused_tog.cpp -o examples/mistakes/NO_BUFFER_TABLE.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/NO_BUFFER_TABLE.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+togsim: refusing TOG examples/mistakes/NO_BUFFER_TABLE.so: it states no spad buffer sizes (togsim_spad_buffer_count / togsim_spad_buffer_bytes)
+exit 1
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DUNSIZED_BUFFER examples/mistakes/refused_tog.cpp -o examples/mistakes/UNSIZED_BUFFER.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/UNSIZED_BUFFER.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+[error] [TOGSim] spad buffer 2 is DMA'd but the TOG states no size for it (togsim_spad_buffer_bytes has 2 entries)
+exit 1
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DWRONG_COUNT examples/mistakes/refused_tog.cpp -o examples/mistakes/WRONG_COUNT.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/WRONG_COUNT.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+[error] [TOGSim] wait expects another element count: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects 2048
+exit 1
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DUNSIGNALED_SEM examples/mistakes/refused_tog.cpp -o examples/mistakes/UNSIGNALED_SEM.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/UNSIGNALED_SEM.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+[error] [TOGSim] wait on a semaphore never signaled: work-item 0 (key 0) sem 8 signaled 0 elements, wait expects 4096
+exit 1
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DNO_WAIT examples/mistakes/refused_tog.cpp -o examples/mistakes/NO_WAIT.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/NO_WAIT.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+[error] [TOGSim] unwaited load batch: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects none
+exit 1
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DTILE_PAST_TABLE examples/mistakes/refused_tog.cpp -o examples/mistakes/TILE_PAST_TABLE.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/TILE_PAST_TABLE.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+[error] [TOGSim] TOG examples/mistakes/TILE_PAST_TABLE.so: work-item 0 (key 0) computes tile id 1, which the cycle table does not hold (it has 1 tile ids, 0 to 0)
+exit 1
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/valid.so --unit_table examples/mistakes/tog_units.tsv
+[error] [TOGSim] --tog_so needs --cycle_table: the TOG's computes take their cycles from it
+exit 1
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycle.tsv --unit_table examples/mistakes/tog_units.tsv
+[error] [TOGSim] cycle table examples/mistakes/tog_cycle.tsv cannot be opened: the TOG's computes take their cycles from it
+exit 1
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/cycles_header.gen.tsv --unit_table examples/mistakes/tog_units.tsv
+[error] [TOGSim] TOG examples/mistakes/valid.so: work-item 0 (key 0) computes tile id 0, which the cycle table does not hold (it has no line)
+exit 1
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv
+[error] [TOGSim] systolic_array_split (on by default) reads each tile's Systolic rows; give --unit_table, or set systolic_array_split: none
+exit 1
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/spaces.gen.tsv
+[error] [TOGSim] --unit_table examples/mistakes/spaces.gen.tsv line 1: expected 5 tab-separated fields (tile_id unit unit_of_work capacity_per_cycle admitted), got 1
+exit 1
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/header.gen.tsv
+[error] [TOGSim] --unit_table examples/mistakes/header.gen.tsv line 1: tile_id 'tile_id' is not a non-negative integer
+exit 1
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/no_array_unit.gen.tsv
+[error] [TOGSim] systolic_array_split: the unit table has no array unit Systolic
+exit 1
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/no_tensors/tog.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+[error] [TOGSim] examples/mistakes/no_tensors/tog_tensors.txt is absent: the TOG's tensor arguments have no addresses
+exit 1
++ cd examples/mistakes
++ ../../build/bin/Simulator --config ../../configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so valid.so --cycle_table tog_cycles.tsv --unit_table tog_units.tsv
+togsim: dlopen failed: valid.so: cannot open shared object file: No such file or directory
+exit 1
+# examples/mistakes/spad_16kb.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with core_spad_size_kb: 16
++ build/bin/Simulator --config examples/mistakes/spad_16kb.gen.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+[error] [Simulator] simulation wedged at cycle 52837: work remains but nothing is in flight -- the per-core spad (core_spad_size_kb) is too small to hold a kernel's working set. Increase it.
+exit 1
++ build/bin/Simulator --config examples/mistakes/copied.gen.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+Config file examples/configs/ramulator2_configs/HBM3_TPUv6e.yaml does not exist!
+exit 255
++ build/bin/Simulator --config examples/mistakes/no_num_cores.gen.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv
+  what():  Config key num_cores not found
+exit 134
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/mistakes/silent_tog.cpp -o examples/mistakes/silent_valid.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/silent_valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
+[trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
+[trace] [311][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [912][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
+[info] Core [0] : DMA active_cycles: 64, DMA idle_cycles: 1038, DRAM BW: 104.000 GB/s (1024 responses)
+[info] Total execution cycles: 1102
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/silent_valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/rows_of_tile_1.gen.tsv
+[warning] [TOGSim] TOG examples/mistakes/silent_valid.so: the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units
+[info] Core [0] : Systolic utilization(%): 0.00, active_cycles: 0, idle_cycles: 1102
+[info] Core [0] : Vpu utilization(%): 0.00, active_cycles: 0, idle_cycles: 1102
+[info] Total execution cycles: 1102
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DTENSOR_PAST_LIST examples/mistakes/silent_tog.cpp -o examples/mistakes/TENSOR_PAST_LIST.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/TENSOR_PAST_LIST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
+[warning] [TOGSim] TOG examples/mistakes/TENSOR_PAST_LIST.so: its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0
+[trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
+[trace] [311][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [912][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000000000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
+[info] Core [0] : DMA active_cycles: 64, DMA idle_cycles: 1038, DRAM BW: 104.000 GB/s (1024 responses)
+[info] Total execution cycles: 1102
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DNULL_STRIDES examples/mistakes/silent_tog.cpp -o examples/mistakes/NULL_STRIDES.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/NULL_STRIDES.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
+[trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
+[trace] [148][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [749][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
+[info] Core [0] : DMA active_cycles: 33, DMA idle_cycles: 937, DRAM BW: 59.000 GB/s (513 responses)
+[info] Total execution cycles: 970
++ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DCONSUMER_FIRST examples/mistakes/silent_tog.cpp -o examples/mistakes/CONSUMER_FIRST.so
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
+[trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
+[trace] [3][Core 0][INST_ISSUED    ][INST_ID=1] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
+[trace] [311][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[info] Core [0] : DMA active_cycles: 64, DMA idle_cycles: 848, DRAM BW: 125.000 GB/s (1024 responses)
+[info] Total execution cycles: 912

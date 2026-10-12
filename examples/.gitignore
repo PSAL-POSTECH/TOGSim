@@ -1,0 +1,4 @@
+*.so
+*.gen.yml
+*.gen.tsv
+mistakes/no_tensors/

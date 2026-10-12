@@ -1,0 +1,16 @@
+# A machine config that needs no other file: one core, a fixed-latency DRAM and interconnect, no array split
+# (so a run needs no unit table). Every key TOGSim requires is here; see docs/config-keys.md for the rest.
+num_cores: 1
+core_freq_mhz: 1000
+core_stats_print_period_cycles: 0
+
+dram_type: simple
+dram_channels: 1
+dram_latency: 10
+dram_stats_print_period_cycles: 0
+
+icnt_type: simple
+icnt_freq_mhz: 1000
+icnt_latency_cycles: 1
+
+systolic_array_split: none
