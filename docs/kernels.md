@@ -25,8 +25,33 @@ them; neither the simulator nor its build needs them.
 - **Tile.** The tile a work-item moves and computes is compile-time, a `-D` macro per extent with
   a default (`gemm`: `-DTM=32 -DTN=256 -DTK=64`). It cannot be a shape argument: TOGSim reads
   `togsim_spad_buffer_bytes` before it calls `togsim_kernel`, and the buffer sizes follow from the
-  tile. A dimension the tile does not divide still gets a whole last tile: the kernel moves and
-  computes past the end of the tensor there, so the shapes to trust are multiples of the tile.
+  tile.
+- **Short last tiles.** A dimension the tile does not divide ends in a short tile: its DMAs move
+  what is left of the dimension and no DMA leaves its tensor (conv clips its `SA`-wide loads the
+  same way, so 3 input channels are loaded as 3). A short tile costs something else than a whole
+  one, so it computes under tile ids of its own: `tile id = node + nodes * variant`, where `node`
+  is the compute's id in the whole tile, `nodes` the kernel's count of them, and bit `i` of
+  `variant` is set when the tile is short on the kernel's axis `i` (`kernel_tile_id` in
+  `kernels/kernel_shape.h`). Variant 0 is the whole tile and keeps the ids the kernel always had,
+  so a shape every tile divides names the same ids as before. A compute outside an inner loop
+  carries only the axes of the loops around it. The axes, in bit order:
+
+  | Kernel | Nodes | Axes (bit 0 first) |
+  |---|---|---|
+  | `gemm` | 2 | `M`, `N`, `K` (acc_init: `M`, `N`) |
+  | `conv` | 2 | `O_C`, `O_H`, `O_W`, `I_C` (acc_init: the first three) |
+  | `attention` | 9 | `SEQ` by `Q_LEN`, `SEQ` by `KV_BLOCK` (normalize: the first) |
+  | `softmax` | 5 | `M`, `N` (the two write nodes: `M`) |
+  | `layernorm` | 4 | `M` by `TM`, `N`, `M` by `TM_STATS` (statistics: the last two, its writes the last; normalize: the first two) |
+  | `global_avgpool` | 3 | `C` by `TC`, `HW`, `C` by `TC_SCALE` (sum: the first two, its write the first; scale: the last) |
+  | `bias_act`, `bias_gelu` | 1 | `M`, `N` |
+  | `embed_layernorm` | 1 | `SEQ`, `DIM` |
+  | `maxpool`, `adaptive_avgpool` | 1 | `ROWS`, `COLS` |
+  | `kvcache_concat` | 1 | `TOKENS` |
+  | `concat`, `flatten` | 0 | no compute; `concat` clips its DMAs |
+
+  A gemm of `M K N = 100 200 300` in the default tile computes acc_init as ids 0, 2, 4, 6 and a
+  block as the odd ids 1 to 15; a cycle table for it has 16 lines.
 - **Compute.** Every `togsim_compute` is `compute_type` `0`. `gemm`, `conv` and `attention` issue
   one compute per block of systolic work (a `TM x TK x TN` block of gemm's K loop) instead of one
   per preload and matmul; what a block costs and how many Systolic rows it holds is the cycle
@@ -35,7 +60,8 @@ them; neither the simulator nor its build needs them.
 ## Replaying a kernel by hand
 
 Compile it, put `tog_tensors.txt` beside it (one byte size per tensor
-argument) and give the simulator a cycle table and a unit table with a row per tile it computes:
+argument) and give the simulator a cycle table and a unit table with a row per tile id it computes
+(two at a shape the tile divides, as here; the ids of the short variants as well at another):
 
 ```bash
 mkdir -p /tmp/gemm && g++ -std=c++17 -shared -fPIC -Iinclude kernels/gemm_tog.cpp -o /tmp/gemm/tog.so
