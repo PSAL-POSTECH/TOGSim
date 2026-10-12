@@ -16,7 +16,8 @@ them; neither the simulator nor its build needs them.
 - **Tile.** The tile a work-item moves and computes is compile-time, a `-D` macro per extent with
   a default (`gemm`: `-DTM=32 -DTN=256 -DTK=64`). It cannot be a shape argument: TOGSim reads
   `togsim_spad_buffer_bytes` before it calls `togsim_kernel`, and the buffer sizes follow from the
-  tile.
+  tile. A dimension the tile does not divide still gets a whole last tile: the kernel moves and
+  computes past the end of the tensor there, so the shapes to trust are multiples of the tile.
 - **Compute.** Every `togsim_compute` is `compute_type` `0`. `gemm`, `conv` and `attention` issue
   one compute per block of systolic work (a `TM x TK x TN` block of gemm's K loop) instead of one
   per preload and matmul; what a block costs and how many Systolic rows it holds is the cycle
