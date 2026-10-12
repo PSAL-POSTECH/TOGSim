@@ -1,4 +1,4 @@
-"""The examples of the README: examples/run.sh <name> prints <name>/expected.txt, and the documents quote only that.
+"""The examples: examples/run.sh <name> prints <name>/expected.txt, and the documents quote only that.
 A quote is a fenced block of a README.md or of docs/*.md: log lines as run.sh prints them, or lines of an example."""
 import difflib
 import re
@@ -70,16 +70,16 @@ def documents_quote_the_examples(t):
 
 
 def refusal_table_is_current(t):
-    """Every row of the README's refusal table (a message in a code span, then its exit status) is a refusal that
+    """Every row of the refusal table of docs/tog-abi.md (a message in a code span, then its exit status) is a refusal that
     examples/run.sh mistakes prints: the message, with <placeholders> and (...) standing for any text, ends a line
     of mistakes/expected.txt that `exit <status>` follows."""
     printed = (EXAMPLES / "mistakes" / "expected.txt").read_text().splitlines()
-    rows = REFUSAL_ROW.findall((REPO / "README.md").read_text())
+    rows = REFUSAL_ROW.findall((REPO / "docs" / "tog-abi.md").read_text())
     wrong = [f"'{message}' with exit {status}" for message, status in rows
              if not any(re.search(PLACEHOLDER.sub(".*", re.escape(message)) + "$", line) and after == f"exit {status}"
                         for line, after in zip(printed, printed[1:]))]
     if not rows or wrong:
-        raise Failure("\n".join([f"expected the README's refusal table to list refusals of examples/mistakes/"
+        raise Failure("\n".join([f"expected the refusal table of docs/tog-abi.md to list refusals of examples/mistakes/"
                                  f"expected.txt, found {len(rows)} rows and {len(wrong)} that are not:", *wrong]))
 
 

@@ -1,7 +1,6 @@
 # Machine config keys
 
-The machine config is the YAML file given to `--config`: a flat map of the keys below. The
-[README](../README.md#machine-configuration) groups the keys by the question they answer and shows
+The machine config is the YAML file given to `--config`: a flat map of the keys below. [machine.md](machine.md) groups the keys by the question they answer and shows
 what changing one does; this page is the full list.
 
 - A required key that is missing, or a value TOGSim does not implement, aborts the run with exit
@@ -23,7 +22,7 @@ what changing one does; this page is the full list.
 | `vpu_num_lanes` | unless `systolic_array_split: none` | | The rows one array takes: a tile with more rows than this is split. |
 | `systolic_array_split` | no | `round_robin` | `round_robin` spreads a tile's array rows over the arrays and needs a unit table. `none` turns that off. |
 | `systolic_array_unit` | no | `Systolic` | The name of the array unit in the unit table. Setting it with `systolic_array_split: none` aborts. |
-| `core_spad_size_kb` | no | 0 | The scratchpad of one core, in KB. 0 means unlimited. It must hold the largest `spad_footprint` of a work-item; a smaller one cannot finish the run (see the README's [known limitations](../README.md#known-limitations)). |
+| `core_spad_size_kb` | no | 0 | The scratchpad of one core, in KB. 0 means unlimited. It must hold the largest `spad_footprint` of a work-item; a smaller one cannot finish the run (see the [known limitations](running.md#known-limitations)). |
 | `sa_weight_buffer_depth` | no | 2 | Deprecated: read only for a TOG that passes `compute_type` 1, 2 or 3. |
 
 ## DRAM
@@ -118,5 +117,4 @@ arrays per core and the Ramulator2 file. The documents call
   other file and no unit table.
 
 Every shipped config writes its Ramulator2 and BookSim2 paths as `../configs/...`, which resolves
-only while the file sits in a directory beside `configs/` or in `configs/` itself. The README shows
-[how to copy one](../README.md#changing-the-machine).
+only while the file sits in a directory beside `configs/` or in `configs/` itself. [machine.md](machine.md#changing-the-machine) shows how to copy one.

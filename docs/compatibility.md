@@ -1,16 +1,15 @@
 # Compatibility
 
-What a compiler, a driver or a script may depend on, and how the version numbers move. The [README](../README.md) explains how to use each of these; this page states the
-contract.
+What a compiler, a driver or a script may depend on, and how the version numbers move.
 
 ## The five things to depend on
 
 A consumer of TOGSim may depend on these five, and on nothing else in this repository:
 
-1. the C ABI of `include/togsim_runtime.h` ([The TOG ABI](../README.md#the-tog-abi));
+1. the C ABI of `include/togsim_runtime.h` ([The TOG ABI](tog-abi.md#the-tog-abi));
 2. the files beside `tog.so` and the two tables
-   ([files](../README.md#files-beside-togso), [tables](../README.md#the-cycle-table));
-3. the command line and the exit statuses ([Running TOGSim](../README.md#running-togsim));
+   ([files](tog-abi.md#files-beside-togso), [tables](tog-abi.md#the-cycle-table));
+3. the command line and the exit statuses ([Running TOGSim](running.md#running-togsim));
 4. the output lines listed in [output-lines.md](output-lines.md#lines-a-script-may-rely-on);
 5. the machine config keys listed in [config-keys.md](config-keys.md).
 

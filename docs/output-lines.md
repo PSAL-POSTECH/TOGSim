@@ -1,7 +1,6 @@
 # Output lines
 
-What TOGSim prints, and which of its lines a script may rely on. The
-[README](../README.md#reading-the-output) explains how to read a result; this page is the
+What TOGSim prints, and which of its lines a script may rely on. [running.md](running.md#reading-the-output) explains how to read a result; this page is the
 reference.
 
 Everything goes to stdout through spdlog as `[YYYY-MM-DD HH:MM:SS.mmm] [level] text`, with these
