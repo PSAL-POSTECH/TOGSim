@@ -104,7 +104,8 @@ states it), so the 64 x 64 x 4-byte data tile above is 512 requests. A core's DM
 DMA at a time, loads ahead of stores, at `icnt_injection_ports_per_core` requests per cycle. A
 synchronous load is finished when its last response arrives. An asynchronous load counts as
 finished when its last request is sent. A store is finished when its last request is sent, and
-the run still waits for DRAM to answer.
+the run still waits for DRAM to answer. A load of what its buffer
+[already holds](#buffers-and-the-scratchpad) sends no request.
 
 ## `togsim_compute`
 
@@ -144,7 +145,8 @@ the scratchpad.
 
 - **Buffer ids are local to a work-item.** The same id in two work-items is two unrelated
   buffers: no instruction waits for an instruction of another work-item, and each work-item's
-  buffers take their own space in the spad.
+  buffers take their own space in the spad. The one exception is a buffer whose load finds its
+  data held (below).
 - State a size in `togsim_spad_buffer_bytes` for every buffer a DMA fills or drains. By convention
   id 0 has size 0 and is not used.
 - A work-item's `spad_footprint` (printed on its `TILE_SCHEDULED` line) is the sum of the sizes of
@@ -153,6 +155,23 @@ the scratchpad.
 - A buffer occupies the spad from the load, or the compute, that first writes it until its last
   reader is issued: a store, or a compute that reads it without writing it. A compute that reads
   and writes the same buffer keeps it alive.
+- **A load of what its buffer already holds is not read again.** For every buffer id of every
+  core TOGSim keeps what the last asynchronous load brought into it: the tensor, the address,
+  `dims`, `strides` and `elem_bits`. An asynchronous load that is not indirect, fills that one
+  buffer and names the same five again finds the data there, in the same work-item or in a later
+  one on that core. It sends no DRAM request (`INST_SKIP` in the trace, and counted in the
+  `skipped inst_count` of the `MOVIN` line), it still signals its semaphore with its element
+  count, and its barrier waits for the data of the load that was read, no longer. Weights that
+  every work-item loads into the same buffer are read once per core.
+- What is found held is one buffer over all the work-items that load it: its bytes are occupied
+  once, from the load that is read until the last reader, in TOG order, of all those work-items
+  is issued. They are not freed in between, so a kernel can need more spad than it did when
+  every work-item read and freed its own copy, and a load that does not fit beside them waits
+  for another buffer to be freed.
+- A store to that tensor, a compute that writes the buffer and any other load into it each end
+  this: the next load of the same data is read. A synchronous load, an indirect load and a load
+  with more than one `write_bufs` entry are always read, and so is the first load of a kernel
+  that is launched again.
 - The machine's `core_spad_size_kb` is the spad of one core. A core keeps two work-items in flight,
   or one if a work-item's footprint is more than half the spad (`max_dispatch` on the
   `TILE_SCHEDULED` line). Without the key the spad is unlimited.
@@ -165,6 +184,11 @@ the scratchpad.
   [refused](#what-gets-a-run-refused) while it is loaded, before anything is simulated. The hello
   TOG holds its two buffers together at the compute, 32768 bytes: it replays in a spad of 32 KB
   and is refused in a smaller one.
+- Bytes that more than one work-item loads and finds held count for every one of those
+  work-items from its start, whichever of them a core runs first: for all its instructions when
+  none of them is the last reader, and otherwise for the last reader and what it waits for.
+  Four work-items that each load the same 64 KB of weights and 4 KB of input and compute them
+  into a 4 KB output need 73728 bytes at once.
 - A work-item that names more bytes than the spad without holding them together is not refused:
   its loads wait for the spad. A fill that its reader does not wait for is not counted. The
   refusal does not cover every run that stops for want of spad: one that depends on the order of
@@ -353,7 +377,8 @@ If you emit TOGs from another frontend, this is the whole contract:
 3. In each body, emit producers before consumers, pass explicit `strides`, use `compute_type` 0
    and an `elem_bits` that is a multiple of 8, and follow every batch of asynchronous loads with a
    barrier that states their element count. Number buffers per work-item; the same ids can serve
-   every work-item.
+   every work-item. Data that every work-item reads (weights) is read once if each loads it
+   into the same buffer id with the same offset, `dims` and `strides`, and stays in the spad.
 4. Number the distinct kinds of compute from 0 and use that number as `tile_id`.
 5. Compile with `g++ -std=c++17 -shared -fPIC -I<TOGSim>/include`.
 6. Write `tog_tensors.txt` (and `tog_shape.txt` if the kernel reads shape arguments) beside the
