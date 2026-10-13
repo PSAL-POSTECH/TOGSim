@@ -1,5 +1,5 @@
 num_cores: 1
-core_freq_mhz: 3502
+core_freq_mhz: 1751
 core_stats_print_period_cycles: 200
 num_systolic_array_per_core: 2
 
@@ -17,7 +17,7 @@ l2d_config: S:128:128:512,32,L:T:m:W:L,A:192:4,32:0,32
 
 icnt_type: simple
 icnt_latency_cycles: 10
-icnt_freq_mhz: 3502
+icnt_freq_mhz: 1751
 icnt_injection_ports_per_core: 16
 
 pytorchsim_functional_mode: 0

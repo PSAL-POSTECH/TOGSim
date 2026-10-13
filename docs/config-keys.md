@@ -99,9 +99,9 @@ arrays per core and the Ramulator2 file. The documents call
 | `128x128_c2_simple_noc_tpuv3_ils` | 2 | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 | `128x128_c2_simple_noc_tpuv3_partition` | 2, in 2 partitions | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 | `128x128_c2_simple_noc_tpuv4` | 2 | 1050 | 4 | 128 | 16384 | 32 | `HBM2_TPUv4.yaml` | data cache | simple, 10 cycles |
-| `256x256_c1_simple_noc_tpuv6e` | 1 | 3502 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
-| `256x256_c1_simple_noc_tpuv6e_functional_only` | 1 | 3502 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
-| `256x256_c1_simple_noc_tpuv6e_timing_only` | 1 | 3502 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
+| `256x256_c1_simple_noc_tpuv6e` | 1 | 1751 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
+| `256x256_c1_simple_noc_tpuv6e_functional_only` | 1 | 1751 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
+| `256x256_c1_simple_noc_tpuv6e_timing_only` | 1 | 1751 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
 | `32x32_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 32 | unlimited | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 | `8x8_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 8 | unlimited | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 

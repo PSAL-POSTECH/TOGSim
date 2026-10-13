@@ -60,7 +60,7 @@ def expect_both_ran(run, total):
 
 def fits_exactly_runs(t):
     """32 KB + 16384 bytes in a 48 KB spad: each work-item fills it to the byte, and the second waits for the first."""
-    expect_both_ran(replay(t, 16 * KB, 48), 761)
+    expect_both_ran(replay(t, 16 * KB, 48), 623)
 
 
 def one_byte_over_refused(t):
@@ -80,7 +80,7 @@ def later_work_item_refused(t):
 
 
 def session_fits_exactly_runs(t):
-    expect_both_ran(session(t, 48, 16 * KB), 761)
+    expect_both_ran(session(t, 48, 16 * KB), 623)
 
 
 def expect_launch_refused(run, command, saying, so):
@@ -105,7 +105,7 @@ def session_second_kernel_refused(t):
 def names_more_than_it_holds_runs(t):
     """APART: 16 KB and 32 KB are named, 48 KB against a 32 KB spad, and each is consumed before the other is
     needed. The big load waits for the spad, and the run ends."""
-    expect_both_ran(replay(t, 32 * KB, 32, "APART"), 1098)
+    expect_both_ran(replay(t, 32 * KB, 32, "APART"), 977)
 
 
 def apart_one_byte_over_refused(t):
@@ -124,7 +124,7 @@ def fill_not_waited_for_is_not_counted(t):
 def version_left_open_runs(t):
     """APART, LEFT_OPEN: the TOG ends with a load nothing reads, so the measuring leaves a buffer version open. The
     run numbers its versions from the start all the same: every load is freed, and the run ends at its total."""
-    expect_both_ran(replay(t, 32 * KB, 32, "APART", "LEFT_OPEN"), 1098)
+    expect_both_ran(replay(t, 32 * KB, 32, "APART", "LEFT_OPEN"), 977)
 
 
 def no_spad_size_refuses_nothing(t):
