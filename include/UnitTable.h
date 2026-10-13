@@ -30,9 +30,22 @@ class UnitTable {
     for (size_t u = 0; u < _units.size(); u++) if (_units[u].name == name) return (int64_t)u;
     return -1;
   }
-  // systolic_array_split: unit `u` is the array a compute spreads over its N_eff arrays; -1 when not split.
-  void set_array_unit(size_t u) { _array_unit = (int64_t)u; }
+  // systolic_array_split: unit `u` is the array, a compute spreads its rows over up to `arrays` of them, one per
+  // `lanes` rows. Not called when the split is off: array_unit() stays -1.
+  void set_array_unit(size_t u, uint64_t lanes, uint64_t arrays) {
+    _array_unit = (int64_t)u;
+    _lanes = lanes;
+    _arrays = arrays;
+  }
   int64_t array_unit() const { return _array_unit; }
+  struct Window {
+    uint64_t cycles;   // what one run of the tile takes
+    uint32_t n_eff;    // the arrays its array-unit rows are spread over
+  };
+  // B_sys = array-unit rows / capacity, N_eff = min(arrays, max(1, ceil(rows / lanes))); the window keeps
+  // cc - B_sys and runs the longest of B_sys / N_eff and every other unit's B_u, never longer than `cc`.
+  // Without the split, with N_eff 1 or with cc 0: cc as is, on one array.
+  Window window(int64_t tile_id, uint64_t cc) const;
   // The (unit, admitted) rows of one run of `tile_id`; empty for an unknown tile.
   const std::vector<std::pair<size_t, uint64_t>>& rows(int64_t tile_id) const {
     static const std::vector<std::pair<size_t, uint64_t>> none;
@@ -65,5 +78,6 @@ class UnitTable {
   size_t read(const std::string& path, bool new_units);
   std::vector<Unit> _units;   // in first-seen order
   int64_t _array_unit = -1;
+  uint64_t _lanes = 0, _arrays = 1;   // of the array split
   std::vector<std::vector<std::pair<size_t, uint64_t>>> _rows;   // tile_id -> (unit, admitted)
 };

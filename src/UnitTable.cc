@@ -82,6 +82,25 @@ size_t UnitTable::read(const std::string& path, bool new_units) {
   return base;
 }
 
+UnitTable::Window UnitTable::window(int64_t tile_id, uint64_t cc) const {
+  if (_array_unit < 0 || cc == 0) return {cc, 1};
+  const auto& tile = rows(tile_id);
+  uint64_t sys_rows = 0;
+  for (auto& [u, admitted] : tile)
+    if ((int64_t)u == _array_unit) sys_rows = admitted;
+  const uint64_t subtiles = (sys_rows + _lanes - 1) / _lanes;
+  const uint32_t n_eff = (uint32_t)std::min<uint64_t>(_arrays, std::max<uint64_t>(1, subtiles));
+  if (n_eff <= 1) return {cc, n_eff};
+  double b_sys = 0, longest = 0;
+  for (auto& [u, admitted] : tile) {
+    const double b = (double)admitted / (double)_units[u].capacity;
+    if ((int64_t)u == _array_unit) b_sys = b;
+    longest = std::max(longest, (int64_t)u == _array_unit ? b / (double)n_eff : b);
+  }
+  const double shortened = std::ceil((double)cc - b_sys + longest);
+  return {(uint64_t)std::clamp(shortened, 1.0, (double)cc), n_eff};
+}
+
 bool UnitTable::print(const std::string& who, size_t u, uint64_t admitted, uint64_t cycles, bool check) const {
   const Unit& unit = _units[u];
   const uint64_t cap = unit.capacity;

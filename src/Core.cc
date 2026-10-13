@@ -17,29 +17,14 @@ Core::Core(uint32_t id, SimulationConfig config)
   _sram_capacity = (size_t)config.core_spad_size_kb * 1024;  // 0 = throttle disabled
 }
 
-// B_sys = array-unit rows / capacity, N_eff = min(N, max(1, ceil(rows / vpu_num_lanes))); the
-// window keeps cc - B_sys and runs the longest of B_sys / N_eff and every other unit's B_u, never
-// longer than cc. Without the split, or with N_eff 1, cc as is.
+// The cycles a compute runs and the arrays it is spread over are its tile's window in the unit table
+// (UnitTable::window); without a unit table, its table cycles.
 cycle_type Core::split_compute_cycles(const std::shared_ptr<Instruction>& inst) const {
   const cycle_type cc = inst->get_compute_cycle();
-  if (!_config.systolic_array_split || !_unit_table || cc == 0) return cc;
-  const auto& rows = _unit_table->rows(inst->get_tile_id());
-  const int64_t array = _unit_table->array_unit();
-  uint64_t sys_rows = 0;
-  for (auto& [u, admitted] : rows)
-    if ((int64_t)u == array) sys_rows = admitted;
-  const uint64_t subtiles = (sys_rows + _config.vpu_num_lanes - 1) / _config.vpu_num_lanes;
-  const uint64_t n_eff = std::min<uint64_t>(_num_systolic_array_per_core, std::max<uint64_t>(1, subtiles));
-  inst->array_split = (uint32_t)n_eff;
-  if (n_eff <= 1) return cc;
-  double b_sys = 0, longest = 0;
-  for (auto& [u, admitted] : rows) {
-    const double b = (double)admitted / (double)_unit_table->capacity(u);
-    if ((int64_t)u == array) b_sys = b;
-    longest = std::max(longest, (int64_t)u == array ? b / (double)n_eff : b);
-  }
-  const double shortened = std::ceil((double)cc - b_sys + longest);
-  return (cycle_type)std::clamp(shortened, 1.0, (double)cc);
+  if (!_unit_table) return cc;
+  const UnitTable::Window w = _unit_table->window(inst->get_tile_id(), cc);
+  inst->array_split = w.n_eff;
+  return (cycle_type)w.cycles;
 }
 
 void Core::apply_due(const DueAction& a) {
