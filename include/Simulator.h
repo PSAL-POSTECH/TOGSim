@@ -48,7 +48,7 @@ class Simulator {
         spdlog::error("[TOGSim] systolic_array_split: the unit table has no array unit {}", _config.systolic_array_unit);
         exit(EXIT_FAILURE);
       }
-      _unit_table->set_array_unit((size_t)u);
+      _unit_table->set_array_unit((size_t)u, _config.vpu_num_lanes, _config.num_systolic_array_per_core);
     }
     for (auto& core : _cores) core->set_unit_table(_unit_table.get());
   }
