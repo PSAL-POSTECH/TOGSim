@@ -80,7 +80,7 @@ else `core_spad_size_kb` alone, else no limit.
 
 Of `configs/`, `systolic_ws_8x8_c1_simple_noc_tpuv3.yml` is accepted. The 32x32, 128x128 and
 256x256 (tpuv6e) configs are refused: one matmul instruction is 1024, 16384 and 65536 columns
-there, wider than the tile. ACS on its own (`python3 -m togsim_frontend.acs`) is not bound by
+there (32768 on the 128 lanes of `_tpuv6e_mxu`), wider than the tile. ACS on its own (`python3 -m togsim_frontend.acs`) is not bound by
 this: it writes the tables for the config and the tile it is given. `SA` is not a config key; it
 is read from the config's file name (`..._8x8_...`) or given with `--sa`.
 

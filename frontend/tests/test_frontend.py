@@ -206,7 +206,7 @@ def test_a_machine_is_refused_for_each_fact_the_tiles_do_not_fit():
 
 def test_of_the_configs_here_only_the_8x8_one_is_a_supported_machine():
     configs = sorted((paths.root() / "configs").glob("*.yml"))
-    assert len(configs) == 19
+    assert len(configs) == 22
     assert [c.name for c in configs if not unsupported(read_hardware(str(c)))] == \
         ["systolic_ws_8x8_c1_simple_noc_tpuv3.yml"]
 
@@ -235,6 +235,8 @@ SPAD_KB = {**{f"systolic_ws_128x128_{name}.yml": 128 * 128 for name in (
                "c1_simple_noc_tpuv4", "c2_booksim_tpuv3", "c2_simple_noc_tpuv2", "c2_simple_noc_tpuv3",
                "c2_simple_noc_tpuv3_ils", "c2_simple_noc_tpuv3_partition", "c2_simple_noc_tpuv4")},
            **{f"systolic_ws_256x256_c1_simple_noc_tpuv6e{name}.yml": 512 * 256 for name in (
+               "", "_functional_only", "_timing_only")},
+           **{f"systolic_ws_256x256_c1_simple_noc_tpuv6e_mxu{name}.yml": 1024 * 128 for name in (
                "", "_functional_only", "_timing_only")},
            "systolic_ws_32x32_c1_simple_noc_tpuv3.yml": 32 * 32, "systolic_ws_8x8_c1_simple_noc_tpuv3.yml": 32 * 8}
 
