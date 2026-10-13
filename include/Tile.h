@@ -31,6 +31,9 @@ class Tile : public std::enable_shared_from_this<Tile> {
   // Dispatch spad-buffer footprint (bytes, codegen .spad x lanes); Core picks 1- vs 2-dispatch by it.
   size_t get_spad_footprint() { return _spad_footprint; }
   void set_spad_footprint(size_t b) { _spad_footprint = b; }
+  void set_spad_versions(int64_t first, int64_t end) { _spad_version_first = first; _spad_version_end = end; }
+  int64_t spad_version_first() const { return _spad_version_first; }
+  int64_t spad_version_end() const { return _spad_version_end; }
   void append_instuction(std::shared_ptr<Instruction>& inst);
   void append_child(std::shared_ptr<Tile> child);
   std::vector<std::shared_ptr<Tile>>& get_child_tile () { return _child_tiles; }
@@ -73,6 +76,7 @@ class Tile : public std::enable_shared_from_this<Tile> {
   Status _status = Status::EMPTY;
   size_t _required_sram_size=0;
   size_t _spad_footprint=0;
+  int64_t _spad_version_first = 0, _spad_version_end = 0;
   size_t _ready_counter=0;
   size_t _nr_insts = 0;
   size_t _nr_finished_insts = 0;

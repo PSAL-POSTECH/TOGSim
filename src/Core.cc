@@ -73,6 +73,19 @@ void Core::release_sram(const std::shared_ptr<Instruction>& inst) {
   }
 }
 
+// A work-item ended: the bytes of its versions that no reader freed (a load nothing reads, a fill issued after
+// its version's last reader) leave the spad with it.
+void Core::release_sram(const std::shared_ptr<Tile>& tile) {
+  if (!_sram_capacity) return;
+  for (int64_t id = tile->spad_version_first(); id < tile->spad_version_end(); id++) {
+    auto it = _sram_allocs.find(id);
+    if (it == _sram_allocs.end()) continue;
+    _sram_used -= it->second;
+    _sram_allocs.erase(it);
+    _issue_dirty = true;
+  }
+}
+
 bool Core::try_occupy_sram(const std::shared_ptr<Instruction>& inst) {
   if (!_sram_capacity || inst->get_sram_alloc() < 0) return true;   // untracked
   size_t F = inst->sram_footprint();
@@ -388,6 +401,7 @@ void Core::cycle() {
     for (int i=0; i<_tiles.size() && !issued; i++) {
       if (_tiles[i]->all_insts_finshed()) {
         _tiles[i]->set_status(Tile::Status::FINISH);
+        release_sram(_tiles[i]);
         _finished_tiles.push(std::move(_tiles[i]));
         _tiles.erase(_tiles.begin() + i); // FIXME. Inefficient data structure
         /* Let's retry */

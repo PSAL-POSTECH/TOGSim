@@ -152,7 +152,9 @@ the scratchpad.
   that only computes touch, like the gemm accumulator, is not counted.
 - A buffer occupies the spad from the load, or the compute, that first writes it until its last
   reader is issued: a store, or a compute that reads it without writing it. A compute that reads
-  and writes the same buffer keeps it alive.
+  and writes the same buffer keeps it alive. A buffer that nothing reads after it is filled, such
+  as what a kernel loads for a later kernel to use, keeps its bytes until its work-item ends. No
+  byte of a work-item stays in the spad after it.
 - The machine's `core_spad_size_kb` is the spad of one core. A core keeps two work-items in flight,
   or one if a work-item's footprint is more than half the spad (`max_dispatch` on the
   `TILE_SCHEDULED` line). Without the key the spad is unlimited.
@@ -160,7 +162,9 @@ the scratchpad.
   instructions finds in the spad when it is issued, whatever the order of issue. That is the bytes
   the instruction occupies itself (a load its data tile, a compute a buffer it writes first), plus
   the bytes of every buffer that was filled by an instruction it waits for and is not freed before
-  it, or an instruction that waits for it, is issued. An instruction is issued only while that
+  it, or an instruction that waits for it, is issued. A buffer that nothing reads is freed by no
+  instruction, so it may be in the spad when any other instruction is issued, and counts for each
+  of them except those its own fill waits for. An instruction is issued only while that
   fits, so a work-item that needs more would never end: its TOG is
   [refused](#what-gets-a-run-refused) while it is loaded, before anything is simulated. The hello
   TOG holds its two buffers together at the compute, 32768 bytes: it replays in a spad of 32 KB
