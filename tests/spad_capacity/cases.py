@@ -120,9 +120,97 @@ def fill_not_waited_for_is_not_counted(t):
 
 
 def version_left_open_runs(t):
-    """APART, LEFT_OPEN: the TOG ends with a load nothing reads, so the measuring leaves a buffer version open. The
-    run numbers its versions from the start all the same: every load is freed, and the run ends at its total."""
-    expect_both_ran(replay(t, 32 * KB, 32, "APART", "LEFT_OPEN"), 977)
+    """APART, LEFT_OPEN: the TOG ends with a 16 KB load nothing reads, so the measuring leaves a buffer version open.
+    The run numbers its versions from the start all the same and ends at its total. That load keeps its bytes until
+    its work-item ends, so the 32 KB load beside it needs a 48 KB spad."""
+    expect_both_ran(replay(t, 32 * KB, 48, "APART", "LEFT_OPEN"), 977)
+
+
+def version_left_open_refused(t):
+    """The same TOG in a 32 KB spad: the 16 KB load nothing reads may be issued before the 32 KB one, which then never
+    is. The TOG is refused, not left to stop mid-run."""
+    expect_refused_before_the_run(replay(t, 32 * KB, 32, "APART", "LEFT_OPEN"), refusal(1, 48 * KB, 32),
+                                  t.work_dir / "tog.so")
+
+
+def work_items(t, body, sizes, spad_kb, items=1, cores=1):
+    """--tog_so: `items` work-items of work_item_tog.cpp, each the calls `body`, with buffers of `sizes` bytes (buffer
+    0 first), on `cores` tpuv6e cores with a `spad_kb` KB spad each; a load or store takes 8 MiB of its tensor at most."""
+    tog = t.tog("work_item_tog.cpp", (f"BODY={body}", f"SIZES={','.join(str(b) for b in sizes)}", f"ITEMS={items}"),
+                tensors=(256 * MIB, 256 * MIB))
+    machine = t.machine(**spad_alone(spad_kb), systolic_array_split="none", num_cores=cores)
+    return t.simulate(tog, machine, cycles=[200, 0], timeout=TIMEOUT_S)
+
+
+def issued(run, opcode, core=0):
+    """The cycles at which the `opcode` instructions of `core` were issued, in order of issue."""
+    return [e.cycle for e in run.events() if (e.tag, e.opcode, e.core) == ("INST_ISSUED", opcode, core)]
+
+
+UNREAD = "L(1); L(2); C({2}, {}); L(3); C({3}, {})"     # buffer 1 is loaded and nothing reads it
+
+
+def unread_load_kept_to_the_end_of_its_work_item(t):
+    """Three 16 KB loads in a 32 KB spad, the first read by nothing: it keeps its bytes while its work-item runs, so
+    the third load is issued only once the compute that frees the second is; and it leaves with its work-item, so the
+    second work-item finds the spad empty and runs the same way."""
+    run = work_items(t, UNREAD, (0, 16 * KB, 16 * KB, 16 * KB), 32, items=2)
+    expect_both_ran(run, 1148)
+    loads, computes = issued(run, "MOVIN"), issued(run, "COMP")
+    if len(loads) != 6 or len(computes) != 4 or loads[2] < computes[0] or loads[5] < computes[2]:
+        run.fail(f"expected each work-item's third load issued once its first compute was, got loads @{loads} and "
+                 f"computes @{computes}")
+
+
+def unread_load_larger_than_spad_refused(t):
+    """A work-item that only loads 64 KB, as a kernel that copies data onto the chip does, in a 48 KB spad."""
+    expect_refused_before_the_run(work_items(t, "L(1)", (0, 64 * KB), 48), refusal(0, 64 * KB, 48),
+                                  t.work_dir / "tog.so")
+
+
+def unread_loads_fit_together_or_are_refused(t):
+    """Three loads of 16 KB that nothing reads are all in the spad when the last of them is issued: 48 KB holds them,
+    47 KB does not, though no load waits for another."""
+    work_items(t, "L(1); L(2); L(3)", (0, 16 * KB, 16 * KB, 16 * KB), 48).expect_total_cycles(176)
+    expect_refused_before_the_run(work_items(t, "L(1); L(2); L(3)", (0, 16 * KB, 16 * KB, 16 * KB), 47),
+                                  refusal(0, 48 * KB, 47), t.work_dir / "tog.so")
+
+
+def unread_load_counts_for_what_does_not_wait_for_it(body):
+    """A 16 KB load nothing reads beside a 16 KB load and the compute that reads it, stated in the order `body`: no
+    order between the two loads is stated, so the unread one may be in the spad when the other is issued. 32 KB runs
+    it, and 31 KB is refused, not left to stop mid-run."""
+    def case(t):
+        sizes = (0, 16 * KB, 16 * KB)
+        work_items(t, body, sizes, 32, items=3).expect_ok()
+        expect_refused_before_the_run(work_items(t, body, sizes, 31, items=3), refusal(0, 32 * KB, 31),
+                                      t.work_dir / "tog.so")
+    return case
+
+
+def unread_output_does_not_count_for_what_it_waits_for(t):
+    """Work-item 0 reads two 16 KB loads in a compute, and a compute that waits for that one writes 16 KB nothing
+    reads (buffer 3, which work-item 1 loads; buffer 4 has no size and only orders the two). The output is filled
+    after the loads are freed, so the work-item needs 32 KB, not 48."""
+    body = "if (i == 0) { L(1); L(2); C({1, 2}, {4}); C({4}, {3}); } else { L(3); C({3}, {}); }"
+    sizes = (0, 16 * KB, 16 * KB, 16 * KB, 0)
+    work_items(t, body, sizes, 32, items=2).expect_ok()
+    expect_refused_before_the_run(work_items(t, body, sizes, 31, items=2), refusal(0, 32 * KB, 31),
+                                  t.work_dir / "tog.so")
+
+
+def buffer_ids_are_per_work_item(body):
+    """Six work-items on two cores with a 16 KB spad each, the even ones `body` and the odd ones one compute that
+    reads buffer 1 (8 KB), an id the even ones load: a work-item's buffer is no version of another's, so every
+    load is freed on the core that took it and the run ends as with odd work-items that name no buffer."""
+    def case(t):
+        totals = []
+        for odd in ("C({1}, {})", "C({}, {})"):
+            run = work_items(t, f"if (i % 2 == 0) {{ {body}; }} else {odd}", (0, 8 * KB), 16, items=6, cores=2)
+            totals.append(run.expect_ok().total_cycles())
+        if totals[0] != totals[1]:
+            run.fail(f"expected one total with and without the odd work-items' read of buffer 1, got {totals}")
+    return case
 
 
 def no_spad_size_refuses_nothing(t):
@@ -197,6 +285,17 @@ CASES = [
     Case("refused.apart_one_byte_over", apart_one_byte_over_refused),
     Case("refused.fill_not_waited_for_is_not_counted", fill_not_waited_for_is_not_counted),
     Case("version_left_open_runs", version_left_open_runs),
+    Case("refused.version_left_open", version_left_open_refused),
+    Case("unread_load.kept_to_the_end_of_its_work_item", unread_load_kept_to_the_end_of_its_work_item),
+    Case("refused.unread_load_larger_than_spad", unread_load_larger_than_spad_refused),
+    Case("unread_load.fit_together_or_are_refused", unread_loads_fit_together_or_are_refused),
+    Case("unread_load.counts_for_what_does_not_wait_for_it.stated_first",
+         unread_load_counts_for_what_does_not_wait_for_it("L(1); L(2); C({2}, {})")),
+    Case("unread_load.counts_for_what_does_not_wait_for_it.stated_last",
+         unread_load_counts_for_what_does_not_wait_for_it("L(2); C({2}, {}); L(1)")),
+    Case("unread_output_does_not_count_for_what_it_waits_for", unread_output_does_not_count_for_what_it_waits_for),
+    Case("buffer_ids_are_per_work_item.loaded_and_read", buffer_ids_are_per_work_item("L(1); C({1}, {})")),
+    Case("buffer_ids_are_per_work_item.loaded_only", buffer_ids_are_per_work_item("L(1)")),
     Case("no_spad_size_refuses_nothing", no_spad_size_refuses_nothing),
     Case("measured_run_traces_as_unmeasured", measured_run_traces_as_unmeasured),
     Case("lanes.fits_exactly_runs", lanes_fit_exactly_runs),

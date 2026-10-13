@@ -88,6 +88,7 @@ class Core {
   // SRAM-capacity throttle (sec 10.4): a consumer frees the buffer-versions it
   // read (refcount -> 0 releases the spad bytes). Called when COMP/MOVOUT issue.
   void release_sram(const std::shared_ptr<Instruction>& inst);
+  void release_sram(const std::shared_ptr<Tile>& tile);
   // Occupy inst's buffer-version footprint on issue; false if it would overflow
   // the spad this cycle (the caller stalls it). True for untracked insts.
   bool try_occupy_sram(const std::shared_ptr<Instruction>& inst);
