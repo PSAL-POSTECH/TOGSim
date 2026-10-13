@@ -54,7 +54,8 @@ def simulate(tog_dir: str, config: str) -> int:
 def prepare_node(node, kernel, shp, hw, out_dir) -> str:
     """Build what one kernel run of `node` needs, in a directory named by its kernel and constants: tog.so compiled
     with the node's tile, the two sidecars, and ACS's tables, a row per tile id the kernel names at this shape, a
-    short last tile costed at what is left. An uncovered tile id refuses the node; a failed compile is a ToolError."""
+    short last tile costed at what is left. A tile whose spad buffers TOGSim would refuse (tiling.spad_refusal) or an
+    uncovered tile id refuses the node; a failed compile is a ToolError."""
     values = shapes.constants(node, kernel, shp, hw)
     macros = emit.defines(kernel, values)
     shape = emit.shape_args(kernel, values)
@@ -68,6 +69,10 @@ def prepare_node(node, kernel, shp, hw, out_dir) -> str:
                         f"{(exc.stderr or '')[-400:]}") from None
     except OSError as exc:
         raise ToolError(f"kernel {kernel.stem} could not be compiled: {exc}") from None
+
+    why = tiling.spad_refusal(kernel.stem, emit.spad_buffer_bytes(so), hw)
+    if why:
+        raise ValueError(f"node {node.name!r}: {why}")
 
     tag = "_".join(str(v) for v in shape + [build] if str(v))
     tog_dir = os.path.join(out_dir, f"{kernel.stem}_{tag}" if tag else kernel.stem)

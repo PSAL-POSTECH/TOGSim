@@ -1,5 +1,4 @@
 """The frontend without the simulator: the operator table, the tiling and how a kernel is specialised."""
-import ctypes
 import os
 import subprocess
 
@@ -14,7 +13,7 @@ from togsim_frontend.onnx_frontend import emit
 from togsim_frontend.onnx_frontend import run as frontend
 from togsim_frontend.onnx_frontend import shapes
 from togsim_frontend.onnx_frontend import tiling
-from togsim_frontend.onnx_frontend.config import array_dim_from_name, read_hardware
+from togsim_frontend.onnx_frontend.config import array_dim_from_name, core_spad_kb, read_hardware
 from togsim_frontend.onnx_frontend.onnx_ops import OPS, resolve
 from togsim_frontend.onnx_frontend.tiling import Hardware, check_systolic, systolic_tile, unsupported
 
@@ -190,19 +189,18 @@ def test_the_systolic_tile_is_the_same_on_every_machine():
 
 
 def test_a_machine_the_tiles_are_whole_matmul_instructions_on_is_supported():
+    """Whatever its spad: a node's tile is held against that, and it is no larger than the node."""
     assert unsupported(HW) == []
     assert unsupported(Hardware(sa=4, vlane=16, vlen_bits=256)) == []
-    assert unsupported(Hardware(sa=8, vlane=8, vlen_bits=256, spad_bytes=tiling.SYSTOLIC_TILE_SPAD_BYTES)) == []
+    assert unsupported(Hardware(sa=8, vlane=8, vlen_bits=256, spad_bytes=1024)) == []
 
 
 def test_a_machine_is_refused_for_each_fact_the_tiles_do_not_fit():
-    """SA has to divide a tile's rows and depth, SA * lanes its columns, and a stated spad has to hold a tile."""
+    """SA has to divide a tile's rows and depth, and SA * lanes its columns."""
     rows, = unsupported(Hardware(sa=16, vlane=4, vlen_bits=256))
     assert "8 rows of a Attention tile are not a multiple of the array's 16 rows" in rows
     cols = unsupported(Hardware(sa=8, vlane=16, vlen_bits=256))
     assert len(cols) == 1 and "64 columns of a Attention tile" in cols[0] and "128 (SA * vpu_num_lanes = 8 * 16)" in cols[0]
-    spad, = unsupported(Hardware(sa=8, vlane=8, vlen_bits=256, spad_bytes=tiling.SYSTOLIC_TILE_SPAD_BYTES - 1024))
-    assert "core_spad_size_kb" in spad
     assert len(unsupported(Hardware(sa=256, vlane=256, vlen_bits=512))) == 5
 
 
@@ -224,17 +222,70 @@ def test_an_unsupported_machine_is_an_error_before_anything_is_read_or_run(tmp_p
 
 
 def stated_spad_bytes(tmp_path, stem, macros):
-    """What kernels/<stem>_tog.cpp compiled with `macros` states in togsim_spad_buffer_bytes, summed."""
+    """What kernels/<stem>_tog.cpp compiled with `macros` states in togsim_spad_buffer_bytes, buffer by buffer."""
     so = emit.compile_so(str(paths.kernel_source(stem)), str(paths.include_dir()), str(tmp_path / f"{stem}.so"), macros)
-    lib = ctypes.CDLL(so, mode=os.RTLD_LAZY)
-    count = ctypes.c_int32.in_dll(lib, "togsim_spad_buffer_count").value
-    return sum((ctypes.c_int64 * count).in_dll(lib, "togsim_spad_buffer_bytes"))
+    return emit.spad_buffer_bytes(so)
 
 
-def test_the_spad_a_machine_needs_is_what_the_conv_kernel_states_for_the_largest_tile(tmp_path):
+#: The spad TOGSim gives a core of each config here, in KB. TOGSim states it nowhere a program reads it but its log,
+#: so it is written out: vpu_spad_size_kb_per_lane x vpu_num_lanes, as each config gives both.
+SPAD_KB = {**{f"systolic_ws_128x128_{name}.yml": 128 * 128 for name in (
+               "c1_booksim_tpuv2", "c1_booksim_tpuv3", "c1_simple_noc_tpuv2", "c1_simple_noc_tpuv3",
+               "c1_simple_noc_tpuv3_functional_only", "c1_simple_noc_tpuv3_half", "c1_simple_noc_tpuv3_timing_only",
+               "c1_simple_noc_tpuv4", "c2_booksim_tpuv3", "c2_simple_noc_tpuv2", "c2_simple_noc_tpuv3",
+               "c2_simple_noc_tpuv3_ils", "c2_simple_noc_tpuv3_partition", "c2_simple_noc_tpuv4")},
+           **{f"systolic_ws_256x256_c1_simple_noc_tpuv6e{name}.yml": 512 * 256 for name in (
+               "", "_functional_only", "_timing_only")},
+           "systolic_ws_32x32_c1_simple_noc_tpuv3.yml": 32 * 32, "systolic_ws_8x8_c1_simple_noc_tpuv3.yml": 32 * 8}
+
+
+def test_the_frontend_reads_the_spad_of_each_config_here_as_togsim_does():
+    configs = sorted((paths.root() / "configs").glob("*.yml"))
+    assert {c.name: read_hardware(str(c)).spad_bytes // 1024 for c in configs} == SPAD_KB
+
+
+def test_the_spad_is_its_lanes_and_a_core_spad_size_kb_beside_them_may_only_restate_it():
+    """TOGSim's rule (core_spad_kb, src/Common.cc), on the machines its tests/spad_capacity run."""
+    lanes = {"vpu_num_lanes": 3, "vpu_spad_size_kb_per_lane": 16}
+    assert core_spad_kb(lanes) == core_spad_kb({**lanes, "core_spad_size_kb": 48}) == 48
+    with pytest.raises(ValueError, match="core_spad_size_kb: 47 is not vpu_spad_size_kb_per_lane x vpu_num_lanes = "
+                                         "16 x 3 = 48: state the spad once"):
+        core_spad_kb({**lanes, "core_spad_size_kb": 47})
+    assert core_spad_kb({"vpu_num_lanes": 256, "core_spad_size_kb": 48}) == 48
+    assert core_spad_kb({"vpu_spad_size_kb_per_lane": 16, "core_spad_size_kb": 48}) == 48
+    assert core_spad_kb({"vpu_num_lanes": 256}) == 0
+    with pytest.raises(ValueError, match="65536 x 65536 = 4294967296 KB is more than a spad TOGSim holds"):
+        core_spad_kb({"vpu_num_lanes": 65536, "vpu_spad_size_kb_per_lane": 65536})
+
+
+def test_a_conv_or_gemm_holds_every_buffer_its_kernel_states_and_the_largest_conv_tile_takes_384_kb(tmp_path):
+    """Its accumulator, weights and input, all read by its matmul; the others are not held against the spad."""
     conv = stated_spad_bytes(tmp_path, "conv", ["TILE_M=32", "TILE_N=256", "TILE_K=64", "TILE_I_H=8", "SA=8"])
     gemm = stated_spad_bytes(tmp_path, "gemm", ["TM=32", "TN=256", "TK=64"])
-    assert conv == tiling.SYSTOLIC_TILE_SPAD_BYTES == 393216 and gemm < conv
+    assert sum(conv) == 393216 and sum(gemm) == 106496
+    hw = Hardware(sa=8, vlane=8, vlen_bits=256, spad_bytes=393216)
+    assert tiling.spad_refusal("conv", conv, hw) is None and tiling.spad_refusal("gemm", gemm, hw) is None
+    small = Hardware(sa=8, vlane=8, vlen_bits=256, spad_bytes=393216 - 1024)
+    assert tiling.spad_refusal("conv", conv, small) == ("a work-item of kernel conv holds its 3 spad buffers at once, "
+                                                        "393216 bytes, and a core's spad is 392192: TOGSim refuses the "
+                                                        "TOG")
+    assert tiling.spad_refusal("conv", conv, HW) is None
+    assert tiling.spad_refusal("attention", [1 << 30], small) is None
+
+
+def test_a_node_whose_tile_the_spad_does_not_hold_is_refused_and_one_of_fewer_channels_is_not(tmp_path):
+    """On the 8x8 config's 256 KB, a Conv of 256 output channels cuts the 384 KB tile; of 128, a tile of 224 KB."""
+    hw = read_hardware(str(paths.root() / "configs" / "systolic_ws_8x8_c1_simple_noc_tpuv3.yml"))
+    assert hw.spad_bytes == 256 * 1024
+    for channels, refused in ((256, True), (128, False)):
+        node = helper.make_node("Conv", ["x", "w"], ["y"], name="conv", pads=[1, 1, 1, 1])
+        shapes_of = {"x": [1, 64, 16, 32], "w": [channels, 64, 3, 3]}
+        if refused:
+            with pytest.raises(ValueError, match="node 'conv': a work-item of kernel conv holds its 3 spad buffers at "
+                                                 "once, 393216 bytes, and a core's spad is 262144"):
+                frontend.prepare_node(node, CONV, shapes_of, hw, str(tmp_path))
+        else:
+            assert os.path.isdir(frontend.prepare_node(node, CONV, shapes_of, hw, str(tmp_path)))
 
 
 def test_the_second_pass_of_layernorm_and_global_avgpool_keeps_the_128_row_tile_of_its_kernel(tmp_path):
