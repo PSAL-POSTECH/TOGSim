@@ -76,7 +76,7 @@ def test_the_tiles_a_kernel_computes_are_the_nodes_of_its_table(stem, tmp_path, 
     log = standalone(tmp_path / stem, stem, cycles=cycles, config=unsplit_config, log_level="trace")
     seen = {int(c) for c in re.findall(r"INST_ISSUED *\]\[INST_ID=\d+\] COMP \(compute_type=0 compute_cycle=(\d+)", log)}
     assert seen == set(cycles), f"{stem}: node_mapping.py lists {len(nodes)} nodes, the kernel computed tiles {seen}"
-    assert not re.search(r"COMP +inst_count: .*skipped inst_count", log)
+    assert "skipped inst_count" not in log
 
 
 def save(tmp_path, nodes, inputs, outputs, initializers, check=True):

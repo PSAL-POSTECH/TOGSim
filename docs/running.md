@@ -82,9 +82,8 @@ line. The final statistics of the hello TOG on tpuv6e (the third run of `example
   `--tog_so` log; a session prints one more line after it, `Wall-clock time for simulation`. A
   `--tog_so` run also prints the same number earlier, as `[TOGSim] Total cycles`.
 - **`Instructions count`** is what each core ran: loads, stores, computes, barriers. A compute of
-  zero cycles is not counted; it is reported as `skipped inst_count`. A load that found its data
-  [already in its buffer](tog-abi.md#buffers-and-the-scratchpad) is counted, and again as
-  `skipped inst_count` on the `MOVIN` line. All computes with `compute_type` 0 are under `Vector`.
+  zero cycles is not counted; it is reported as `skipped inst_count`. All computes with
+  `compute_type` 0 are under `Vector`.
 - **`<unit> utilization(%)`**: one line per unit of the unit table. 256 rows at 1 per cycle are 256
   active cycles of 964, or 26.56%. With more than one core each core prints its block, and a
   `Total : <unit> utilization(%)` line per unit follows.
