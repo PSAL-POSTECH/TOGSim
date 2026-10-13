@@ -11,7 +11,7 @@ own tests and its own CI job. Like the [kernel library](kernels.md), it comes fr
   calibrated against gem5, and no result built on them should be read as a measurement.** A vector
   tile costs `ceil(elements / (lanes * elements per lane))` cycles per elementwise instruction; a
   systolic block costs the rows its matmuls feed (one per cycle) plus the `2*SA - 2` stages the
-  last one drains through, and those rows are its `Systolic` rows in the unit table. The
+  last one drains through, and those rows are its `SYSTOLIC` rows in the unit table. The
   `overlapping` column is always `0`. A short last tile is costed by the same formulas at the
   extents it has: a vector tile by its elements, a block by `depth * ceil(columns / (SA * lanes))`
   preloads of its rows. So a block 3 channels deep is 3 preloads where an 8-deep one is 8 (the
@@ -79,8 +79,8 @@ spad as TOGSim does: `vpu_spad_size_kb_per_lane` x `vpu_num_lanes` when the conf
 else `core_spad_size_kb` alone, else no limit.
 
 Of `configs/`, `systolic_ws_8x8_c1_simple_noc_tpuv3.yml` is accepted. The 32x32, 128x128 and
-256x256 (tpuv6e) configs are refused: one matmul instruction is 1024, 16384 and 65536 columns
-there (32768 on the 128 lanes of `_tpuv6e_mxu`), wider than the tile. ACS on its own (`python3 -m togsim_frontend.acs`) is not bound by
+256x256 (tpuv6e) configs are refused: one matmul instruction is 1024, 16384 and 32768 columns
+there, wider than the tile. ACS on its own (`python3 -m togsim_frontend.acs`) is not bound by
 this: it writes the tables for the config and the tile it is given. `SA` is not a config key; it
 is read from the config's file name (`..._8x8_...`) or given with `--sa`.
 

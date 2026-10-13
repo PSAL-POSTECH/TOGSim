@@ -54,7 +54,7 @@ them; neither the simulator nor its build needs them.
   block as the odd ids 1 to 15; a cycle table for it has 16 lines.
 - **Compute.** Every `togsim_compute` is `compute_type` `0`. `gemm`, `conv` and `attention` issue
   one compute per block of systolic work (a `TM x TK x TN` block of gemm's K loop) instead of one
-  per preload and matmul; what a block costs and how many Systolic rows it holds is the cycle
+  per preload and matmul; what a block costs and how many array-unit rows it holds is the cycle
   table's and the unit table's to say.
 
 ## Replaying a kernel by hand
@@ -67,7 +67,7 @@ argument) and give the simulator a cycle table and a unit table with a row per t
 mkdir -p /tmp/gemm && g++ -std=c++17 -shared -fPIC -Iinclude kernels/gemm_tog.cpp -o /tmp/gemm/tog.so
 printf '131072\n262144\n131072\n' > /tmp/gemm/tog_tensors.txt        # A 128x256, B 256x256, C 128x256
 printf '128\t0\n8206\t0\n' > /tmp/gemm/tog_cycles.tsv                # tile 0 accumulator init, tile 1 a block
-printf '0\tSystolic\trows\t1\t0\n1\tSystolic\trows\t1\t8192\n' > /tmp/gemm/tog_units.tsv
+printf '0\tTPUV6_MXU\trows\t1\t0\n1\tTPUV6_MXU\trows\t1\t8192\n' > /tmp/gemm/tog_units.tsv
 build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml \
   --tog_so /tmp/gemm/tog.so --cycle_table /tmp/gemm/tog_cycles.tsv --unit_table /tmp/gemm/tog_units.tsv
 ```

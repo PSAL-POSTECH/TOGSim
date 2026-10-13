@@ -107,12 +107,12 @@ gemm() {
   local run="--tog_so $dir/tog.so --cycle_table $dir/tog_cycles.tsv --log_level trace"
   tog $dir/gemm_tog.cpp -o $dir/tog.so
   sim result --config $V6E $run --unit_table $dir/tog_units.tsv
-  sim result --config $V6E $run --unit_table $dir/tog_units_256_rows.tsv
+  sim result --config $V6E $run --unit_table $dir/tog_units_128_rows.tsv
   machine $dir/one_array.gen.yml $V6E "num_systolic_array_per_core: 1"
   sim result --config $dir/one_array.gen.yml $run --unit_table $dir/tog_units.tsv
-  machine $dir/128_lanes.gen.yml $V6E "vpu_num_lanes: 128"
-  sim result --config $dir/128_lanes.gen.yml $run --unit_table $dir/tog_units_256_rows.tsv
-  machine $dir/no_split.gen.yml $V6E "systolic_array_split: none"
+  machine $dir/64_lanes.gen.yml $V6E "vpu_num_lanes: 64"
+  sim result --config $dir/64_lanes.gen.yml $run --unit_table $dir/tog_units_128_rows.tsv
+  machine $dir/no_split.gen.yml $V6E "systolic_array_split: none" "no systolic_array_unit"
   sim result --config $dir/no_split.gen.yml $run
 }
 
@@ -123,7 +123,8 @@ session() {
     tog examples/hello/hello_tog.cpp -o $dir/$kernel/tog.so
   done
   sim kernels --config $V6E --models_list $dir/commands.txt --log_level trace
-  sim kernels --config configs/systolic_ws_128x128_c2_simple_noc_tpuv3_partition.yml --models_list $dir/commands_two_partitions.txt --log_level trace
+  machine $dir/two_partitions.gen.yml $V6E "num_cores: 2" "num_partition: 2" "partition: {core_0: 0, core_1: 1}"
+  sim kernels --config $dir/two_partitions.gen.yml --models_list $dir/commands_two_partitions.txt --log_level trace
 }
 
 # The valid TOG and each way of breaking it that is refused; the valid TOG with each wrong input or machine that is
@@ -142,9 +143,9 @@ mistakes() {
   printf 'cycle\toverlapping\n600\t0\n' > $dir/cycles_header.gen.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/cycles_header.gen.tsv --unit_table $dir/tog_units.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_cycles.tsv
-  printf '0 Systolic rows 1 256\n' > $dir/spaces.gen.tsv
+  printf '0 TPUV6_MXU rows 1 128\n' > $dir/spaces.gen.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_cycles.tsv --unit_table $dir/spaces.gen.tsv
-  printf 'tile_id\tunit\tunit_of_work\tcapacity_per_cycle\tadmitted\n0\tSystolic\trows\t1\t256\n' > $dir/header.gen.tsv
+  printf 'tile_id\tunit\tunit_of_work\tcapacity_per_cycle\tadmitted\n0\tTPUV6_MXU\trows\t1\t128\n' > $dir/header.gen.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_cycles.tsv --unit_table $dir/header.gen.tsv
   printf '0\tVpu\tcycles\t1\t100\n' > $dir/no_array_unit.gen.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_cycles.tsv --unit_table $dir/no_array_unit.gen.tsv
@@ -160,7 +161,7 @@ mistakes() {
   sim first_error --config $dir/no_num_cores.gen.yml --tog_so $dir/valid.so --cycle_table $dir/tog_cycles.tsv
   tog $dir/silent_tog.cpp -o $dir/silent_valid.so
   sim unrefused --config $V6E --tog_so $dir/silent_valid.so $tables --log_level trace
-  printf '1\tSystolic\trows\t1\t256\n1\tVpu\tcycles\t1\t100\n' > $dir/rows_of_tile_1.gen.tsv
+  printf '1\tTPUV6_MXU\trows\t1\t128\n1\tVpu\tcycles\t1\t100\n' > $dir/rows_of_tile_1.gen.tsv
   sim result --config $V6E --tog_so $dir/silent_valid.so --cycle_table $dir/tog_cycles.tsv --unit_table $dir/rows_of_tile_1.gen.tsv
   for broken in TENSOR_PAST_LIST NULL_STRIDES CONSUMER_FIRST; do
     tog -D$broken $dir/silent_tog.cpp -o $dir/$broken.so

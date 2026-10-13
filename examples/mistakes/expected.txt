@@ -1,7 +1,7 @@
 == mistakes
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/mistakes/refused_tog.cpp -o examples/mistakes/valid.so
 + build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-[info] Core [0] : Systolic utilization(%): 30.48, active_cycles: 256, idle_cycles: 584
+[info] Core [0] : TPUV6_MXU utilization(%): 15.24, active_cycles: 128, idle_cycles: 712
 [info] Core [0] : Vpu utilization(%): 11.90, active_cycles: 100, idle_cycles: 740
 [info] Total execution cycles: 840
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DOTHER_ABI examples/mistakes/refused_tog.cpp -o examples/mistakes/OTHER_ABI.so
@@ -50,7 +50,7 @@ exit 1
 [error] [TOGSim] TOG examples/mistakes/valid.so: work-item 0 (key 0) computes tile id 0, which the cycle table does not hold (it has no line)
 exit 1
 + build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv
-[error] [TOGSim] systolic_array_split (on by default) reads each tile's Systolic rows; give --unit_table, or set systolic_array_split: none
+[error] [TOGSim] systolic_array_split (on by default) reads each tile's TPUV6_MXU rows; give --unit_table, or set systolic_array_split: none
 exit 1
 + build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/spaces.gen.tsv
 [error] [TOGSim] --unit_table examples/mistakes/spaces.gen.tsv line 1: expected 5 tab-separated fields (tile_id unit unit_of_work capacity_per_cycle admitted), got 1
@@ -59,7 +59,7 @@ exit 1
 [error] [TOGSim] --unit_table examples/mistakes/header.gen.tsv line 1: tile_id 'tile_id' is not a non-negative integer
 exit 1
 + build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/no_array_unit.gen.tsv
-[error] [TOGSim] systolic_array_split: the unit table has no array unit Systolic
+[error] [TOGSim] systolic_array_split: the unit table has no array unit TPUV6_MXU
 exit 1
 + build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/no_tensors/tog.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
 [error] [TOGSim] examples/mistakes/no_tensors/tog_tensors.txt is absent: the TOG's tensor arguments have no addresses
@@ -87,7 +87,7 @@ exit 134
 [info] Total execution cycles: 840
 + build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/silent_valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/rows_of_tile_1.gen.tsv
 [warning] [TOGSim] TOG examples/mistakes/silent_valid.so: the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units
-[info] Core [0] : Systolic utilization(%): 0.00, active_cycles: 0, idle_cycles: 840
+[info] Core [0] : TPUV6_MXU utilization(%): 0.00, active_cycles: 0, idle_cycles: 840
 [info] Core [0] : Vpu utilization(%): 0.00, active_cycles: 0, idle_cycles: 840
 [info] Total execution cycles: 840
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DTENSOR_PAST_LIST examples/mistakes/silent_tog.cpp -o examples/mistakes/TENSOR_PAST_LIST.so

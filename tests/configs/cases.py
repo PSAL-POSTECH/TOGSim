@@ -19,21 +19,18 @@ SHIPPED = [
     "systolic_ws_128x128_c2_simple_noc_tpuv4",
     "systolic_ws_256x256_c1_simple_noc_tpuv6e",
     "systolic_ws_256x256_c1_simple_noc_tpuv6e_functional_only",
-    "systolic_ws_256x256_c1_simple_noc_tpuv6e_mxu",
-    "systolic_ws_256x256_c1_simple_noc_tpuv6e_mxu_functional_only",
-    "systolic_ws_256x256_c1_simple_noc_tpuv6e_mxu_timing_only",
     "systolic_ws_256x256_c1_simple_noc_tpuv6e_timing_only",
     "systolic_ws_32x32_c1_simple_noc_tpuv3",
     "systolic_ws_8x8_c1_simple_noc_tpuv3",
 ]
 RUNS_WITHOUT_UNIT_TABLE = []
-#: The array unit a config names with systolic_array_unit, where it is not the default Systolic.
-ARRAY_UNIT = {name: "Mxu" for name in SHIPPED if "_tpuv6e_mxu" in name}
+#: The array unit a config names with systolic_array_unit, where it is not the default SYSTOLIC.
+ARRAY_UNIT = {name: "TPUV6_MXU" for name in SHIPPED if "_tpuv6e" in name}
 
 
 def units(name):
     """The unit table of the TOG on configs/<name>.yml: 256 rows of its array unit, and 100 cycles of the Vpu."""
-    return [(0, ARRAY_UNIT.get(name, "Systolic"), "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)]
+    return [(0, ARRAY_UNIT.get(name, "SYSTOLIC"), "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)]
 
 
 def every_config_is_listed(t):

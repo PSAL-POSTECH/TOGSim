@@ -231,9 +231,12 @@ class Ctx:
 
     def machine(self, base=TPUV6E, **keys):
         """<work dir>/machine.yml: configs/<base> with each of `keys` set (in place where the base has it, appended
-        otherwise; None: left out) and the Ramulator2 / BookSim2 paths made absolute, as the file leaves configs/."""
+        otherwise; None: left out) and the Ramulator2 / BookSim2 paths made absolute, as the file leaves configs/.
+        systolic_array_split="none" also leaves out systolic_array_unit, which TOGSim refuses without the split."""
         src = REPO / "configs" / base
         lines, left = [], dict(keys)
+        if left.get("systolic_array_split") == "none":
+            left.setdefault("systolic_array_unit", None)
         for line in src.read_text().splitlines():
             m = re.match(r"([A-Za-z_]\w*):\s*(.*)$", line)
             if m and m[1] in left and left[m[1]] is None:

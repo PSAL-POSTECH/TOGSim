@@ -17,7 +17,7 @@ GOLDEN = {
         machine=dict(**spad_alone(48), systolic_array_split="none")),
     "computes_split_over_two_arrays": dict(
         total=2993, tog="spad_footprint/state_stored_each_trip_tog.cpp", cycles=[600], compute=344,
-        units=[(0, "Systolic", "rows", 1, 512), (0, "Vpu", "cycles", 1, 50)], machine=dict()),
+        units=[(0, "TPUV6_MXU", "rows", 1, 512), (0, "Vpu", "cycles", 1, 50)], machine=dict()),
 }
 
 

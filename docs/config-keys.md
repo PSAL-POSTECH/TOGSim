@@ -21,7 +21,7 @@ what changing one does; this page is the full list.
 | `num_systolic_array_per_core` | no | 1 | The arrays a tile's rows can be spread over by the array split. |
 | `vpu_num_lanes` | unless `systolic_array_split: none` | | The rows one array takes: a tile with more rows than this is split. |
 | `systolic_array_split` | no | `round_robin` | `round_robin` spreads a tile's array rows over the arrays and needs a unit table. `none` turns that off. |
-| `systolic_array_unit` | no | `Systolic` | The name of the array unit in the unit table. Setting it with `systolic_array_split: none` aborts. |
+| `systolic_array_unit` | no | `SYSTOLIC` | The name of the array unit in the unit table. Setting it with `systolic_array_split: none` aborts. |
 | `vpu_spad_size_kb_per_lane` | no | | The scratchpad of one lane, in KB. With `vpu_num_lanes` it makes the scratchpad of one core: `vpu_spad_size_kb_per_lane` x `vpu_num_lanes`. 0 means unlimited. It must hold what a work-item needs [at once](tog-abi.md#buffers-and-the-scratchpad); a TOG with a work-item that needs more is refused. |
 | `core_spad_size_kb` | no | 0 | The scratchpad of one core, in KB, for a config without `vpu_spad_size_kb_per_lane` and `vpu_num_lanes`; 0 means unlimited. Beside those two it may only restate their product: another value aborts. |
 | `sa_weight_buffer_depth` | no | 2 | Deprecated: read only for a TOG that passes `compute_type` 1, 2 or 3. |
@@ -77,12 +77,12 @@ what changing one does; this page is the full list.
 
 ## The shipped configs
 
-`configs/` holds 22 machines named `systolic_ws_<n>x<n>_c<cores>_<interconnect>_<machine>`:
+`configs/` holds 19 machines named `systolic_ws_<n>x<n>_c<cores>_<interconnect>_<machine>`:
 `<n>` is the systolic array, which the frontend reads from the name (and `vpu_num_lanes`, except on
-the `_tpuv6e_mxu` ones), `<cores>` is `num_cores`, `<interconnect>` is `simple_noc`
+the `_tpuv6e` ones), `<cores>` is `num_cores`, `<interconnect>` is `simple_noc`
 (`icnt_type: simple`) or `booksim` (`icnt_type: booksim2`), and `<machine>` selects the clock, the
 arrays per core and the Ramulator2 file. The documents call
-`systolic_ws_256x256_c1_simple_noc_tpuv6e.yml` "tpuv6e" for short. All 22 use
+`systolic_ws_256x256_c1_simple_noc_tpuv6e.yml` "tpuv6e" for short. All 19 use
 `dram_type: ramulator2`, and none sets `systolic_array_split: none`, so every one needs a unit table.
 
 | Config (without the `systolic_ws_` prefix and `.yml`) | Cores | Core MHz | Arrays per core | Lanes | Spad KB | DRAM channels | Ramulator2 file | L2 | Interconnect |
@@ -101,27 +101,24 @@ arrays per core and the Ramulator2 file. The documents call
 | `128x128_c2_simple_noc_tpuv3_ils` | 2 | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 | `128x128_c2_simple_noc_tpuv3_partition` | 2, in 2 partitions | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 | `128x128_c2_simple_noc_tpuv4` | 2 | 1050 | 4 | 128 | 16384 | 32 | `HBM2_TPUv4.yaml` | data cache | simple, 10 cycles |
-| `256x256_c1_simple_noc_tpuv6e` | 1 | 1751 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
-| `256x256_c1_simple_noc_tpuv6e_functional_only` | 1 | 1751 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
-| `256x256_c1_simple_noc_tpuv6e_timing_only` | 1 | 1751 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
-| `256x256_c1_simple_noc_tpuv6e_mxu` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
-| `256x256_c1_simple_noc_tpuv6e_mxu_functional_only` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
-| `256x256_c1_simple_noc_tpuv6e_mxu_timing_only` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
+| `256x256_c1_simple_noc_tpuv6e` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
+| `256x256_c1_simple_noc_tpuv6e_functional_only` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
+| `256x256_c1_simple_noc_tpuv6e_timing_only` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
 | `32x32_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 32 | 1024 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 | `8x8_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 8 | 256 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 
-- `256x256_c1_simple_noc_tpuv6e` is the machine the tests and the examples use. It, its two
-  variants and the three `_mxu` ones print statistics every 200 cycles; the others every 10000.
-- `_tpuv6e_mxu` is tpuv6e as libtpu drives it: 128 lanes of 1024 KB (VMEM 128 MB) and 256-bit
+- `256x256_c1_simple_noc_tpuv6e` is the machine the tests and the examples use: one TPU v6e
+  TensorCore as libtpu drives it, two 256x256 arrays, 128 lanes of 1024 KB (VMEM 128 MB) and 256-bit
   vectors (8 sublanes x 32 bit), and `systolic_array_split: round_robin` over the array unit
-  `Mxu` (`systolic_array_unit`), so its unit tables name `Mxu` where the others name `Systolic`.
+  `TPUV6_MXU` (`systolic_array_unit`), so its unit tables name `TPUV6_MXU` where the others name
+  `SYSTOLIC`. It and its two variants print statistics every 200 cycles; the others every 10000.
 - `128x128_c1_simple_noc_tpuv2` spells its DRAM period `dram_stats_print_period_cycless`. TOGSim
   ignores that key, so this config sets no DRAM period.
 - The `_functional_only`, `_timing_only` and `_ils` variants differ from their base only in
   `pytorchsim_*` keys, which TOGSim does not read: they simulate exactly as their base does.
 - `_half` is `128x128_c1_simple_noc_tpuv3` with half the DRAM channels.
 - `_partition` is `128x128_c2_simple_noc_tpuv3` with `num_partition: 2` and one core in each.
-- `examples/minimal.yml` is not one of the 22: it is a `dram_type: simple` machine that needs no
+- `examples/minimal.yml` is not one of the 19: it is a `dram_type: simple` machine that needs no
   other file and no unit table.
 
 Every shipped config writes its Ramulator2 and BookSim2 paths as `../configs/...`, which resolves
