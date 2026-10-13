@@ -85,8 +85,7 @@ class Core {
   void record_unit_window(const std::shared_ptr<Instruction>& inst);
   // Credit every recorded window's share of [lo, hi) into _stat_unit_spread; drop windows ended by hi.
   void credit_unit_windows(cycle_type lo, cycle_type hi);
-  // SRAM-capacity throttle (sec 10.4): a consumer frees the buffer-versions it
-  // read (refcount -> 0 releases the spad bytes). Called when COMP/MOVOUT issue.
+  // A consumer leaves the buffer versions it read; the last reader of a version to be issued frees its bytes.
   void release_sram(const std::shared_ptr<Instruction>& inst);
   void release_sram(const std::shared_ptr<Tile>& tile);
   // Occupy inst's buffer-version footprint on issue; false if it would overflow
@@ -161,11 +160,10 @@ class Core {
   std::queue<mem_fetch*> _response_queue;
   uint32_t _waiting_write_reqs;
 
-  // SRAM-capacity throttle (sec 10.4). _sram_used = current per-core spad bytes;
-  // _sram_capacity = limit (0 = disabled); _sram_allocs maps a buffer-version id
-  // to its accumulated footprint bytes (freed when its last reader issues).
+  // The spad: bytes in use, the limit (0: none), and each buffer version's bytes.
   size_t _sram_used = 0;
   size_t _sram_capacity = 0;
   std::unordered_map<int64_t, size_t> _sram_allocs;
+  std::unordered_map<int64_t, int> _sram_readers;
   std::multimap<cycle_type, DueAction> _due_events;
 };

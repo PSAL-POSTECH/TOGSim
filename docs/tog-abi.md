@@ -36,8 +36,9 @@ A TOG calls four functions, which TOGSim provides at load time:
    the key) and binds it to a core: round-robin, in dispatch order, over the cores of the
    kernel's partition.
 2. TOGSim then calls each work-item's body to record its instructions. It calls each body **three
-   times** over the run: twice up front, to find the buffers and to plan the spad, and once more
-   when it builds the work-item's instructions.
+   times** over the run: twice up front, to find the buffers and, when the machine states a spad
+   size, to measure what the work-item needs of it, and once more when it builds the work-item's
+   instructions.
 3. The recorded instructions run on the modeled core as [the model](tutorial.md#the-model) says: each as soon
    as the instructions it depends on are done and the resource it needs is free.
 
@@ -150,8 +151,10 @@ the scratchpad.
 - A work-item's `spad_footprint` (printed on its `TILE_SCHEDULED` line) is the sum of the sizes of
   the distinct buffers it names, counting only buffers that some DMA of the TOG moves. A buffer
   that only computes touch, like the gemm accumulator, is not counted.
-- A buffer occupies the spad from the load, or the compute, that first writes it until its last
-  reader is issued: a store, or a compute that reads it without writing it. A compute that reads
+- A buffer occupies the spad from the load, or the compute, that first writes it until every
+  reader of it is issued: a store, or a compute that reads it without writing it. Readers that do
+  not wait for one another are issued in any order, and the last to be issued frees the buffer,
+  not the one the TOG states last. A compute that reads
   and writes the same buffer keeps it alive. A buffer that nothing reads after it is filled, such
   as what a kernel loads for a later kernel to use, keeps its bytes until its work-item ends. No
   byte of a work-item stays in the spad after it.
@@ -161,8 +164,8 @@ the scratchpad.
 - `core_spad_size_kb` must hold what a work-item needs **at once**: the most that one of its
   instructions finds in the spad when it is issued, whatever the order of issue. That is the bytes
   the instruction occupies itself (a load its data tile, a compute a buffer it writes first), plus
-  the bytes of every buffer that was filled by an instruction it waits for and is not freed before
-  it, or an instruction that waits for it, is issued. A buffer that nothing reads is freed by no
+  the bytes of every buffer that was filled by an instruction it waits for and that it, or an
+  instruction that waits for it, reads. A buffer that nothing reads is freed by no
   instruction, so it may be in the spad when any other instruction is issued, and counts for each
   of them except those its own fill waits for. An instruction is issued only while that
   fits, so a work-item that needs more would never end: its TOG is

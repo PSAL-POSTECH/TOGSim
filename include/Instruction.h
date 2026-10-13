@@ -140,9 +140,8 @@ class Instruction : public std::enable_shared_from_this<Instruction> {
   static uint64_t next_global_inst_id() { return _next_global_inst_id; }
   static void rewind_global_inst_id(uint64_t id) { _next_global_inst_id = id; }
 
-  // SRAM-capacity model (sec 10.4), filled by the bridge and enforced by Core: a
-  // load fills buffer-version `_sram_alloc_id` (-1 = untracked), and a version's
-  // last reader frees it on issue via `_sram_release_allocs`.
+  // A load fills buffer version `_sram_alloc_id` (-1: none); every reader names the versions it reads in
+  // `_sram_release_allocs`, and the last of them to be issued frees a version.
   void set_sram_alloc(int64_t id) { _sram_alloc_id = id; }
   int64_t get_sram_alloc() const { return _sram_alloc_id; }
   // Keep the list ascending by version id. The Core frees each version regardless

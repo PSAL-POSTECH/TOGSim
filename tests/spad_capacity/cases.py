@@ -213,6 +213,31 @@ def buffer_ids_are_per_work_item(body):
     return case
 
 
+def freed_when_every_reader_is_issued(t):
+    """Buffer 1 (16 KB) has two readers. The one the TOG states first also waits for a 64 KB load; the one it states
+    last is issued first and frees nothing, since the other still reads the buffer: the 16 KB load of buffer 3, which
+    an 88 KB spad takes only without buffer 1, is issued once the first reader is."""
+    run = work_items(t, "L(1); L(2); C({1, 2}, {}); C({1}, {}); L(3); C({3}, {})",
+                     (0, 16 * KB, 64 * KB, 16 * KB), 88)
+    run.expect_total_cycles(745)
+    loads, computes = issued(run, "MOVIN"), issued(run, "COMP")
+    if len(loads) != 3 or len(computes) != 3 or not computes[0] < computes[1] <= loads[2]:
+        run.fail(f"expected the reader of buffer 1 alone issued first, then the reader of 1 and 2, then the load of "
+                 f"buffer 3; got loads @{loads} and computes @{computes}")
+
+
+FOUR_READERS = "L(1); L(2); C({1, 2}, {}); C({1, 2}, {}); C({1, 2}, {}); C({1}, {})"
+
+
+def every_reader_holds_its_buffer(t):
+    """Three computes read 64 KB and 512 KB together and a fourth, stated last, the 64 KB alone: each of the three
+    is issued with both in the spad, whichever reader the TOG states last. 576 KB holds that and 575 KB does not."""
+    sizes = (0, 64 * KB, 512 * KB)
+    work_items(t, FOUR_READERS, sizes, 576).expect_total_cycles(1351)
+    expect_refused_before_the_run(work_items(t, FOUR_READERS, sizes, 575), refusal(0, 576 * KB, 575),
+                                  t.work_dir / "tog.so")
+
+
 def no_spad_size_refuses_nothing(t):
     """core_spad_size_kb: 0 is a spad without a limit, and so is a config without that key and without
     vpu_spad_size_kb_per_lane: the TOG that 48 KB refuses runs, to one total."""
@@ -296,6 +321,8 @@ CASES = [
     Case("unread_output_does_not_count_for_what_it_waits_for", unread_output_does_not_count_for_what_it_waits_for),
     Case("buffer_ids_are_per_work_item.loaded_and_read", buffer_ids_are_per_work_item("L(1); C({1}, {})")),
     Case("buffer_ids_are_per_work_item.loaded_only", buffer_ids_are_per_work_item("L(1)")),
+    Case("freed_when_every_reader_is_issued", freed_when_every_reader_is_issued),
+    Case("refused.every_reader_holds_its_buffer", every_reader_holds_its_buffer),
     Case("no_spad_size_refuses_nothing", no_spad_size_refuses_nothing),
     Case("measured_run_traces_as_unmeasured", measured_run_traces_as_unmeasured),
     Case("lanes.fits_exactly_runs", lanes_fit_exactly_runs),
