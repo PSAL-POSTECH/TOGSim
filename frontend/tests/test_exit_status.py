@@ -165,6 +165,10 @@ def test_a_node_whose_tile_ids_the_tables_do_not_cover_exits_3(tmp_path):
     ("vpu_num_lanes: 0\nvpu_vector_length_bits: 256\n", "vpu_num_lanes is 0, below 1"),
     ("vpu_num_lanes: 8\nvpu_vector_length_bits: 16\n", "vpu_vector_length_bits is 16, below 32"),
     ("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\ncore_spad_size_kb: -1\n", "core_spad_size_kb is -1, below 0"),
+    ("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\nvpu_spad_size_kb_per_lane: -1\n",
+     "vpu_spad_size_kb_per_lane is -1, below 0"),
+    ("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\nvpu_spad_size_kb_per_lane: 32\ncore_spad_size_kb: 384\n",
+     "core_spad_size_kb: 384 is not vpu_spad_size_kb_per_lane x vpu_num_lanes = 32 x 8 = 256"),
 ])
 @pytest.mark.parametrize("module", [FRONTEND, ACS])
 def test_a_config_that_cannot_be_read_exits_4(module, text, said, tmp_path):

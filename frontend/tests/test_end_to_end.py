@@ -1,6 +1,7 @@
 """The frontend against a built simulator: every kernel replays with the tables ACS gives it, and a graph's total is
 the sum of its nodes replayed on their own. Skipped when build/bin/Simulator is absent, unless
 TOGSIM_REQUIRE_SIMULATOR is set (CI): then they fail."""
+import dataclasses
 import json
 import math
 import os
@@ -14,6 +15,7 @@ from onnx import TensorProto, helper
 
 from togsim_frontend import paths
 from togsim_frontend.acs.node_mapping import KERNELS, lookup, tile_ids
+from togsim_frontend.onnx_frontend import emit
 from togsim_frontend.onnx_frontend import run as frontend
 from togsim_frontend.onnx_frontend import shapes as frontend_shapes
 from togsim_frontend.onnx_frontend.config import read_hardware
@@ -278,6 +280,50 @@ def test_a_node_its_kernel_cannot_run_at_its_shape_is_listed_with_the_reason_and
     assert [(r["name"], r["op"]) for r in report["refused"]] == [("narrow", "Gemm")]
     assert "32 columns is under one matmul instruction" in report["refused"][0]["reason"]
     assert report["nodes_run"] == 0 and report["total_cycles"] == 0
+
+
+def spad_alone(directory, kb):
+    """The 8x8 config with a spad of `kb` stated by core_spad_size_kb alone."""
+    config = yaml.safe_load(CONFIG.read_text())
+    del config["vpu_spad_size_kb_per_lane"]
+    config["core_spad_size_kb"] = kb
+    config["ramulator_config_path"] = os.path.normpath(CONFIG.parent / config["ramulator_config_path"])
+    directory.mkdir(parents=True)
+    (directory / CONFIG.name).write_text(yaml.safe_dump(config))
+    return directory / CONFIG.name
+
+
+def togsim_runs(tog_dir, config):
+    """Whether TOGSim replays the TOG laid out in `tog_dir` on `config` to the end: its exit status, 0."""
+    return subprocess.run([str(paths.simulator()), "--config", str(config), "--tog_so", f"{tog_dir}/tog.so",
+                           "--cycle_table", f"{tog_dir}/tog_cycles.tsv", "--unit_table", f"{tog_dir}/tog_units.tsv"],
+                          capture_output=True).returncode == 0
+
+
+@pytest.mark.parametrize("op,shapes,attributes", [
+    ("Conv", [[1, 64, 16, 32], [256, 64, 3, 3]], dict(pads=[1, 1, 1, 1])),
+    ("Gemm", [[64, 64], [64, 256]], {}),
+])
+def test_the_frontend_refuses_a_conv_or_gemm_on_the_spad_togsim_refuses_its_tog_on_and_no_larger(op, shapes,
+                                                                                                attributes, tmp_path):
+    """Of the largest tile, 384 and 104 KB: on a spad that size TOGSim replays it and the frontend lays it out, on
+    one KB less TOGSim refuses it and the frontend refuses the node."""
+    inputs = {f"in{i}": shape for i, shape in enumerate(shapes)}
+    node = helper.make_node(op, list(inputs), ["out"], name=op.lower(), **attributes)
+    hw = read_hardware(str(CONFIG))
+    tog_dir = frontend.prepare_node(node, OPS[op][0], inputs, dataclasses.replace(hw, spad_bytes=0),
+                                    str(tmp_path / "unbounded"))
+    need = sum(emit.spad_buffer_bytes(f"{tog_dir}/tog.so"))
+    assert need == {"Conv": 384, "Gemm": 104}[op] * 1024
+    for kb, fits in ((need // 1024, True), (need // 1024 - 1, False)):
+        config = spad_alone(tmp_path / f"{kb}kb", kb)
+        assert togsim_runs(tog_dir, config) == fits
+        try:
+            frontend.prepare_node(node, OPS[op][0], inputs, read_hardware(str(config)), str(tmp_path / f"{kb}kb"))
+            refused = False
+        except ValueError as exc:
+            refused = f"{need} bytes, and a core's spad is {kb * 1024}: TOGSim refuses the TOG" in str(exc)
+        assert refused == (not fits)
 
 
 def test_a_fully_mapped_graph_exits_zero_and_refuses_nothing(tmp_path, capsys):
