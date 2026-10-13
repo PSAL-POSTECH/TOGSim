@@ -126,6 +126,9 @@ struct BuildState {
   std::vector<std::shared_ptr<const TensorTiling>> tilings;   // per arg_id; empty = row-major
   std::set<int64_t> cur_tile_bufs;
   size_t cur_tile_footprint = 0;
+  std::set<int64_t> cur_touched, cur_held;
+  struct CoreHold { std::set<int64_t> ids; std::shared_ptr<SpadHold> hold = std::make_shared<SpadHold>(); };
+  std::map<int32_t, CoreHold> core_holds;
 
   // Buffer versions of the work-item being fed; one counter numbers the versions of every kernel of the process.
   inline static int64_t next_alloc = 0;
@@ -150,6 +153,15 @@ struct BuildState {
     return t.read_bufs.empty() ? std::vector<int64_t>{} : std::vector<int64_t>{t.read_bufs.front()};
   }
 
+  // The first record of a work-item that names a buffer decides what it is there: written (in place or not), the
+  // work-item's own; only read, `held`: data already on the chip, of which the work-item has no version.
+  static void first_touch(const togsim::TraceRec& t, std::set<int64_t>& touched, std::set<int64_t>& held) {
+    if (t.kind != togsim::TraceRec::DMA && t.kind != togsim::TraceRec::COMPUTE) return;
+    for (int64_t b : t.write_bufs) touched.insert(b);
+    for (int64_t b : t.read_bufs)
+      if (touched.insert(b).second) held.insert(b);
+  }
+
   // Point an indirect dma at its index dump, indirect_index_<key>_<seq>.raw (the vcix
   // tpu model's dma_index_key naming): one uint64 element offset per tile element.
   // A dump that is absent or of another size leaves the dma dense, and is counted.
@@ -170,9 +182,9 @@ struct BuildState {
   }
 
   // ---- index + footprint --------------------------------------------------
-  // Open the TOG and replay every work-item once: a DMA'd buffer is as large as the TOG states, and a TOG is refused
-  // for a buffer it does not size, or a compute whose tile id the cycle table does not hold or whose unit table rows
-  // exceed what a unit takes in the tile's cycles. Warned once each: tile ids without unit rows, stray arg_ids.
+  // Replay every work-item once. Refused: a buffer the TOG DMAs and does not size, a compute whose tile id the cycle
+  // table does not hold, or whose unit table rows exceed what a unit takes in the tile's cycles. Named and still run:
+  // tile ids without unit rows and stray arg_ids (a warning each), and the buffers each core holds.
   bool index(const char* so_path, const int64_t* shape_args, int32_t n_shape,
              const uint64_t* tensor_base, int32_t n_tensors,
              const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,
@@ -184,8 +196,12 @@ struct BuildState {
     const std::vector<int64_t>& stated = tog.spad_buffer_bytes();
     std::set<uint64_t> unitless, fitted;
     std::set<int64_t> stray_args;
-    for (size_t i = 0; i < tog.num_items(); i++)
+    for (size_t i = 0; i < tog.num_items(); i++) {
+      std::set<int64_t> touched, held;
+      CoreHold* core = nullptr;
       for (const TraceRec& t : tog.run_item(i)) {
+        if (t.kind == TraceRec::TILE_BEGIN) core = &core_holds[t.core];
+        first_touch(t, touched, held);
         if (t.kind == TraceRec::COMPUTE && t.tile_id >= tog.num_tile_ids())
           throw std::runtime_error(fmt::format(
               "[TOGSim] TOG {}: work-item {} (key {}) computes tile id {}, which the cycle table does "
@@ -212,6 +228,22 @@ struct BuildState {
           buf_bytes[b] = (size_t)stated[b];
         }
       }
+      if (!core) continue;
+      core->ids.insert(held.begin(), held.end());
+      core->hold->left++;
+    }
+    for (auto& [id, core] : core_holds) {
+      for (int64_t b : core.ids)
+        if (b >= 0 && (size_t)b < stated.size() && stated[b] > 0) core.hold->bytes += (size_t)stated[b];
+      if (core.ids.empty()) continue;
+      if (spad_bytes)
+        spdlog::info("[TOGSim] TOG {}: core {} holds {} bytes for the kernel: buffers {}, which its work-items "
+                     "read without having written them", so_path, id, core.hold->bytes, id_list(core.ids));
+      else
+        spdlog::info("[TOGSim] TOG {}: the work-items of core {} read buffers {} without having written them: {} "
+                     "bytes on the chip already, which nothing accounts without core_spad_size_kb", so_path, id,
+                     id_list(core.ids), core.hold->bytes);
+    }
     if (!unitless.empty())
       warn_once(fmt::format("[TOGSim] TOG {}: the unit table has no rows for tile ids {}, which its computes "
                             "name: those computes add nothing to the units", so_path, id_list(unitless)));
@@ -264,6 +296,7 @@ struct BuildState {
     if (sg && tile) {
       tile->set_spad_footprint(cur_tile_footprint);   // distinct-buffer resident set (1- vs 2-dispatch)
       tile->set_spad_versions(tile_first_alloc, next_alloc);
+      tile->set_spad_hold(core_holds[sg->get_core_id()].hold);
       sg->add_tile(tile);
       tile->set_owner(sg);
       sg_out = sg;   // hand this tile to the consumer
@@ -277,6 +310,8 @@ struct BuildState {
     tile_first_alloc = next_alloc;
     cur_tile_bufs.clear();
     cur_tile_footprint = 0;
+    cur_touched.clear();
+    cur_held.clear();
     next_tag = 0;
   }
 
@@ -320,13 +355,13 @@ struct BuildState {
   // A coarse tile is one version of its buffer, freed once every reader of it is issued, or with its work-item.
   void note_bufs(const std::vector<int64_t>& bufs) {
     for (int64_t b : bufs)   // once per buffer: a K-loop reload reuses the same id
-      if (cur_tile_bufs.insert(b).second) {
+      if (!cur_held.count(b) && cur_tile_bufs.insert(b).second) {
         auto it = buf_bytes.find(b);
         if (it != buf_bytes.end()) cur_tile_footprint += it->second;
       }
   }
-  // Run record `t`'s spad effects (sram_effects) against the live version state and tag `inst` with the
-  // version it fills and the versions it reads: a core frees a version when the last of its readers is issued.
+  // Tag `inst` with the version record `t` fills and the versions it reads (sram_effects). A held buffer has
+  // no version.
   void sram_apply(const togsim::TraceRec& t, const std::shared_ptr<Instruction>& inst) {
     using togsim::TraceRec;
     std::vector<int64_t> reads, opens;
@@ -338,6 +373,8 @@ struct BuildState {
       inst->add_sram_release(it->second);
       open_ver[b] = false;                         // next write starts a new version
     }
+    opens.erase(std::remove_if(opens.begin(), opens.end(), [&](int64_t b) { return cur_held.count(b) != 0; }),
+                opens.end());
     for (int64_t b : opens) {
       const bool fresh = !cur_alloc.count(b) || !open_ver[b];   // a read closed it
       if (fresh) {
@@ -381,6 +418,7 @@ struct BuildState {
       return;
     }
     if (!tile) return;  // defensive: ops before the first TILE_BEGIN
+    first_touch(t, cur_touched, cur_held);
 
     if (t.kind == TraceRec::DMA) {
       int64_t uniq = next_tag++;                         // fresh Core tag key per dma record
@@ -451,7 +489,11 @@ struct BuildState {
     for (const togsim::TraceRec& t : tog.run_item(next++)) feed(t);
     auto out = std::move(sg_out);
     sg_out.reset();
-    if (out && spad_bytes) out->peek_tile()->set_spad_at_once(spad_demand(*out->peek_tile(), spad_bytes / 2));
+    if (out && spad_bytes) {
+      const size_t held = core_holds[out->get_core_id()].hold->bytes;
+      Tile& built = *out->peek_tile();
+      built.set_spad_at_once(spad_demand(built, (spad_bytes - std::min(held, spad_bytes)) / 2));
+    }
     return out;
   }
 
@@ -518,24 +560,29 @@ struct BuildState {
     return most;
   }
 
-  // Refuse a TOG a work-item of which needs more of the spad at once than one core has (`spad_bytes`; 0: no
-  // limit). Every work-item is built once, as the run will build it, and measured; the ids the build handed out
-  // are then put back, so the run starts as if nothing had been built.
+  // Refuse a TOG with a work-item that needs more spad at once, beside its core's hold, than a core has
+  // (`spad_bytes`; 0: no limit). Each work-item is built and measured once; the ids handed out are put back.
   void refuse_overflow(const char* so_path) {
     if (!spad_bytes) return;
     const uint64_t first_inst = Instruction::next_global_inst_id();
-    const int64_t first_version = next_alloc;
     const int first_subgraph = TileSubGraph::next_id();
+    const int64_t first_version = next_alloc;
     measuring = true;
     for (item = 0; item < tog.num_items(); item++) {
       for (const togsim::TraceRec& t : tog.run_item(item)) feed(t);
       const std::shared_ptr<TileSubGraph> built = std::move(sg_out);
-      const size_t needed = built ? spad_demand(*built->peek_tile(), spad_bytes) : 0;
-      if (needed > spad_bytes)
-        throw std::runtime_error(fmt::format(
-            "[TOGSim] TOG {}: work-item {} (key {}) needs {} bytes in the spad at once, and a core's spad "
-            "holds {} (core_spad_size_kb: {})", so_path, item, tog.item_key(item), needed, spad_bytes,
-            spad_bytes / 1024));
+      if (!built) continue;
+      const CoreHold& core = core_holds[built->get_core_id()];
+      const size_t held = core.hold->bytes;
+      const size_t needed = spad_demand(*built->peek_tile(), spad_bytes - std::min(held, spad_bytes));
+      if (held + needed <= spad_bytes) continue;
+      const std::string beside = held ? fmt::format(
+          " beside the {} bytes core {} holds for the kernel (buffers {}, read without having been written)",
+          held, built->get_core_id(), id_list(core.ids)) : std::string();
+      throw std::runtime_error(fmt::format(
+          "[TOGSim] TOG {}: work-item {} (key {}) needs {} bytes in the spad at once{}, and a core's spad "
+          "holds {} (core_spad_size_kb: {})", so_path, item, tog.item_key(item), needed, beside, spad_bytes,
+          spad_bytes / 1024));
     }
     measuring = false;
     next_alloc = tile_first_alloc = first_version;

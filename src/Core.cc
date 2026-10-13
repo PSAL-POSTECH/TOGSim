@@ -75,9 +75,16 @@ void Core::release_sram(const std::shared_ptr<Instruction>& inst) {
   }
 }
 
-// A work-item ended: the bytes of its versions that no reader freed (a load nothing reads, a fill issued after
-// its version's last reader) leave the spad with it.
+// A work-item ended: the bytes of its versions that no reader freed leave the spad, and so does its kernel's
+// hold when it is the kernel's last work-item on this core.
 void Core::release_sram(const std::shared_ptr<Tile>& tile) {
+  const std::shared_ptr<SpadHold>& hold = tile->get_spad_hold();
+  if (hold && hold->left && --hold->left == 0 && hold->taken) {
+    _sram_used -= hold->bytes;
+    _spad_holds.erase(std::remove(_spad_holds.begin(), _spad_holds.end(), hold), _spad_holds.end());
+    _issue_dirty = true;
+    core_trace_log::trace_spad_hold(_core_cycle, _id, TraceLogTag::pad15(TraceLogTag::kSpadHoldEnd), hold->bytes);
+  }
   if (!_sram_capacity) return;
   for (int64_t id = tile->spad_version_first(); id < tile->spad_version_end(); id++) {
     auto it = _sram_allocs.find(id);
@@ -97,23 +104,41 @@ bool Core::try_occupy_sram(const std::shared_ptr<Instruction>& inst) {
   return true;
 }
 
-// Two work-items are in flight only when two of them fit the spad: twice the footprint, and twice what one needs
-// at once when that is more (a buffer filled twice, bytes nothing reads). Else one runs alone: two would wait for
-// each other's bytes.
-bool Core::can_issue(const std::shared_ptr<Tile>& op) {
-  size_t M = std::max(op->get_spad_footprint(), op->get_spad_at_once());
-  int max_concurrent = (_sram_capacity && M > _sram_capacity / 2) ? 1 : 2;
-  return (int)_tiles.size() < max_concurrent;
+// Two work-items in flight when two of `op` fit the spad beside its kernel's hold (twice the larger of its
+// footprint and what it needs at once), else one.
+int Core::max_dispatch(const std::shared_ptr<Tile>& op) const {
+  if (!_sram_capacity) return 2;
+  const size_t held = op->get_spad_hold() ? op->get_spad_hold()->bytes : 0;
+  const size_t room = _sram_capacity > held ? _sram_capacity - held : 0;
+  return 2 * std::max(op->get_spad_footprint(), op->get_spad_at_once()) > room ? 1 : 2;
 }
 
+// A kernel that holds bytes on this core has the core to itself; kernels that hold nothing overlap.
+bool Core::can_issue(const std::shared_ptr<Tile>& op) {
+  if (_sram_capacity) {
+    const SpadHold* hold = op->get_spad_hold().get();
+    for (const auto& other : _spad_holds)
+      if (other.get() != hold) return false;
+    if (hold && hold->bytes)
+      for (const auto& tile : _tiles)
+        if (tile->get_spad_hold().get() != hold) return false;
+  }
+  return (int)_tiles.size() < max_dispatch(op);
+}
+
+// The first work-item of a kernel to reach the core takes the bytes the kernel holds on it.
 void Core::issue(std::shared_ptr<Tile> op) {
-  if (op->get_instructions().size()) {
-    size_t M = std::max(op->get_spad_footprint(), op->get_spad_at_once());
-    int max_dispatch = (_sram_capacity && M > _sram_capacity / 2) ? 1 : 2;
+  const std::shared_ptr<SpadHold>& hold = op->get_spad_hold();
+  if (_sram_capacity && hold && hold->bytes && !hold->taken) {
+    hold->taken = true;
+    _sram_used += hold->bytes;
+    _spad_holds.push_back(hold);
+    core_trace_log::trace_spad_hold(_core_cycle, _id, TraceLogTag::pad15(TraceLogTag::kSpadHold), hold->bytes);
+  }
+  if (op->get_instructions().size())
     core_trace_log::trace_tile_scheduled(_core_cycle, _id,
                                          TraceLogTag::pad15(TraceLogTag::kTileScheduled),
-                                         op->get_spad_footprint(), max_dispatch);
-  }
+                                         op->get_spad_footprint(), max_dispatch(op));
   for (const auto& inst : op->get_instructions()) {
     inst->set_owner_dirty(&_issue_dirty);   // dep-resolved enqueues re-arm THIS core
     if (_sram_capacity)

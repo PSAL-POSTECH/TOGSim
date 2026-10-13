@@ -1,12 +1,13 @@
 // A valid TOG (a load, a compute, a store) that one -D<NAME> breaks in a way TOGSim does NOT refuse: the run
-// exits 0. TENSOR_PAST_LIST is said in a warning; NULL_STRIDES and CONSUMER_FIRST are not said at all.
+// exits 0. TENSOR_PAST_LIST is said in a warning and NULL_STRIDES is not said at all. CONSUMER_FIRST is a valid
+// TOG of another meaning, a store of data already on the chip, and an info line names the buffer it holds.
 #include "togsim_runtime.h"
 
 #define ROWS 64
 #define COLS 64
 
 // TENSOR_PAST_LIST names an arg_id tog_tensors.txt lacks, NULL_STRIDES passes no strides, CONSUMER_FIRST calls
-// the store before the compute that feeds it.
+// the store before the compute that feeds it: the store reads buffer 2 before anything wrote it.
 static void body(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   (void)iv; (void)n_iv;
   const int64_t dims[2] = {ROWS, COLS}, strides[2] = {COLS, 1};

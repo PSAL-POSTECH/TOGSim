@@ -127,6 +127,14 @@ per TOG, while the TOG is loaded, and the run exits 0. They are not part of the 
 
 `examples/run.sh mistakes` shows the first two.
 
+One `[info]` line is of the same kind: it names something that runs as stated and may not be what
+was meant. It is printed per core, each time a TOG with held buffers is loaded.
+
+| Line | Meaning |
+|---|---|
+| `[TOGSim] TOG <so>: core <c> holds <H> bytes for the kernel: buffers <ids>, which its work-items read without having written them` | Work-items bound to core `<c>` read those buffers before anything in them writes them: [data that is already on the chip](tog-abi.md#data-that-is-already-on-the-chip). The core's spad holds their `<H>` stated bytes while the kernel runs on it. A consumer called before its producer reads the same way. |
+| `[TOGSim] TOG <so>: the work-items of core <c> read buffers <ids> without having written them: <H> bytes on the chip already, which nothing accounts without core_spad_size_kb` | The same, in a machine without `core_spad_size_kb`: nothing is held. |
+
 ## Periodic and final statistics
 
 | Line | When | Meaning |
@@ -162,11 +170,13 @@ Some lines are spelled differently in the two places they appear: the final
 ## Trace lines
 
 `--log_level trace` adds one line per event, `[cycle][Core c][TAG][INST_ID=n] OPCODE (fields)`.
-`TILE_SCHEDULED` lines have no `INST_ID`.
+`TILE_SCHEDULED`, `SPAD_HOLD` and `SPAD_HOLD_END` lines have no `INST_ID`.
 
 | Tag | Printed when | Fields worth reading |
 |---|---|---|
-| `TILE_SCHEDULED` | A work-item is handed to a core. | `spad_footprint` in bytes; `max_dispatch`, the work-items that core keeps in flight (1 or 2). |
+| `TILE_SCHEDULED` | A work-item is handed to a core. | `spad_footprint`, the bytes of its own buffers ([held ones](tog-abi.md#data-that-is-already-on-the-chip) are not in it); `max_dispatch`, the work-items that core keeps in flight (1 or 2). |
+| `SPAD_HOLD` | A core is handed the first work-item of a kernel that holds spad bytes on it. Only with a spad size, and only for a hold of more than 0 bytes. | `bytes`, what the core holds for the kernel from now on. |
+| `SPAD_HOLD_END` | The kernel's last work-item on that core has ended. | `bytes`, what the core gives back. |
 | `INST_ISSUED` | An instruction starts. | For a DMA: `dram` (its address), `size`, `stride`, `elem_bits`, `async`, `indirect`. For `COMP`: `compute_cycle` (after any array split), `tile` (the work-item index, not the `tile_id`). |
 | `INST_FINISHED` | An instruction is done. | |
 | `ASYNC_DMA_ISSUE` | An asynchronous load has sent all its requests. | |

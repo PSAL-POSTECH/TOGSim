@@ -37,6 +37,7 @@ class Core {
   // Used by the frozen-state (spad-too-small) guard.
   bool has_inflight();
   virtual bool can_issue(const std::shared_ptr<Tile>& op);
+  int max_dispatch(const std::shared_ptr<Tile>& op) const;
   virtual void issue(std::shared_ptr<Tile> tile);
   virtual std::shared_ptr<Tile> pop_finished_tile();
   virtual void cycle();
@@ -165,5 +166,6 @@ class Core {
   size_t _sram_capacity = 0;
   std::unordered_map<int64_t, size_t> _sram_allocs;
   std::unordered_map<int64_t, int> _sram_readers;
+  std::vector<std::shared_ptr<SpadHold>> _spad_holds;
   std::multimap<cycle_type, DueAction> _due_events;
 };
