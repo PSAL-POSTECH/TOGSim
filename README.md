@@ -61,10 +61,10 @@ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.ym
 ```
 
 ```text
-[2026-10-12 14:29:12.768] [info] Total execution cycles: 841
+[2026-10-12 14:29:12.768] [info] Total execution cycles: 840
 ```
 
-The kernel took 841 cycles of the core clock on that machine.
+The kernel took 840 cycles of the core clock on that machine.
 
 ## A whole TOG
 
@@ -149,11 +149,11 @@ matter; `examples/<name>/expected.txt` is that output.
 
 | Example | What it shows | Total cycles |
 |---|---|---|
-| `hello` | One load, one compute, one store. | 841 |
-| `async_barrier` | Two asynchronous loads and the barrier that waits for them. | 873 |
-| `tiles` | Eight work-items on one, two and four cores. | 5032, 2647, 1495 |
-| `gemm` | Two kinds of compute, the unit table and the array split. | 1106 |
-| `session` | Two kernels from a command stream, on one partition and on two. | 1694, 908 |
+| `hello` | One load, one compute, one store. | 840 |
+| `async_barrier` | Two asynchronous loads and the barrier that waits for them. | 858 |
+| `tiles` | Eight work-items on one, two and four cores. | 5021, 2635, 1487 |
+| `gemm` | Two kinds of compute, the unit table and the array split. | 1099 |
+| `session` | Two kernels from a command stream, on one partition and on two. | 1668, 908 |
 | `mistakes` | What TOGSim refuses, what it warns about, and what it does not notice. | |
 
 ## Running

@@ -266,8 +266,8 @@ The table does two things.
 
 **Utilization.** A unit's busy cycles are `admitted / capacity_per_cycle`, summed over the
 computes that ran. The final statistics print one line per unit:
-`Core [0] : Vpu utilization(%): 22.60, active_cycles: 250, idle_cycles: 856` is 2 x 50 + 150 busy
-cycles of 1106. A unit that comes out above 100% ends the run with an error.
+`Core [0] : Vpu utilization(%): 22.75, active_cycles: 250, idle_cycles: 849` is 2 x 50 + 150 busy
+cycles of 1099. A unit that comes out above 100% ends the run with an error.
 
 **The array split.** With `systolic_array_split: round_robin`, which is the default, a compute
 tile whose array rows exceed `vpu_num_lanes` is spread over several arrays and gets shorter. For a

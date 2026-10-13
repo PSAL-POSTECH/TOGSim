@@ -114,6 +114,7 @@ SPLIT = {
 SPLIT_REFUSED = {
     "refused.spread_exceeds_one_array": dict(
         saying="Systolic spread", exit=1, num_systolic_array_per_core=4, cycles=matmul_cycles(230),
+        core_stats_print_period_cycles=20,
         units=admitted(MATMUL_TILE, "Systolic", 256)),
 }
 
