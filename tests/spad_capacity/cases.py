@@ -1,7 +1,7 @@
 """A work-item that needs more of the spad at once than a core has is refused while its TOG is loaded, in both modes;
 one that fits exactly runs, and so does one that names more bytes than the spad and never holds them together. The
 spad is vpu_spad_size_kb_per_lane x vpu_num_lanes, and a core_spad_size_kb beside them that differs is refused."""
-from togtest import MIB, Case, spad_alone, write_table
+from togtest import MIB, REPO, Case, spad_alone, write_table
 
 TOG = "held_at_once_tog.cpp"
 KB = 1024
@@ -161,6 +161,19 @@ def stated_twice_disagreeing_refused(t):
                        exit=134)
 
 
+MXU = REPO / "configs" / "systolic_ws_256x256_c1_simple_noc_tpuv6e_mxu.yml"
+
+
+def mxu_spad_is_its_lanes(t):
+    """configs/..._tpuv6e_mxu.yml as shipped, with its Mxu unit table, states 1024 KB on each of 128 lanes and no
+    core_spad_size_kb: the TOG one byte over 131072 KB is refused, naming that spad."""
+    big = 131072 * KB - HELD + 1
+    so = t.tog(TOG, (f"BIG_BYTES={big}",), tensors=(MIB, 256 * MIB, MIB))
+    run = t.simulate(so, MXU, cycles=[200], units=[(0, "Mxu", "rows", 1, 0), (0, "Vpu", "cycles", 1, 200)],
+                     timeout=TIMEOUT_S)
+    expect_refused_before_the_run(run, refusal(0, HELD + big, 131072), so)
+
+
 def measured_run_traces_as_unmeasured(t):
     """The TOG that fills 48 KB, with a spad it never fills (measured while loaded) and with no limit (not measured):
     the same instruction trace, line for line: ids, subgraphs, work-item numbers, cycles."""
@@ -190,4 +203,5 @@ CASES = [
     Case("lanes.refused.one_byte_over", lanes_one_byte_over_refused),
     Case("lanes.restated_runs", lanes_restated_runs),
     Case("refused.stated_twice_disagreeing", stated_twice_disagreeing_refused),
+    Case("lanes.refused.tpuv6e_mxu_one_byte_over", mxu_spad_is_its_lanes),
 ]

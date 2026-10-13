@@ -20,12 +20,13 @@ icnt_latency_cycles: 1
 systolic_array_split: none
 ```
 
-`configs/` ships 19 machines named `systolic_ws_<lanes>x<lanes>_c<cores>_<interconnect>_<machine>`:
-`<lanes>` is `vpu_num_lanes`, `<cores>` is `num_cores`, `<interconnect>` is `simple_noc` or
-`booksim`, and `<machine>` selects the clock, the arrays per core and the DRAM file. So
+`configs/` ships 22 machines named `systolic_ws_<n>x<n>_c<cores>_<interconnect>_<machine>`:
+`<n>` is the systolic array (and `vpu_num_lanes`, except on the `_tpuv6e_mxu` ones, of 128
+lanes), `<cores>` is `num_cores`, `<interconnect>` is `simple_noc` or `booksim`, and
+`<machine>` selects the clock, the arrays per core and the DRAM file. So
 `systolic_ws_256x256_c1_simple_noc_tpuv6e.yml`, called tpuv6e in these pages, has 256 lanes, one core and
 the simple interconnect. [docs/config-keys.md](config-keys.md) lists every key with its
-default, and all 19 configs.
+default, and all 22 configs.
 
 ## The knobs
 

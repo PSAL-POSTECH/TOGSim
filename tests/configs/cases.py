@@ -19,12 +19,21 @@ SHIPPED = [
     "systolic_ws_128x128_c2_simple_noc_tpuv4",
     "systolic_ws_256x256_c1_simple_noc_tpuv6e",
     "systolic_ws_256x256_c1_simple_noc_tpuv6e_functional_only",
+    "systolic_ws_256x256_c1_simple_noc_tpuv6e_mxu",
+    "systolic_ws_256x256_c1_simple_noc_tpuv6e_mxu_functional_only",
+    "systolic_ws_256x256_c1_simple_noc_tpuv6e_mxu_timing_only",
     "systolic_ws_256x256_c1_simple_noc_tpuv6e_timing_only",
     "systolic_ws_32x32_c1_simple_noc_tpuv3",
     "systolic_ws_8x8_c1_simple_noc_tpuv3",
 ]
 RUNS_WITHOUT_UNIT_TABLE = []
-UNITS = [(0, "Systolic", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)]
+#: The array unit a config names with systolic_array_unit, where it is not the default Systolic.
+ARRAY_UNIT = {name: "Mxu" for name in SHIPPED if "_tpuv6e_mxu" in name}
+
+
+def units(name):
+    """The unit table of the TOG on configs/<name>.yml: 256 rows of its array unit, and 100 cycles of the Vpu."""
+    return [(0, ARRAY_UNIT.get(name, "Systolic"), "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)]
 
 
 def every_config_is_listed(t):
@@ -42,7 +51,7 @@ def loads_and_runs(name):
     that sets systolic_array_split: none), which must then run to the end as well."""
     def case(t):
         tog, config = t.tog("load_compute_store_tog.cpp", tensors=(MIB, MIB)), CONFIGS / f"{name}.yml"
-        run = t.simulate(tog, config, cycles=[600], units=UNITS).expect_ok()
+        run = t.simulate(tog, config, cycles=[600], units=units(name)).expect_ok()
         run.total_cycles()
         if len(run.computes()) != 2:
             run.fail(f"expected the computes of both work-items to finish, got {run.computes()}")

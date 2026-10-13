@@ -77,12 +77,13 @@ what changing one does; this page is the full list.
 
 ## The shipped configs
 
-`configs/` holds 19 machines named `systolic_ws_<lanes>x<lanes>_c<cores>_<interconnect>_<machine>`:
-`<lanes>` is `vpu_num_lanes`, `<cores>` is `num_cores`, `<interconnect>` is `simple_noc`
+`configs/` holds 22 machines named `systolic_ws_<n>x<n>_c<cores>_<interconnect>_<machine>`:
+`<n>` is the systolic array, which the frontend reads from the name (and `vpu_num_lanes`, except on
+the `_tpuv6e_mxu` ones), `<cores>` is `num_cores`, `<interconnect>` is `simple_noc`
 (`icnt_type: simple`) or `booksim` (`icnt_type: booksim2`), and `<machine>` selects the clock, the
 arrays per core and the Ramulator2 file. The documents call
-`systolic_ws_256x256_c1_simple_noc_tpuv6e.yml` "tpuv6e" for short. All 19 use
-`dram_type: ramulator2`, and none sets `systolic_array_split`, so every one needs a unit table.
+`systolic_ws_256x256_c1_simple_noc_tpuv6e.yml` "tpuv6e" for short. All 22 use
+`dram_type: ramulator2`, and none sets `systolic_array_split: none`, so every one needs a unit table.
 
 | Config (without the `systolic_ws_` prefix and `.yml`) | Cores | Core MHz | Arrays per core | Lanes | Spad KB | DRAM channels | Ramulator2 file | L2 | Interconnect |
 |---|---|---|---|---|---|---|---|---|---|
@@ -103,18 +104,24 @@ arrays per core and the Ramulator2 file. The documents call
 | `256x256_c1_simple_noc_tpuv6e` | 1 | 1751 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
 | `256x256_c1_simple_noc_tpuv6e_functional_only` | 1 | 1751 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
 | `256x256_c1_simple_noc_tpuv6e_timing_only` | 1 | 1751 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
+| `256x256_c1_simple_noc_tpuv6e_mxu` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
+| `256x256_c1_simple_noc_tpuv6e_mxu_functional_only` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
+| `256x256_c1_simple_noc_tpuv6e_mxu_timing_only` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
 | `32x32_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 32 | 1024 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 | `8x8_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 8 | 256 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 
-- `256x256_c1_simple_noc_tpuv6e` is the machine the tests and the examples use. It and its two
-  variants print statistics every 200 cycles; the others every 10000.
+- `256x256_c1_simple_noc_tpuv6e` is the machine the tests and the examples use. It, its two
+  variants and the three `_mxu` ones print statistics every 200 cycles; the others every 10000.
+- `_tpuv6e_mxu` is tpuv6e as libtpu drives it: 128 lanes of 1024 KB (VMEM 128 MB) and 256-bit
+  vectors (8 sublanes x 32 bit), and `systolic_array_split: round_robin` over the array unit
+  `Mxu` (`systolic_array_unit`), so its unit tables name `Mxu` where the others name `Systolic`.
 - `128x128_c1_simple_noc_tpuv2` spells its DRAM period `dram_stats_print_period_cycless`. TOGSim
   ignores that key, so this config sets no DRAM period.
 - The `_functional_only`, `_timing_only` and `_ils` variants differ from their base only in
   `pytorchsim_*` keys, which TOGSim does not read: they simulate exactly as their base does.
 - `_half` is `128x128_c1_simple_noc_tpuv3` with half the DRAM channels.
 - `_partition` is `128x128_c2_simple_noc_tpuv3` with `num_partition: 2` and one core in each.
-- `examples/minimal.yml` is not one of the 19: it is a `dram_type: simple` machine that needs no
+- `examples/minimal.yml` is not one of the 22: it is a `dram_type: simple` machine that needs no
   other file and no unit table.
 
 Every shipped config writes its Ramulator2 and BookSim2 paths as `../configs/...`, which resolves
