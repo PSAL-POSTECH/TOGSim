@@ -1,5 +1,5 @@
-// One kernel of a session: ITEMS work-items (two, so a two-core partition uses both cores), each a 16 KB load, one
-// compute tile and a 16 KB store. compute_type 0: the segment grouping.
+// One kernel of a session: ITEMS work-items (default two), each a 16 KB load, one compute tile and a 16 KB store.
+// -DNO_CALLS: the work-items make no call.
 #include "togsim_runtime.h"
 
 #ifndef ITEMS
@@ -11,12 +11,16 @@
 
 static void tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   (void)n_iv;
+#if defined(NO_CALLS)
+  (void)ctx; (void)iv;
+#else
   const int64_t d[2] = {ROWS, COLS}, st[2] = {COLS, 1};
   const int64_t in[1] = {1}, out[1] = {2};
   const uint64_t at = (uint64_t)iv[0] * ROWS * COLS;
   togsim_dma(ctx, 0, 0, at, 2, d, st, 32, 0, 0, nullptr, 0, in, 1, 0);
   togsim_compute(ctx, 0, 0, 0, nullptr, in, 1, out, 1);
   togsim_dma(ctx, 1, 1, at, 2, d, st, 32, 0, 0, out, 1, nullptr, 0, 0);
+#endif
 }
 
 extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape_args) {

@@ -282,29 +282,57 @@ def own_and_held_under_one_id(t):
 
 # ---- a kernel that holds H bytes runs as one that holds none in a spad H bytes smaller ------------------------------
 
-def as_in_a_smaller_spad(room_kb, at_once):
-    """Four work-items of two 12 KB loads and a compute into a 24 KB output that is stored, 48 KB each. With a
-    read of held buffer 9 (64 KB) in the compute and `room_kb` + 64 KB of spad, the run is the one without that read
-    in `room_kb` KB: the same number in flight (`at_once`), the same trace cycle for cycle, the same total."""
+def as_in_a_smaller_spad(room_kb, at_once, then=""):
+    """Four work-items of two 12 KB loads and a compute into a 24 KB output that is stored, 48 KB each, and what
+    `then` adds. With a read of held buffer 9 (64 KB) in the compute and `room_kb` + 64 KB of spad, the run is the
+    one without that read in `room_kb` KB: the same number in flight (`at_once`), the same trace cycle for cycle,
+    the same total."""
     def case(t):
-        table = sizes(b1=12 * KB, b2=12 * KB, b3=24 * KB, b9=64 * KB)
-        held, _ = replay(t, "L(1); L(2); C({1, 2, 9}, {3}); S(3)", table, room_kb + 64, items=4)
-        plain, _ = replay(t, "L(1); L(2); C({1, 2}, {3}); S(3)", table, room_kb, items=4)
+        table = sizes(b1=12 * KB, b2=12 * KB, b3=24 * KB, b4=32 * KB, b9=64 * KB)
+        held, _ = replay(t, f"L(1); L(2); C({{1, 2, 9}}, {{3}}); S(3){then}", table, room_kb + 64, items=4)
+        plain, _ = replay(t, f"L(1); L(2); C({{1, 2}}, {{3}}); S(3){then}", table, room_kb, items=4)
         held.expect_ok(), plain.expect_ok()
         expect_holds(held, [(0, 64 * KB)])
-        if held.scheduled() != [(48 * KB, at_once)] * 4 or held.scheduled() != plain.scheduled():
-            held.fail(f"expected four work-items of spad_footprint 49152, {at_once} in flight, in both runs; got "
+        footprint = (80 if then else 48) * KB
+        if held.scheduled() != [(footprint, at_once)] * 4 or held.scheduled() != plain.scheduled():
+            held.fail(f"expected four work-items of spad_footprint {footprint}, {at_once} in flight, in both runs; got "
                       f"{held.scheduled()} with the held read and {plain.scheduled()} without")
         traces = [[(e.cycle, e.tag, e.inst, e.opcode) for e in run.events()] for run in (held, plain)]
         if traces[0] != traces[1] or held.total_cycles() != plain.total_cycles():
             held.fail(f"expected one trace and one total, got totals {held.total_cycles()} and "
                       f"{plain.total_cycles()}, {sum(a != b for a, b in zip(*traces))} trace lines differing")
+        return held
     return case
+
+
+def a_compute_waits_for_room_beside_the_held_bytes(t):
+    """The same with a 32 KB load and its compute after the store, in 64 + 64 KB: the three loads are in the spad
+    when the first compute (instruction 2) wants 24 KB for its output, 80 KB beside the 64 KB held, so it waits
+    until the last compute (instruction 5) has freed the 32 KB. The held bytes are in the spad the core counts."""
+    run = as_in_a_smaller_spad(64, 1, "; L(4); C({4}, {})")(t)
+    if run.when("INST_ISSUED", 5) >= run.when("INST_ISSUED", 2):
+        run.fail(f"expected the compute stated last issued first (@{run.when('INST_ISSUED', 5)}), the first compute "
+                 f"waiting for room (@{run.when('INST_ISSUED', 2)})")
+
+
+def needs_at_once_measured_beside_the_held_bytes(t):
+    """Two work-items that load buffer 1 (8 KB) three times, each load read before the next is needed, beside 16 KB
+    of held data in a 48 KB spad. Their fills sum to 24 KB, more than half the 32 KB beside the hold, but one needs
+    8 KB at once: two are in flight, as without the held read in 32 KB."""
+    body = "L(1); C({{1{held}}}, {{}}); L(1); C({{1}}, {{}}); L(1); C({{1}}, {{}})"
+    table = sizes(b1=8 * KB, b9=16 * KB)
+    for held, spad_kb in ((", 9", 48), ("", 32)):
+        run, _ = replay(t, body.format(held=held), table, spad_kb, items=2)
+        run.expect_ok()
+        if run.scheduled() != [(8 * KB, 2)] * 2:
+            run.fail(f"expected two work-items of spad_footprint 8192 in flight at once in {spad_kb} KB, got "
+                     f"{run.scheduled()}")
 
 
 def loads_everything_it_reads_is_unchanged(t, session):
     """The same four work-items with every buffer loaded, the form every TOG had before: nothing is held, no hold
-    is traced, and the footprint, the number in flight and the total are those of TOGSim 1.3.0 (measured there)."""
+    is traced, and the footprint, the number in flight and the total are those of the tree before held buffers were
+    defined (origin/main a1c4209, measured there)."""
     run, _ = replay(t, "L(1); L(2); C({1, 2}, {3}); S(3)", sizes(b1=12 * KB, b2=12 * KB, b3=24 * KB), 96, items=4,
                     session=session)
     run.expect_total_cycles(1171)
@@ -355,6 +383,35 @@ def kernels_that_hold_nothing_overlap(t):
     if len(scheduled) != 3 or scheduled[2] >= last_finish(run, range(4)) or run.core_lines("SPAD_HOLD"):
         run.fail(f"expected kernel 1's work-item scheduled before kernel 0's last instruction finished "
                  f"(@{last_finish(run, range(4))}) and no hold, got work-items scheduled @{scheduled}")
+
+
+def a_kernel_ending_beside_another_frees_only_its_own(t):
+    """Kernel 0 fills a 32 KB spad with two 16 KB loads that one compute reads, and loads 16 KB more after it.
+    Kernel 1, one compute of 50 cycles that names no buffer, runs beside it and ends first. Its end frees nothing
+    of kernel 0: the third load is issued once the compute that reads the first two is, not when kernel 1 ends."""
+    homes = [kernel_dir(t, 0, "L(1); L(2); C({1, 2}, {}); L(3); C({3}, {})",
+                        sizes(b1=16 * KB, b2=16 * KB, b3=16 * KB), 1),
+             kernel_dir(t, 1, "T(1, {}, {})", sizes(b1=16 * KB), 1)]
+    run = launch(t, 32, homes).expect_ok()
+    loads, computes = issued(run, "MOVIN"), sorted(run.computes(), key=lambda c: c.start)
+    if len(loads) != 3 or [c.cycles for c in computes] != [50, 200, 200] or loads[2] < computes[1].start:
+        run.fail(f"expected kernel 1's compute of 50 cycles first, and kernel 0's third load issued once its first "
+                 f"compute was (@{computes[1].start if len(computes) > 1 else '?'}); got loads @{loads}")
+
+
+def versions_of_two_kernels_at_once_are_apart(t):
+    """Kernel 0 loads 8 KB that nothing reads and ends with that load. Kernel 1 runs beside it in a 40 KB spad: two
+    16 KB loads of buffer 1, the compute that reads them, a third load and its compute. The buffers of the two
+    kernels are numbered apart, so kernel 0's end frees its 8 KB and no more: the third load still waits for the
+    compute that frees the first two."""
+    homes = [kernel_dir(t, 0, "L(1)", sizes(b1=8 * KB), 1),
+             kernel_dir(t, 1, "L(1); L(1); C({1}, {}); L(1); C({1}, {})", sizes(b1=16 * KB), 1)]
+    run = launch(t, 40, homes).expect_ok()
+    loads, computes = sorted(issued(run, "MOVIN")), sorted(issued(run, "COMP"))
+    ended = last_finish(run, [0])
+    if len(loads) != 4 or len(computes) != 2 or not ended < computes[0] <= loads[3]:
+        run.fail(f"expected kernel 0 to end (@{ended}) before kernel 1's first compute is issued, and kernel 1's "
+                 f"third load issued once that compute was; got loads @{loads} and computes @{computes}")
 
 
 COPY = ("L(9)", sizes(b9=24 * KB))      # a kernel that only loads: what puts the data on the chip
@@ -430,10 +487,16 @@ CASES = [
     Case("own_and_held_under_one_id", own_and_held_under_one_id),
     Case("as_in_a_smaller_spad.one_in_flight", as_in_a_smaller_spad(64, 1)),
     Case("as_in_a_smaller_spad.two_in_flight", as_in_a_smaller_spad(96, 2)),
+    Case("as_in_a_smaller_spad.a_compute_waits_for_room", a_compute_waits_for_room_beside_the_held_bytes),
+    Case("as_in_a_smaller_spad.needs_at_once_measured_beside_the_held_bytes",
+         needs_at_once_measured_beside_the_held_bytes),
     *in_both_modes("loads_everything_it_reads_is_unchanged", loads_everything_it_reads_is_unchanged),
     Case("session.holder_waits_for_the_core", holder_waits_for_the_core),
     Case("session.nobody_joins_a_holder", nobody_joins_a_holder),
     Case("session.kernels_that_hold_nothing_overlap", kernels_that_hold_nothing_overlap),
+    Case("session.a_kernel_ending_beside_another_frees_only_its_own",
+         a_kernel_ending_beside_another_frees_only_its_own),
+    Case("session.versions_of_two_kernels_at_once_are_apart", versions_of_two_kernels_at_once_are_apart),
     *[copy_then_use(sync, cores) for sync in (True, False) for cores in (1, 2)],
     Case("session.use_then_copy", use_then_copy),
     Case("session.refused.copy_larger_than_the_spad", copy_larger_than_the_spad_refused),
