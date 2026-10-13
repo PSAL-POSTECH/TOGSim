@@ -19,7 +19,7 @@ test run.
 | `tiles/` | A kernel that dispatches a grid of work-items from `tog_shape.txt`: on one, two and four cores, in a small scratchpad, and with half the DRAM channels. | 5021 |
 | `gemm/` | A GEMM-like work-item: two kinds of compute, an accumulator, and how the unit table's rows and the array split change a compute's cycles. | 1099 |
 | `session/` | Two kernels launched from a command stream (`--models_list`), on one partition and on two. | 1668 |
-| `mistakes/` | What TOGSim refuses, with the message of each of 22 refusals; two mistakes it only warns about; one it does not notice; and a consumer called before its producer, which reads as data already on the chip. | 840 |
+| `mistakes/` | What TOGSim refuses, with the message of each of 22 refusals; two mistakes it only warns about; one it does not notice; a consumer called before its producer. | 840 |
 | `minimal.yml` | A machine config that needs no other file and no unit table. | |
 
 To add an example, add a directory with its sources and inputs, a function of the directory's name

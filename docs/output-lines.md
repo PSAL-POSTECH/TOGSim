@@ -127,13 +127,8 @@ per TOG, while the TOG is loaded, and the run exits 0. They are not part of the 
 
 `examples/run.sh mistakes` shows the first two.
 
-One `[info]` line is of the same kind: it names something that runs as stated and may not be what
-was meant. It is printed per core, each time a TOG with held buffers is loaded.
-
-| Line | Meaning |
-|---|---|
-| `[TOGSim] TOG <so>: core <c> holds <H> bytes for the kernel: buffers <ids>, which its work-items read without having written them` | Work-items bound to core `<c>` read those buffers before anything in them writes them: [data that is already on the chip](tog-abi.md#data-that-is-already-on-the-chip). The core's spad holds their `<H>` stated bytes while the kernel runs on it. A consumer called before its producer reads the same way. |
-| `[TOGSim] TOG <so>: the work-items of core <c> read buffers <ids> without having written them: <H> bytes on the chip already, which nothing accounts without core_spad_size_kb` | The same, in a machine without `core_spad_size_kb`: nothing is held. |
+An `[info]` line `[TOGSim] TOG <so>: core <c> holds <H> bytes for the kernel: buffers <ids>, ...`
+names the [held buffers](tog-abi.md#data-that-is-already-on-the-chip) of each core.
 
 ## Periodic and final statistics
 
@@ -174,9 +169,8 @@ Some lines are spelled differently in the two places they appear: the final
 
 | Tag | Printed when | Fields worth reading |
 |---|---|---|
-| `TILE_SCHEDULED` | A work-item is handed to a core. | `spad_footprint`, the bytes of its own buffers ([held ones](tog-abi.md#data-that-is-already-on-the-chip) are not in it); `max_dispatch`, the work-items that core keeps in flight (1 or 2). |
-| `SPAD_HOLD` | A core is handed the first work-item of a kernel that holds spad bytes on it. Only with a spad size, and only for a hold of more than 0 bytes. | `bytes`, what the core holds for the kernel from now on. |
-| `SPAD_HOLD_END` | The kernel's last work-item on that core has ended. | `bytes`, what the core gives back. |
+| `TILE_SCHEDULED` | A work-item is handed to a core. | `spad_footprint` in bytes; `max_dispatch`, the work-items that core keeps in flight (1 or 2). |
+| `SPAD_HOLD`, `SPAD_HOLD_END` | A core takes, and gives back, the bytes it holds for a kernel. | `bytes`. |
 | `INST_ISSUED` | An instruction starts. | For a DMA: `dram` (its address), `size`, `stride`, `elem_bits`, `async`, `indirect`. For `COMP`: `compute_cycle` (after any array split), `tile` (the work-item index, not the `tile_id`). |
 | `INST_FINISHED` | An instruction is done. | |
 | `ASYNC_DMA_ISSUE` | An asynchronous load has sent all its requests. | |

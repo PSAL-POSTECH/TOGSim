@@ -35,10 +35,7 @@ and lines that start with `#` are skipped.
 `LAUNCH_KERNEL` loads `tog.so`, `tog_cycles.tsv` and `tog_units.tsv` from the kernel's directory;
 the first two are required, and the third unless the config sets `systolic_array_split: none`.
 `DEVICE_SYNC` simulates until all launched work is done. At the end of the file the simulation runs
-to completion as well. Kernels launched on one partition run in launch order: a kernel starts on a
-core beside the last work-items of the one before, unless one of the two
-[holds spad bytes on that core](tog-abi.md#data-that-is-already-on-the-chip); then it starts
-when the other has ended there. Nothing else relates two kernels. The kernels' unit tables are joined into one, so every kernel must use the
+to completion as well. The kernels' unit tables are joined into one, so every kernel must use the
 units the first kernel's table names; `--unit_table` is refused in this mode. A line with another
 field count or an unknown command is reported and skipped.
 
@@ -147,7 +144,7 @@ A run that ends with a message: look the message up in the
 | Symptom | Likely cause |
 |---|---|
 | The log shows only `[TOGSim] the TOG failed to load or replay`, or the run ends with `Aborted` and no reason | The reason went to stderr. Add `2>&1`. |
-| The total is too small | A consumer called before its producer (it reads as [data already on the chip](tog-abi.md#data-that-is-already-on-the-chip): look for the `holds ... bytes for the kernel` line), or null `strides` ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)). |
+| The total is too small | A consumer called before its producer (look for the `holds ... bytes for the kernel` line), or null `strides` ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)). |
 | A unit's utilization is lower than expected, or a compute is not split | The unit table has no rows for that `tile_id`. Look for the `[warning]` line that says so. |
 | A compute takes fewer cycles than the cycle table says | The array split shortened it. `compute_cycle` in the trace is the value after the split. |
 | The run never ends | Work-items wait for spad that is never freed, in an order the loader does not see ([known limitations](#known-limitations)). Raise `core_spad_size_kb`. |
@@ -177,9 +174,9 @@ Behaviour of the simulator that a user runs into. Each was reproduced with this 
   single DRAM request ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)).
 - **A non-static body function in a session** makes a later kernel run the first kernel's body. A
   session whose second kernel has two computes in its body ran one compute for it.
-- **The `[Scheduler p] Kernel k has completed ... finished at cycle N` line** is printed near the
-  start of the run and reads 1 for the hello run of 1659 cycles on `examples/minimal.yml`. It is
-  not when the kernel finished; read the total.
+- **The `[Scheduler p] Kernel k has completed ... finished at cycle N` line** reads 1 for the hello run of 1659 cycles on
+  `examples/minimal.yml`. It is not when the kernel finished; read the total.
+- **The spad between kernels is not modelled** ([held buffers](tog-abi.md#data-that-is-already-on-the-chip)).
 - **Unknown config keys are ignored**, including misspelled ones:
   `configs/systolic_ws_128x128_c1_simple_noc_tpuv2.yml` spells a key
   `dram_stats_print_period_cycless`.

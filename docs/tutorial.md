@@ -505,11 +505,8 @@ total; only the number is wrong.
 | `NULL_STRIDES`: `strides` is a null pointer | 785 | The whole DMA becomes one DRAM request. | `stride=[]` on the trace line; 513 responses instead of 1024. |
 
 **Valid, with another meaning.** `CONSUMER_FIRST` calls the store before the compute that writes
-its buffer. A read of a buffer that nothing in the work-item wrote yet is a defined form: the
-store drains [data that is already on the chip](tog-abi.md#data-that-is-already-on-the-chip), so
-it depends on nothing and is issued at cycle 3, and the total is 748. TOGSim names every such
-buffer in an `[info]` line while it loads the TOG, and accounts its bytes in the spad for the
-whole kernel: in a spad of 16 KB this TOG is refused, with the buffer named.
+its buffer, so the store drains [data already on the chip](tog-abi.md#data-that-is-already-on-the-chip).
+It is issued at cycle 3, an `[info]` line names the buffer, and a 16 KB spad refuses the TOG.
 
 ```text
 + build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
@@ -525,6 +522,5 @@ exit 1
 ```
 
 So when you bring up a new TOG, read its log once at `--log_level trace`: check that it has no
-`[warning]` line and no `holds ... bytes for the kernel` line you did not mean, that every compute
-is there with the cycles you expect, that each DMA has the address and strides you meant, and that
-the instructions are issued in the order the data flows.
+`[warning]` line, that every compute is there with the cycles you expect, that each DMA has the
+address and strides you meant, and that the instructions are issued in the order the data flows.

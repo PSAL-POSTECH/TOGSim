@@ -36,9 +36,8 @@ A TOG calls four functions, which TOGSim provides at load time:
    the key) and binds it to a core: round-robin, in dispatch order, over the cores of the
    kernel's partition.
 2. TOGSim then calls each work-item's body to record its instructions. It calls each body **three
-   times** over the run: twice up front, to find the buffers and, when the machine states a spad
-   size, to measure what the work-item needs of it, and once more when it builds the work-item's
-   instructions.
+   times** over the run: twice up front, to find the buffers and to plan the spad, and once more
+   when it builds the work-item's instructions.
 3. The recorded instructions run on the modeled core as [the model](tutorial.md#the-model) says: each as soon
    as the instructions it depends on are done and the resource it needs is free.
 
@@ -48,9 +47,9 @@ Three rules follow, and none of them is checked for you:
   time. A counter, a static variable or I/O in a body happens three times.
 - **Call order is not execution order.** An instruction depends only on instructions that were
   called *before* it in the same work-item and wrote a buffer it reads; a load depends on nothing.
-  Write the producer before the consumer: a read of a buffer that nothing wrote before it is not
-  refused, it reads [data that is already on the chip](#data-that-is-already-on-the-chip). Two
-  instructions that share no buffer are not ordered at all.
+  Write the producer before the consumer: otherwise the consumer reads
+  [data already on the chip](#data-that-is-already-on-the-chip). Two instructions that share no
+  buffer are not ordered at all.
 - **Make body functions `static`.** In a session all TOGs are loaded into one process, and a
   second kernel's non-static `body` function resolves to the first kernel's.
 
@@ -122,7 +121,7 @@ void togsim_compute(EmitCtx* ctx, uint64_t tile_id, int32_t compute_type,
 | `tile_id` | The compute tile: the row of the cycle table, from 0, that gives its cycles, and the key of its unit-table rows. A `tile_id` the cycle table has no row for is refused. |
 | `compute_type` | Pass 0. The values 1, 2 and 3 are [deprecated](compatibility.md#deprecated-compute_type-1-2-and-3). |
 | `ndim`, `dims` | Not used. Pass `0, nullptr`. |
-| `read_bufs`, `write_bufs` | The buffers it reads and writes. They create its dependencies. A buffer it reads that nothing in the work-item wrote is [held](#data-that-is-already-on-the-chip). |
+| `read_bufs`, `write_bufs` | The buffers it reads and writes. They create its dependencies. |
 
 A core runs one compute at a time. A compute that lists the same buffer in both `read_bufs` and
 `write_bufs` updates it in place, which is how the gemm example chains its accumulate steps.
@@ -148,39 +147,24 @@ the scratchpad.
   buffers: no instruction waits for an instruction of another work-item, and each work-item's
   buffers take their own space in the spad.
 - State a size in `togsim_spad_buffer_bytes` for every buffer a DMA fills or drains, and for
-  every buffer a work-item reads as [held](#data-that-is-already-on-the-chip). An id with size 0,
-  or past the end of the table, occupies nothing. By convention id 0 has size 0 and is not used.
-- **The first instruction of a work-item that names a buffer decides what the buffer is there.**
-  If it writes the buffer, the buffer is the work-item's own. If it only reads the buffer, the
-  buffer is [held](#data-that-is-already-on-the-chip): data that is on the chip already. A
-  compute that lists the buffer in both `read_bufs` and `write_bufs` writes it, so an accumulator
-  without an initialising write is the work-item's own.
+  every [held](#data-that-is-already-on-the-chip) buffer. By convention id 0 has size 0 and is
+  not used.
 - A work-item's `spad_footprint` (printed on its `TILE_SCHEDULED` line) is the sum of the sizes of
-  its own distinct buffers, counting only buffers that some DMA of the TOG moves. A buffer of its
-  own that only computes touch, like the gemm accumulator, is not counted. Held buffers are not
-  in it: their core holds them.
+  its own distinct buffers, counting only buffers that some DMA of the TOG moves. A buffer that
+  only computes touch, like the gemm accumulator, is not counted.
 - A work-item's own buffer occupies the spad from the load, or the compute, that first writes it
-  until every reader of it is issued: a store, or a compute that reads it without writing it.
-  Readers that do not wait for one another are issued in any order, and the last to be issued
-  frees the buffer, not the one the TOG states last. A compute that reads and writes the same
-  buffer keeps it alive.
-- A buffer that nothing reads after it is filled keeps its bytes until its work-item ends: what a
-  kernel loads for a later kernel to use is such a buffer. No byte of a work-item's own buffers
-  stays in the spad after it.
+  until the last of its readers is issued: a store, or a compute that reads it without writing it.
+  A compute that reads and writes the same buffer keeps it alive. A buffer that nothing reads
+  keeps its bytes until its work-item ends.
 - The machine's `core_spad_size_kb` is the spad of one core. A core keeps two work-items in flight
-  when two of them fit the spad beside what the core holds for the kernel, else one
-  (`max_dispatch` on the `TILE_SCHEDULED` line): twice the footprint must fit, and twice what the
-  work-item needs at once (below) when that is more, as it is for a work-item that fills a buffer
-  twice and keeps both fills. Without the key the spad is unlimited and nothing in this section is
-  accounted.
-- `core_spad_size_kb` must hold what a work-item needs **at once**, beside what its core holds for
-  the kernel: the most that one of its instructions finds in the spad when it is issued, whatever
-  the order of issue. That is the bytes the instruction occupies itself (a load its data tile, a
-  compute a buffer it writes first), plus the bytes of every buffer that was filled by an
-  instruction it waits for and that it, or an instruction that waits for it, reads. A buffer that
-  nothing reads is freed by no instruction, so it may be in the spad when any other instruction
-  is issued, and counts for each of them except those its own fill waits for. An instruction is
-  issued only while that fits, so a work-item that needs more would never end: its TOG is
+  when two of them fit, else one (`max_dispatch` on the `TILE_SCHEDULED` line). Without the key
+  the spad is unlimited.
+- `core_spad_size_kb` must hold what a work-item needs **at once**: the most that one of its
+  instructions finds in the spad when it is issued, whatever the order of issue. That is the bytes
+  the instruction occupies itself (a load its data tile, a compute a buffer it writes first), plus
+  the bytes of every buffer that was filled by an instruction it waits for and that it, or an
+  instruction that waits for it, reads, and of every buffer nothing reads whose fill does not wait
+  for it. An instruction is issued only while that fits, so a work-item that needs more would never end: its TOG is
   [refused](#what-gets-a-run-refused) while it is loaded, before anything is simulated. The hello
   TOG holds its two buffers together at the compute, 32768 bytes: it replays in a spad of 32 KB
   and is refused in a smaller one.
@@ -192,60 +176,20 @@ the scratchpad.
 
 ### Data that is already on the chip
 
-A TOG states the transfers that happen. When the data an instruction reads is on the chip
-already, because an earlier kernel loaded or computed it, the TOG arrives **without that load**,
-and the instruction reads a buffer that nothing in its work-item wrote. That is a defined form,
-not a mistake: a **held buffer**. Whether a load can be left out is the decision of whoever emits
-the TOG, the compiler or the frontend that knows the graph of kernels. TOGSim never decides it:
-it issues every DMA a TOG states, and adds none.
+A TOG states the transfers that happen. When data is on the chip already, the TOG has no load for
+it, and an instruction reads a buffer that nothing in its work-item wrote: a **held buffer**.
+TOGSim does not decide that a load can be left out; the emitter of the TOG does.
 
-| | A held buffer |
-|---|---|
-| What makes one | In a work-item, the first instruction that names the id reads it and does not write it: a compute's `read_bufs`, the buffer a store drains, a store's index buffer, a load's `read_bufs`. |
-| Dependencies | The read waits for nothing. An instruction of the same work-item that writes the id later updates the data in place: readers after it wait for it. |
-| Size | What `togsim_spad_buffer_bytes` states for the id. With size 0, or past the table, it occupies nothing; a store still needs a size for the buffer it drains. |
-| Who holds it | The core that runs the work-item. Each core holds, once, every id that one of the kernel's work-items on that core reads as held: one copy, however many of them read it and however many are in flight. Two cores that read the same id hold a copy each. |
-| For how long | **For the whole kernel on that core**: from the moment the core is handed the kernel's first work-item until the kernel's last work-item on that core ends, also while a work-item that does not read it runs and between two work-items. |
-| A write to it | In the same work-item, after the read: takes no further bytes, whether a load or a compute writes it. |
-| The same id written first | A work-item of the kernel that writes the id before it reads it has a buffer of its own under that id, beside the held one: on a core that runs both, both are counted. |
-| What says so | While the TOG is loaded, one line per core: `[TOGSim] TOG <so>: core <c> holds <H> bytes for the kernel: buffers <ids>, which its work-items read without having written them`. With `--log_level trace`, `SPAD_HOLD` and `SPAD_HOLD_END` lines with `bytes=<H>`. Without a spad size nothing is held, and the line says so instead: `[TOGSim] TOG <so>: the work-items of core <c> read buffers <ids> without having written them: <H> bytes on the chip already, which nothing accounts without core_spad_size_kb`. |
-
-Use one id for one piece of data: the table states one size per id, so two work-items that read
-different data through the same held id on one core are accounted as one copy.
-
-**A kernel that holds `H` bytes on a core is refused, admitted and scheduled as the same kernel
-without those reads is in a spad `H` bytes smaller.** That one rule gives the rest:
-
-- *Refusal.* A work-item is refused when what it needs at once, plus `H`, is more than
-  `core_spad_size_kb`. The message names both parts and the held ids
-  ([refusal table](#what-gets-a-run-refused)). `H` alone larger than the spad is refused too.
-- *Work-items in flight.* Two when two of them fit in the spad less `H`, else one.
-- *Other kernels.* A kernel that holds bytes on a core has that core to itself. Its first
-  work-item waits until no work-item of another kernel is in flight there, and no work-item of
-  another kernel is handed to the core until its last one has ended. Kernels that hold nothing
-  overlap on a core as before: the next one starts beside the last work-items of the one before.
-
-**A copy node is a TOG of its own.** To model data that is put on the chip once and used by
-several kernels, emit one TOG whose work-items only load it (a load that nothing reads keeps its
-bytes until its work-item ends, so the loads of one work-item must fit the spad together), launch
-it before the kernels that use the data, and emit those kernels without the load: they read the
-buffer as held. `tests/held/cases.py` replays that session (`copy_then_use`), and
-`tests/spad_capacity/work_item_tog.cpp` is the TOG its kernels are written with.
-
-**What is not modelled.** TOGSim does not know that one kernel's data is another kernel's held
-buffer: nothing in a TOG or in the command stream relates two kernels. So the spad that data
-occupies *between* kernels is not accounted:
-
-- the copy kernel's bytes leave the spad when its work-item ends, not when the last user ends;
-- a kernel accounts only the bytes it reads as held itself, and only while it runs on that core:
-  nothing is held between the copy and the first user, between two users, after the last user,
-  or while a kernel that does not read the data runs;
-- nothing checks that the data a kernel reads as held was ever loaded, or on which core. A
-  consumer that is called before its producer in one work-item has the same form: read the
-  line that names the held buffers of a new TOG and check that every id it names is meant.
-
-A frontend that needs those bytes accounted between kernels has to state them in each kernel that
-runs meanwhile, as a held buffer of that kernel.
+- A held buffer has the size `togsim_spad_buffer_bytes` states for its id, and a read of it waits
+  for nothing.
+- The core that runs the work-item holds those bytes once, from the kernel's first work-item there
+  until its last one there ends. A later write to the id in the same work-item takes no more.
+- A kernel that holds `H` bytes is refused and scheduled as the same kernel without those reads in
+  a spad `H` bytes smaller. It has its core to itself: no other kernel's work-items run there
+  beside it.
+- The spad between kernels is not modelled: a kernel accounts only what it reads as held, while it
+  runs. A copy node is a TOG of its own that only loads, launched before the kernels that read the
+  data as held.
 
 ## Indirect DMAs
 
@@ -409,7 +353,7 @@ needs a unit table that has rows of its array unit**. To run without one, set
 | `[TOGSim] <dir>/tog_tensors.txt is absent: the TOG's tensor arguments have no addresses` | 1 | No `tog_tensors.txt` beside `tog.so`. | Create it. |
 | `togsim: dlopen failed: valid.so: cannot open shared object file: No such file or directory` | 1 | `--tog_so` has no `/` in it, so the loader searches the library path, not the current directory. | Write `./valid.so`. |
 | `[TOGSim] TOG <so>: work-item 0 (key 0) needs 32768 bytes in the spad at once, and a core's spad holds 16384 (core_spad_size_kb: 16)` | 1 | A work-item holds more bytes in the spad [at once](#buffers-and-the-scratchpad) than `core_spad_size_kb`. | Raise it to at least those bytes, or free a buffer before the next is filled. |
-| `[TOGSim] TOG <so>: work-item 0 (key 0) needs 16384 bytes in the spad at once beside the 16384 bytes core 0 holds for the kernel (buffers 2, read without having been written), and a core's spad holds 16384 (core_spad_size_kb: 16)` | 1 | The work-item reads [held buffers](#data-that-is-already-on-the-chip), and what it needs at once does not fit beside them. | Raise `core_spad_size_kb`; or, if the ids named are not meant to be on the chip already, write their producer before their reader. |
+| `[TOGSim] TOG <so>: work-item 0 (key 0) needs 16384 bytes in the spad at once beside the 16384 bytes core 0 holds for the kernel (buffers 2, read without having been written), and a core's spad holds 16384 (core_spad_size_kb: 16)` | 1 | The same, beside [held buffers](#data-that-is-already-on-the-chip). | Raise it, or write the producer of those ids before their reader. |
 | `Config file <path>/configs/ramulator2_configs/HBM3_TPUv6e.yaml does not exist!` | 255 | A shipped config was copied out of `configs/`; its `../configs/...` path no longer resolves. | Make the path absolute ([how](machine.md#changing-the-machine)). |
 | `what():  Config key num_cores not found` | 134 | The machine config lacks a required key. | Add it ([keys](config-keys.md)). |
 
@@ -449,9 +393,7 @@ If you emit TOGs from another frontend, this is the whole contract:
 3. In each body, emit producers before consumers, pass explicit `strides`, use `compute_type` 0
    and an `elem_bits` that is a multiple of 8, and follow every batch of asynchronous loads with a
    barrier that states their element count. Number buffers per work-item; the same ids can serve
-   every work-item. State the size of every buffer. Leave a load
-   out only for [data that is on the chip already](#data-that-is-already-on-the-chip), and give
-   such a buffer an id nothing else in the kernel uses.
+   every work-item.
 4. Number the distinct kinds of compute from 0 and use that number as `tile_id`.
 5. Compile with `g++ -std=c++17 -shared -fPIC -I<TOGSim>/include`.
 6. Write `tog_tensors.txt` (and `tog_shape.txt` if the kernel reads shape arguments) beside the
