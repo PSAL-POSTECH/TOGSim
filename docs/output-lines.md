@@ -143,14 +143,14 @@ bytes); `examples/run.sh hello` prints these three lines above the final statist
 
 ```text
 [info] [DRAM] Per-channel average bandwidth
-[info] [DRAM] channel 0 | 2.98 GB/s avg., 5.82% of utilization | 16 reads, 16 writes
+[info] [DRAM] channel 0 | 3.40 GB/s avg., 6.65% of utilization | 16 reads, 16 writes
 ...
-[info] [DRAM] channels 0..31 combined | 95.30 GB/s aggregate, 5.82% of utilization (avg. per channel) | 512 reads, 512 writes
+[info] [DRAM] channels 0..31 combined | 108.94 GB/s aggregate, 6.65% of utilization (avg. per channel) | 512 reads, 512 writes
 ```
 
-**Why a log is long.** The log of that run is 2,050 lines. 1,857 of them are the
-`=== DRAM statistics ===` dump (58 lines for each of the 32 channels and the heading), and 33 are
-the periodic statistics of a run of 1102 cycles on a config that prints every 200. On a long run
+**Why a log is long.** The log of that run is 2,044 lines. 1,857 of them are the
+`=== DRAM statistics ===` dump (58 lines for each of the 32 channels and the heading), and 27 are
+the periodic statistics of a run of 964 cycles on a config that prints every 200. On a long run
 the periodic blocks dominate, and `core_stats_print_period_cycles: 0` and
 `dram_stats_print_period_cycles: 0` remove them; nothing removes the dump, so read a log through
 `grep` or `tail`.

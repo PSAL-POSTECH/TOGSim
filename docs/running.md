@@ -68,13 +68,13 @@ line. The final statistics of the hello TOG on tpuv6e (the third run of `example
 [info] Core [0] : COMP     inst_count: 1 (GEMM: 0, Vector: 1, XLU: 0)
 [info] Core [0] : MEMORY_BAR inst_count: 0
 [info] ========= Core stat =========
-[info] Core [0] : Systolic utilization(%): 23.23, active_cycles: 256, idle_cycles: 846
-[info] Core [0] : Vpu utilization(%): 9.07, active_cycles: 100, idle_cycles: 1002
-[info] Core [0] : DMA active_cycles: 64, DMA idle_cycles: 1038, DRAM BW: 104.000 GB/s (1024 responses)
+[info] Core [0] : Systolic utilization(%): 26.56, active_cycles: 256, idle_cycles: 708
+[info] Core [0] : Vpu utilization(%): 10.37, active_cycles: 100, idle_cycles: 864
+[info] Core [0] : DMA active_cycles: 64, DMA idle_cycles: 900, DRAM BW: 119.000 GB/s (1024 responses)
 [info] Core [0] : NUMA local memory: 1024 requests, remote memory: 0 requests
-[info] Core [0] : Total_cycles: 1102
+[info] Core [0] : Total_cycles: 964
 [info] Core [0] : computes held at least once by the core's compute in flight: 0
-[info] Total execution cycles: 1102
+[info] Total execution cycles: 964
 ```
 
 - **`Total execution cycles`** is the result: the cycles of the core clock (`core_freq_mhz`) until
@@ -86,7 +86,7 @@ line. The final statistics of the hello TOG on tpuv6e (the third run of `example
   [already in its buffer](tog-abi.md#buffers-and-the-scratchpad) is counted, and again as
   `skipped inst_count` on the `MOVIN` line. All computes with `compute_type` 0 are under `Vector`.
 - **`<unit> utilization(%)`**: one line per unit of the unit table. 256 rows at 1 per cycle are 256
-  active cycles of 1102, or 23.23%. With more than one core each core prints its block, and a
+  active cycles of 964, or 26.56%. With more than one core each core prints its block, and a
   `Total : <unit> utilization(%)` line per unit follows.
 - **`DMA active_cycles`** are the cycles the core's DMA engine spent sending requests: 2 DMAs of
   512 requests at 16 per cycle. **`DRAM BW`** is the bytes DRAM answered (32 x 1024 here) over the
@@ -120,7 +120,7 @@ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.ym
 [2026-10-12 14:29:13.216] [trace] [2][Core 0][L2CACHE_STAT   ][INST_ID=0] dram=0x0000000000000000 cacheable=false
 [2026-10-12 14:29:13.216] [trace] [2][Core 0][DRAM_NUMA      ][INST_ID=0] core_id=0 subgraph_id=0 numa_id=0 addr_name=tag0 is_write=false
 [2026-10-12 14:29:13.219] [trace] [147][Core 0][DRAM_RESP_FIRST][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
-[2026-10-12 14:29:13.221] [trace] [310][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
+[2026-10-12 14:29:13.221] [trace] [225][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
 ```
 
 | Tag | Meaning |
