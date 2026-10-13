@@ -68,7 +68,7 @@ exit 1
 + ../../build/bin/Simulator --config ../../configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so valid.so --cycle_table tog_cycles.tsv --unit_table tog_units.tsv
 togsim: dlopen failed: valid.so: cannot open shared object file: No such file or directory
 exit 1
-# examples/mistakes/spad_16kb.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with core_spad_size_kb: 16
+# examples/mistakes/spad_16kb.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with no vpu_spad_size_kb_per_lane, core_spad_size_kb: 16
 + build/bin/Simulator --config examples/mistakes/spad_16kb.gen.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
 [error] [TOGSim] TOG examples/mistakes/valid.so: work-item 0 (key 0) needs 32768 bytes in the spad at once, and a core's spad holds 16384 (core_spad_size_kb: 16)
 exit 1

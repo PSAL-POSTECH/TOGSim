@@ -1,5 +1,5 @@
 """A barrier waits every async load signaled on its semaphore; a TOG that breaks the semaphore contract is refused."""
-from togtest import Case, write_table
+from togtest import Case, spad_alone, write_table
 
 TOG = "barrier_waits_both_loads_tog.cpp"
 REFUSED = {
@@ -34,7 +34,7 @@ def session_wrong_count_refused_at_launch(t):
     write_table(home / "tog_cycles.tsv", [(200, 0)])
     stream = t.work_dir / "commands.txt"
     stream.write_text(f"LAUNCH_KERNEL,0,0,0,{home}/kernel,{home}/attributes,0\nDEVICE_SYNC,0,0,0,-,-,0\n")
-    for spad, command in (({}, "LAUNCH_KERNEL"), (dict(core_spad_size_kb=0), "DEVICE_SYNC")):
+    for spad, command in (({}, "LAUNCH_KERNEL"), (spad_alone(0), "DEVICE_SYNC")):
         machine = t.machine(systolic_array_split="none", **spad)
         run = t.execute("Simulator", ["--config", machine, "--models_list", stream, "--log_level", "trace"])
         run.expect_refused(f"Error processing command 0 (type: {command}): [TOGSim] wait expects another element "

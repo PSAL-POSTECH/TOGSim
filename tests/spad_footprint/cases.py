@@ -1,5 +1,5 @@
 """A spad buffer is as large as the TOG states it, however many DMAs fill or drain it; an unsized one is refused."""
-from togtest import Case
+from togtest import Case, spad_alone
 
 FOOTPRINT = {
     "piecewise_fill": dict(spad_footprint=32768, max_dispatch=1),
@@ -16,7 +16,7 @@ REFUSED = {
 
 def replay(t, source, defines=()):
     """The TOG on tpuv6e with a 48 KB spad and no array split (it brings no unit table), every tile 200 cycles."""
-    return t.simulate(t.tog(source, defines), t.machine(core_spad_size_kb=48, systolic_array_split="none"),
+    return t.simulate(t.tog(source, defines), t.machine(**spad_alone(48), systolic_array_split="none"),
                       cycles=[200])
 
 

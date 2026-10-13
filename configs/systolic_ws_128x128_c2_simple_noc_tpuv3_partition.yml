@@ -25,7 +25,3 @@ partition:
 
 pytorchsim_functional_mode: 1
 pytorchsim_timing_mode: 1
-
-
-# Per-core VMEM (vector/scratchpad) size: TPUv2/v3/v4 = 16 MB.
-core_spad_size_kb: 16384

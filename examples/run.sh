@@ -25,16 +25,19 @@ sim() {
   [ "$status" -eq 0 ] || echo "exit $status"
 }
 
-# machine <out.yml> <base.yml> <"key: value">...: a copy of a shipped config with those keys set, and with its
-# ../configs paths made absolute so that the copy works outside configs/.
+# machine <out.yml> <base.yml> <"key: value" | "no key">...: a copy of a shipped config with those keys set or
+# left out, and with its ../configs paths made absolute so that the copy works outside configs/.
 machine() {
-  local out=$1 base=$2 key_value
+  local out=$1 base=$2 key_value what
   shift 2
-  echo "# $out: $base with $*"
+  what=$(printf '%s, ' "$@")
+  echo "# $out: $base with ${what%, }"
   sed "s#: \.\./configs/#: $PWD/configs/#" "$base" > "$out"
   for key_value in "$@"; do
-    sed -i "/^${key_value%%:*}:/d" "$out"
-    echo "$key_value" >> "$out"
+    case $key_value in
+      "no "*) sed -i "/^${key_value#no }:/d" "$out" ;;
+      *) sed -i "/^${key_value%%:*}:/d" "$out"; echo "$key_value" >> "$out" ;;
+    esac
   done
 }
 
@@ -90,7 +93,7 @@ tiles() {
   tog $dir/tiles_tog.cpp -o $dir/tog.so
   machine $dir/two_cores.gen.yml $V6E "num_cores: 2"
   machine $dir/four_cores.gen.yml $V6E "num_cores: 4"
-  machine $dir/small_spad.gen.yml $V6E "core_spad_size_kb: 48"
+  machine $dir/small_spad.gen.yml $V6E "no vpu_spad_size_kb_per_lane" "core_spad_size_kb: 48"
   machine $dir/half_dram.gen.yml $V6E "dram_channels: 16"
   for config in $V6E $dir/two_cores.gen.yml $dir/four_cores.gen.yml $dir/small_spad.gen.yml $dir/half_dram.gen.yml; do
     sim scheduling --config $config --tog_so $dir/tog.so --cycle_table $dir/tog_cycles.tsv --unit_table $dir/tog_units.tsv --log_level trace
@@ -149,7 +152,7 @@ mistakes() {
   sim first_error --config $V6E --tog_so $dir/no_tensors/tog.so $tables
   echo "+ cd $dir"
   (cd $dir && SIM=../../$SIM sim first_error --config ../../$V6E --tog_so valid.so --cycle_table tog_cycles.tsv --unit_table tog_units.tsv)
-  machine $dir/spad_16kb.gen.yml $V6E "core_spad_size_kb: 16"
+  machine $dir/spad_16kb.gen.yml $V6E "no vpu_spad_size_kb_per_lane" "core_spad_size_kb: 16"
   sim first_error --config $dir/spad_16kb.gen.yml --tog_so $dir/valid.so $tables
   cp $V6E $dir/copied.gen.yml
   sim first_error --config $dir/copied.gen.yml --tog_so $dir/valid.so $tables

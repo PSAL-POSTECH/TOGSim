@@ -6,7 +6,7 @@ what changing one does; this page is the full list.
 - A required key that is missing, or a value TOGSim does not implement, aborts the run with exit
   status 134 and a `what():  <reason>` line on stderr.
 - A key that is not in this list is ignored without a message. The shipped configs carry several
-  for other tools that read the same file (`vpu_vector_length_bits`, `vpu_spad_size_kb_per_lane`,
+  for other tools that read the same file (`vpu_vector_length_bits`,
   `tpu_*`, `pytorchsim_*`, `codegen_*`); their meaning is not defined here.
 - The config is echoed at the top of the log, so a run shows which values it used.
 
@@ -22,7 +22,8 @@ what changing one does; this page is the full list.
 | `vpu_num_lanes` | unless `systolic_array_split: none` | | The rows one array takes: a tile with more rows than this is split. |
 | `systolic_array_split` | no | `round_robin` | `round_robin` spreads a tile's array rows over the arrays and needs a unit table. `none` turns that off. |
 | `systolic_array_unit` | no | `Systolic` | The name of the array unit in the unit table. Setting it with `systolic_array_split: none` aborts. |
-| `core_spad_size_kb` | no | 0 | The scratchpad of one core, in KB. 0 means unlimited. It must hold what a work-item needs [at once](tog-abi.md#buffers-and-the-scratchpad); a TOG with a work-item that needs more is refused. |
+| `vpu_spad_size_kb_per_lane` | no | | The scratchpad of one lane, in KB. With `vpu_num_lanes` it makes the scratchpad of one core: `vpu_spad_size_kb_per_lane` x `vpu_num_lanes`. 0 means unlimited. It must hold what a work-item needs [at once](tog-abi.md#buffers-and-the-scratchpad); a TOG with a work-item that needs more is refused. |
+| `core_spad_size_kb` | no | 0 | The scratchpad of one core, in KB, for a config without `vpu_spad_size_kb_per_lane` and `vpu_num_lanes`; 0 means unlimited. Beside those two it may only restate their product: another value aborts. |
 | `sa_weight_buffer_depth` | no | 2 | Deprecated: read only for a TOG that passes `compute_type` 1, 2 or 3. |
 
 ## DRAM
@@ -102,8 +103,8 @@ arrays per core and the Ramulator2 file. The documents call
 | `256x256_c1_simple_noc_tpuv6e` | 1 | 1751 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
 | `256x256_c1_simple_noc_tpuv6e_functional_only` | 1 | 1751 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
 | `256x256_c1_simple_noc_tpuv6e_timing_only` | 1 | 1751 | 2 | 256 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
-| `32x32_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 32 | unlimited | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
-| `8x8_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 8 | unlimited | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
+| `32x32_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 32 | 1024 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
+| `8x8_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 8 | 256 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 
 - `256x256_c1_simple_noc_tpuv6e` is the machine the tests and the examples use. It and its two
   variants print statistics every 200 cycles; the others every 10000.

@@ -4,7 +4,7 @@ systolic_array_split); the TOGs are.
 Every run here loads its TOG: the refusals that end before one is loaded are in tests/array_split/."""
 from pathlib import Path
 
-from togtest import Case, read_table
+from togtest import Case, read_table, spad_alone
 
 HERE = Path(__file__).resolve().parent
 TYPED_GROUPING = True
@@ -36,7 +36,7 @@ def held_through_overlap_refused(t):
     """A 24 KB spad against the 32 KB the matmul finds held: one of the two loads reaches it only through the
     preload it overlaps (an edge released at issue), and the refusal counts that load too."""
     run = t.simulate(t.tog("held_through_overlap_tog.cpp"),
-                     t.machine(core_spad_size_kb=24, systolic_array_split="none"), cycles=[200], timeout=60)
+                     t.machine(**spad_alone(24), systolic_array_split="none"), cycles=[200], timeout=60)
     run.expect_refused("work-item 0 (key 0) needs 32768 bytes in the spad at once, and a core's spad holds 24576",
                        exit=1)
 

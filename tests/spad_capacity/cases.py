@@ -1,6 +1,7 @@
 """A work-item that needs more of the spad at once than a core has is refused while its TOG is loaded, in both modes;
-one that fits exactly runs, and so does one that names more bytes than the spad and never holds them together."""
-from togtest import MIB, Case, write_table
+one that fits exactly runs, and so does one that names more bytes than the spad and never holds them together. The
+spad is vpu_spad_size_kb_per_lane x vpu_num_lanes, and a core_spad_size_kb beside them that differs is refused."""
+from togtest import MIB, Case, spad_alone, write_table
 
 TOG = "held_at_once_tog.cpp"
 KB = 1024
@@ -19,13 +20,10 @@ def tog(t, big, defines, into=""):
     return t.tog(TOG, (f"BIG_BYTES={big}", *defines), tensors=(MIB, MIB, MIB), into=into)
 
 
-def replay(t, big, spad_kb, *defines):
-    """--tog_so: the TOG with a big buffer of `big` bytes on tpuv6e with a `spad_kb` KB spad (None: the config
-    has no core_spad_size_kb line), every tile 200 cycles."""
-    machine = t.machine(core_spad_size_kb=spad_kb, systolic_array_split="none")
-    if spad_kb is None:
-        machine.write_text("".join(line for line in machine.read_text().splitlines(keepends=True)
-                                   if not line.startswith("core_spad_size_kb:")))
+def replay(t, big, spad_kb, *defines, **keys):
+    """--tog_so: the TOG with a big buffer of `big` bytes on tpuv6e with a `spad_kb` KB spad stated alone (None: the
+    config states no spad), or with the machine `keys` instead, every tile 200 cycles."""
+    machine = t.machine(**(keys or spad_alone(spad_kb)), systolic_array_split="none")
     return t.simulate(tog(t, big, defines), machine, cycles=[200], timeout=TIMEOUT_S)
 
 
@@ -39,7 +37,7 @@ def session(t, spad_kb, *bigs):
             write_table(home / "tog_cycles.tsv", [(200, 0)])
             commands.write(f"LAUNCH_KERNEL,{i},0,0,{home}/kernel,{home}/attributes,0\n")
         commands.write("DEVICE_SYNC,0,0,0,-,-,0\n")
-    machine = t.machine(core_spad_size_kb=spad_kb, systolic_array_split="none")
+    machine = t.machine(**spad_alone(spad_kb), systolic_array_split="none")
     return t.execute("Simulator", ["--config", machine, "--models_list", stream, "--log_level", "trace"], TIMEOUT_S)
 
 
@@ -128,12 +126,39 @@ def version_left_open_runs(t):
 
 
 def no_spad_size_refuses_nothing(t):
-    """core_spad_size_kb: 0 is a spad without a limit, and so is a config without the key: the TOG that 48 KB
-    refuses runs, to one total."""
+    """core_spad_size_kb: 0 is a spad without a limit, and so is a config without that key and without
+    vpu_spad_size_kb_per_lane: the TOG that 48 KB refuses runs, to one total."""
     runs = [replay(t, 16 * KB + 1, spad_kb).expect_ok() for spad_kb in (0, None)]
     if runs[0].total_cycles() != runs[1].total_cycles():
         runs[1].fail(f"expected one total with core_spad_size_kb: 0 and without the key, got "
                      f"{runs[0].total_cycles()} and {runs[1].total_cycles()}")
+
+
+LANES = dict(vpu_spad_size_kb_per_lane=16, vpu_num_lanes=3)   # a 48 KB spad, stated by the lanes alone
+
+
+def lanes_fit_exactly_runs(t):
+    """16 KB on each of 3 lanes is a 48 KB spad: the TOG that fills 48 KB runs to the total of fits_exactly_runs."""
+    expect_both_ran(replay(t, 16 * KB, None, **LANES), 623)
+
+
+def lanes_one_byte_over_refused(t):
+    """The same spad of 16 KB x 3 lanes, without core_spad_size_kb, refuses the TOG one byte over 48 KB."""
+    expect_refused_before_the_run(replay(t, 16 * KB + 1, None, **LANES), refusal(0, HELD + 16 * KB + 1, 48),
+                                  t.work_dir / "tog.so")
+
+
+def lanes_restated_runs(t):
+    """core_spad_size_kb: 48 beside 16 KB x 3 lanes restates the spad, and the run is fits_exactly_runs."""
+    expect_both_ran(replay(t, 16 * KB, None, core_spad_size_kb=48, **LANES), 623)
+
+
+def stated_twice_disagreeing_refused(t):
+    """core_spad_size_kb: 48 on tpuv6e as shipped, whose 512 KB x 256 lanes are 131072 KB: the config is refused
+    before anything runs, naming both."""
+    run = replay(t, 16 * KB, None, core_spad_size_kb=48)
+    run.expect_refused("core_spad_size_kb: 48 is not vpu_spad_size_kb_per_lane x vpu_num_lanes = 512 x 256 = 131072",
+                       exit=134)
 
 
 def measured_run_traces_as_unmeasured(t):
@@ -161,4 +186,8 @@ CASES = [
     Case("version_left_open_runs", version_left_open_runs),
     Case("no_spad_size_refuses_nothing", no_spad_size_refuses_nothing),
     Case("measured_run_traces_as_unmeasured", measured_run_traces_as_unmeasured),
+    Case("lanes.fits_exactly_runs", lanes_fit_exactly_runs),
+    Case("lanes.refused.one_byte_over", lanes_one_byte_over_refused),
+    Case("lanes.restated_runs", lanes_restated_runs),
+    Case("refused.stated_twice_disagreeing", stated_twice_disagreeing_refused),
 ]

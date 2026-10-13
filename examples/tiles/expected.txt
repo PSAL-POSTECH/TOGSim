@@ -2,7 +2,7 @@
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/tiles/tiles_tog.cpp -o examples/tiles/tog.so
 # examples/tiles/two_cores.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with num_cores: 2
 # examples/tiles/four_cores.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with num_cores: 4
-# examples/tiles/small_spad.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with core_spad_size_kb: 48
+# examples/tiles/small_spad.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with no vpu_spad_size_kb_per_lane, core_spad_size_kb: 48
 # examples/tiles/half_dram.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with dram_channels: 16
 + build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/tiles/tog.so --cycle_table examples/tiles/tog_cycles.tsv --unit_table examples/tiles/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
