@@ -58,7 +58,7 @@ from togtest import Case
 def one_compute_runs_600_cycles(t):
     run = t.simulate(t.tog("my_tog.cpp", tensors=(16384, 16384)), t.machine(), cycles=[600],
                      units=[(0, "Systolic", "rows", 1, 256)])
-    run.expect_total_cycles(1102)
+    run.expect_total_cycles(964)
 
 
 CASES = [Case("one_compute_runs_600_cycles", one_compute_runs_600_cycles)]

@@ -27,7 +27,7 @@
         "impl": "Open"
       },
       "addr_mapper": {
-        "impl": "RoBaRaCoCh"
+        "impl": "MOP4CLXOR"
       },
       "dram": {
         "impl": "HBM3",
