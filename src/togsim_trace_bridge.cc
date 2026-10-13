@@ -107,6 +107,7 @@ struct BuildState {
   const UnitTable* units = nullptr;
   togsim::LazyTog tog;
   size_t next = 0;               // next work-item to materialize
+  size_t spad_bytes = 0;
   std::map<int64_t, size_t> buf_bytes;
   std::shared_ptr<TileSubGraph> sg_out;   // the tile just built
 
@@ -450,6 +451,7 @@ struct BuildState {
     for (const togsim::TraceRec& t : tog.run_item(next++)) feed(t);
     auto out = std::move(sg_out);
     sg_out.reset();
+    if (out && spad_bytes) out->peek_tile()->set_spad_at_once(spad_demand(*out->peek_tile(), spad_bytes / 2));
     return out;
   }
 
@@ -519,7 +521,7 @@ struct BuildState {
   // Refuse a TOG a work-item of which needs more of the spad at once than one core has (`spad_bytes`; 0: no
   // limit). Every work-item is built once, as the run will build it, and measured; the ids the build handed out
   // are then put back, so the run starts as if nothing had been built.
-  void refuse_overflow(const char* so_path, size_t spad_bytes) {
+  void refuse_overflow(const char* so_path) {
     if (!spad_bytes) return;
     const uint64_t first_inst = Instruction::next_global_inst_id();
     const int64_t first_version = next_alloc;
@@ -559,6 +561,7 @@ std::unique_ptr<TileGraph> tog_to_tilegraph(
   S->units = units;
   S->indirect_dir = indirect_dir;
   S->tilings = tilings;
+  S->spad_bytes = spad_bytes;
 
   // Index the dispatches (records each work-item's fn/iv/core) and collect each
   // buffer's spad size. Builds no Instruction.
@@ -566,7 +569,7 @@ std::unique_ptr<TileGraph> tog_to_tilegraph(
                 cyc, ovl, n_tiles, partition_cores, n_partition_cores))
     return nullptr;
 
-  S->refuse_overflow(so_path, spad_bytes);
+  S->refuse_overflow(so_path);
 
   auto tg = std::make_unique<TileGraph>(name, name);
   // Empty cache plan (no L2/CMEM persistence) -- the tile source propagates it

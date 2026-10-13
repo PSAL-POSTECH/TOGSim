@@ -97,24 +97,22 @@ bool Core::try_occupy_sram(const std::shared_ptr<Instruction>& inst) {
   return true;
 }
 
+// Two work-items are in flight only when two of them fit the spad: twice the footprint, and twice what one needs
+// at once when that is more (a buffer filled twice, bytes nothing reads). Else one runs alone: two would wait for
+// each other's bytes.
 bool Core::can_issue(const std::shared_ptr<Tile>& op) {
-  /* Bound concurrent dispatches so their combined spad working set fits. Two run
-   * concurrently (double-buffer) only if each fits half the spad; a dispatch whose
-   * footprint exceeds spad/2 runs alone with the whole spad (else two would compete
-   * for the shared spad and deadlock). spad_footprint = codegen .spad x lanes; 0
-   * (unknown) falls back to 2. */
-  size_t M = op->get_spad_footprint();
+  size_t M = std::max(op->get_spad_footprint(), op->get_spad_at_once());
   int max_concurrent = (_sram_capacity && M > _sram_capacity / 2) ? 1 : 2;
   return (int)_tiles.size() < max_concurrent;
 }
 
 void Core::issue(std::shared_ptr<Tile> op) {
   if (op->get_instructions().size()) {
-    size_t M = op->get_spad_footprint();
+    size_t M = std::max(op->get_spad_footprint(), op->get_spad_at_once());
     int max_dispatch = (_sram_capacity && M > _sram_capacity / 2) ? 1 : 2;
     core_trace_log::trace_tile_scheduled(_core_cycle, _id,
                                          TraceLogTag::pad15(TraceLogTag::kTileScheduled),
-                                         M, max_dispatch);
+                                         op->get_spad_footprint(), max_dispatch);
   }
   for (const auto& inst : op->get_instructions()) {
     inst->set_owner_dirty(&_issue_dirty);   // dep-resolved enqueues re-arm THIS core

@@ -158,9 +158,11 @@ the scratchpad.
   and writes the same buffer keeps it alive. A buffer that nothing reads after it is filled, such
   as what a kernel loads for a later kernel to use, keeps its bytes until its work-item ends. No
   byte of a work-item stays in the spad after it.
-- The machine's `core_spad_size_kb` is the spad of one core. A core keeps two work-items in flight,
-  or one if a work-item's footprint is more than half the spad (`max_dispatch` on the
-  `TILE_SCHEDULED` line). Without the key the spad is unlimited.
+- The machine's `core_spad_size_kb` is the spad of one core. A core keeps two work-items in flight
+  when two of them fit the spad, else one (`max_dispatch` on the `TILE_SCHEDULED` line): twice the
+  footprint must fit, and twice what the work-item needs at once (below) when that is more, as it
+  is for a work-item that fills a buffer twice and keeps both fills. Without the key the spad is
+  unlimited.
 - `core_spad_size_kb` must hold what a work-item needs **at once**: the most that one of its
   instructions finds in the spad when it is issued, whatever the order of issue. That is the bytes
   the instruction occupies itself (a load its data tile, a compute a buffer it writes first), plus

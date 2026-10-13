@@ -199,6 +199,18 @@ def unread_output_does_not_count_for_what_it_waits_for(t):
                                   t.work_dir / "tog.so")
 
 
+def two_in_flight_only_when_two_of_what_one_needs_fit(t):
+    """Each work-item writes buffer 3 (8 KB) with a compute and loads it again, and nothing reads it: it keeps 16 KB
+    until it ends, twice its footprint. In a 16 KB spad one is in flight at a time and the run ends; two in flight
+    would each take one fill and wait for the other's. 32 KB holds two of them."""
+    for spad_kb, in_flight in ((16, 1), (31, 1), (32, 2)):
+        run = work_items(t, "C({}, {3}); L(3)", (0, 0, 0, 8 * KB), spad_kb, items=3)
+        run.expect_ok()
+        if run.scheduled() != [(8 * KB, in_flight)] * 3:
+            run.fail(f"expected three work-items of spad_footprint 8192, {in_flight} in flight, in {spad_kb} KB; got "
+                     f"{run.scheduled()}")
+
+
 def buffer_ids_are_per_work_item(body):
     """Six work-items on two cores with a 16 KB spad each, the even ones `body` and the odd ones one compute that
     reads buffer 1 (8 KB), an id the even ones load: a work-item's buffer is no version of another's, so every
@@ -319,6 +331,7 @@ CASES = [
     Case("unread_load.counts_for_what_does_not_wait_for_it.stated_last",
          unread_load_counts_for_what_does_not_wait_for_it("L(2); C({2}, {}); L(1)")),
     Case("unread_output_does_not_count_for_what_it_waits_for", unread_output_does_not_count_for_what_it_waits_for),
+    Case("two_in_flight_only_when_two_of_what_one_needs_fit", two_in_flight_only_when_two_of_what_one_needs_fit),
     Case("buffer_ids_are_per_work_item.loaded_and_read", buffer_ids_are_per_work_item("L(1); C({1}, {})")),
     Case("buffer_ids_are_per_work_item.loaded_only", buffer_ids_are_per_work_item("L(1)")),
     Case("freed_when_every_reader_is_issued", freed_when_every_reader_is_issued),
