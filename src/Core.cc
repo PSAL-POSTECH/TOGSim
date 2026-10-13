@@ -255,41 +255,17 @@ void Core::cycle() {
 
       switch (inst->get_opcode()) {
         case Opcode::MOVIN:
-          {
-            /* Check another MOVIN with same tag is issued */
-            auto& key = inst->get_tag_id();
-            if (inst->is_async_dma() && _dma.tag_key_exist(inst->subgraph_id, key)) {
-              bool finished = _dma.get_tag_finish(inst->subgraph_id, key);
-              if (finished)
-                finish_instruction(inst);
-              else
-                _dma.register_tag_waiter(inst->subgraph_id, key, inst);
-              if (core_trace_log::trace_enabled()) core_trace_log::trace_instruction_line(_core_cycle,
-                                                       _id,
-                                                       TraceLogTag::pad15(
-                                                           TraceLogTag::kInstructionSkipped),
-                                                       inst->get_global_inst_id(),
-                                                       core_trace_log::format_dma_inst_issued_trace_line(
-                                                           *inst));
-              issued = true;
-              _stat_tot_skipped_inst.at(static_cast<size_t>(inst->get_opcode()))++;
-              break;
-            } else {
-              // load occupies its spad bytes on issue; stall (retry next cycle) if full.
-              if (!try_occupy_sram(inst)) break;
-              if (core_trace_log::trace_enabled()) core_trace_log::trace_instruction_line(_core_cycle,
-                                                       _id,
-                                                       TraceLogTag::pad15(
-                                                           TraceLogTag::kInstructionIssued),
-                                                       inst->get_global_inst_id(),
-                                                       core_trace_log::format_dma_inst_issued_trace_line(
-                                                           *inst));
-              _dma.register_tag(inst->subgraph_id, inst->get_tag_id());
-              _ld_inst_queue.push(inst);
-              issued = true;
-              break;
-            }
-          }
+          if (!try_occupy_sram(inst)) break;
+          if (core_trace_log::trace_enabled()) core_trace_log::trace_instruction_line(_core_cycle,
+                                                   _id,
+                                                   TraceLogTag::pad15(TraceLogTag::kInstructionIssued),
+                                                   inst->get_global_inst_id(),
+                                                   core_trace_log::format_dma_inst_issued_trace_line(
+                                                       *inst));
+          _dma.register_tag(inst->subgraph_id, inst->get_tag_id());
+          _ld_inst_queue.push(inst);
+          issued = true;
+          break;
         case Opcode::MOVOUT:
           release_sram(inst);   // store issued -> free the tiles it drained
           if (core_trace_log::trace_enabled()) core_trace_log::trace_instruction_line(_core_cycle,
