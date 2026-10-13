@@ -35,7 +35,10 @@ and lines that start with `#` are skipped.
 `LAUNCH_KERNEL` loads `tog.so`, `tog_cycles.tsv` and `tog_units.tsv` from the kernel's directory;
 the first two are required, and the third unless the config sets `systolic_array_split: none`.
 `DEVICE_SYNC` simulates until all launched work is done. At the end of the file the simulation runs
-to completion as well. The kernels' unit tables are joined into one, so every kernel must use the
+to completion as well. Kernels launched on one partition run in launch order: a kernel starts on a
+core beside the last work-items of the one before, unless one of the two
+[holds spad bytes on that core](tog-abi.md#data-that-is-already-on-the-chip); then it starts
+when the other has ended there. Nothing else relates two kernels. The kernels' unit tables are joined into one, so every kernel must use the
 units the first kernel's table names; `--unit_table` is refused in this mode. A line with another
 field count or an unknown command is reported and skipped.
 
@@ -125,6 +128,7 @@ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.ym
 | Tag | Meaning |
 |---|---|
 | `TILE_SCHEDULED` | A work-item was handed to a core: `spad_footprint` in bytes, and `max_dispatch`, how many work-items that core keeps in flight (1 or 2). |
+| `SPAD_HOLD`, `SPAD_HOLD_END` | A core took, and gave back, the `bytes` it holds for a kernel's [held buffers](tog-abi.md#data-that-is-already-on-the-chip). |
 | `INST_ISSUED`, `INST_FINISHED` | An instruction started, finished. On a `COMP` line `compute_cycle` is its cycles after any array split, and `tile=N` the work-item index. |
 | `ASYNC_DMA_ISSUE` | An asynchronous load has sent all its requests. |
 | `DRAM_RESP_FIRST`, `DRAM_RESP_DONE` | The first response of a DMA arrived; all data of an asynchronous load arrived. |
@@ -143,7 +147,7 @@ A run that ends with a message: look the message up in the
 | Symptom | Likely cause |
 |---|---|
 | The log shows only `[TOGSim] the TOG failed to load or replay`, or the run ends with `Aborted` and no reason | The reason went to stderr. Add `2>&1`. |
-| The total is too small | A consumer called before its producer, or null `strides` ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)). |
+| The total is too small | A consumer called before its producer (it reads as [data already on the chip](tog-abi.md#data-that-is-already-on-the-chip): look for the `holds ... bytes for the kernel` line), or null `strides` ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)). |
 | A unit's utilization is lower than expected, or a compute is not split | The unit table has no rows for that `tile_id`. Look for the `[warning]` line that says so. |
 | A compute takes fewer cycles than the cycle table says | The array split shortened it. `compute_cycle` in the trace is the value after the split. |
 | The run never ends | Work-items wait for spad that is never freed, in an order the loader does not see ([known limitations](#known-limitations)). Raise `core_spad_size_kb`. |

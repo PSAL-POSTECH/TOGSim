@@ -17,6 +17,8 @@ inline std::string pad15(std::string_view sv) {
 }
 
 inline constexpr const char* kTileScheduled = "TILE_SCHEDULED";
+inline constexpr const char* kSpadHold = "SPAD_HOLD";
+inline constexpr const char* kSpadHoldEnd = "SPAD_HOLD_END";
 
 inline constexpr const char* kInstructionIssued = "INST_ISSUED";
 inline constexpr const char* kInstructionFinished = "INST_FINISHED";

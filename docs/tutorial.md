@@ -497,23 +497,34 @@ takes 840 cycles.
 [warning] [TOGSim] TOG examples/mistakes/TENSOR_PAST_LIST.so: its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0
 ```
 
-**Not said at all.** The dangerous mistakes are the ones nothing reports. Each of these exits 0
-and prints a total; only the number is wrong.
+**Not said at all.** The dangerous mistake is the one nothing reports. It exits 0 and prints a
+total; only the number is wrong.
 
 | Mistake (`-D` flag) | Total | What happens | How to notice |
 |---|---|---|---|
 | `NULL_STRIDES`: `strides` is a null pointer | 785 | The whole DMA becomes one DRAM request. | `stride=[]` on the trace line; 513 responses instead of 1024. |
-| `CONSUMER_FIRST`: the store is called before the compute that writes its buffer | 748 | The store depends on nothing and is issued at cycle 3. | The order of the `INST_ISSUED` lines. |
+
+**Valid, with another meaning.** `CONSUMER_FIRST` calls the store before the compute that writes
+its buffer. A read of a buffer that nothing in the work-item wrote yet is a defined form: the
+store drains [data that is already on the chip](tog-abi.md#data-that-is-already-on-the-chip), so
+it depends on nothing and is issued at cycle 3, and the total is 748. TOGSim names every such
+buffer in an `[info]` line while it loads the TOG, and accounts its bytes in the spad for the
+whole kernel: in a spad of 16 KB this TOG is refused, with the buffer named.
 
 ```text
 + build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
+[info] [TOGSim] TOG examples/mistakes/CONSUMER_FIRST.so: core 0 holds 16384 bytes for the kernel: buffers 2, which its work-items read without having written them
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false ...
 [trace] [3][Core 0][INST_ISSUED    ][INST_ID=1] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false ...
 [trace] [147][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 716, DRAM BW: 76.000 GB/s (1024 responses)
 [info] Total execution cycles: 748
++ build/bin/Simulator --config examples/mistakes/spad_16kb.gen.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+[error] [TOGSim] TOG examples/mistakes/CONSUMER_FIRST.so: work-item 0 (key 0) needs 16384 bytes in the spad at once beside the 16384 bytes core 0 holds for the kernel (buffers 2, read without having been written), and a core's spad holds 16384 (core_spad_size_kb: 16)
+exit 1
 ```
 
 So when you bring up a new TOG, read its log once at `--log_level trace`: check that it has no
-`[warning]` line, that every compute is there with the cycles you expect, that each DMA has the
-address and strides you meant, and that the instructions are issued in the order the data flows.
+`[warning]` line and no `holds ... bytes for the kernel` line you did not mean, that every compute
+is there with the cycles you expect, that each DMA has the address and strides you meant, and that
+the instructions are issued in the order the data flows.

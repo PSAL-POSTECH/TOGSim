@@ -96,6 +96,10 @@ void trace_tile_scheduled(cycle_type core_cycle, uint32_t core_id, const std::st
                 core_cycle, core_id, tag15, spad_footprint, max_dispatch);
 }
 
+void trace_spad_hold(cycle_type core_cycle, uint32_t core_id, const std::string& tag15, size_t bytes) {
+  spdlog::trace("[{}][Core {}][{}] bytes={}", core_cycle, core_id, tag15, bytes);
+}
+
 void trace_instruction_line(cycle_type core_cycle,
                             uint32_t core_id,
                             const std::string& tag15,

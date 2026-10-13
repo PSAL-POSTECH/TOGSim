@@ -43,12 +43,13 @@ machine() {
 
 # Filters of a --log_level trace run. timeline: every instruction, and when an async load has sent its requests
 # and has its data. instruction_0: every event of instruction 0. computes: the computes as issued. scheduling:
-# computes, and the work-items as handed to a core. unrefused: what a run of a broken TOG that is not refused shows.
+# computes, and the work-items as handed to a core. unrefused: what a run of a broken TOG that is not refused shows,
+# the line that names its held buffers among it.
 timeline() { grep -E 'TILE_SCHEDULED|INST_(ISSUED|FINISHED)|ASYNC_DMA_ISSUE|DRAM_RESP_DONE|Total execution cycles'; }
 instruction_0() { grep -F 'INST_ID=0]'; }
 computes() { grep -E 'INST_ISSUED.*COMP|Total execution cycles'; }
 scheduling() { grep -E 'TILE_SCHEDULED|INST_ISSUED.*COMP|Total execution cycles'; }
-unrefused() { awk '/\[warning\]|INST_ISSUED/ || (final && /responses\)|Total execution cycles/); /Simulation finished/ { final = 1 }'; }
+unrefused() { awk '/\[warning\]|bytes for the kernel|INST_ISSUED/ || (final && /responses\)|Total execution cycles/); /Simulation finished/ { final = 1 }'; }
 
 # Filters of any run. statistics: the DRAM summary and the final statistics. result: warnings, the computes as
 # issued, the unit lines of the final statistics and the total. kernels: the kernels and computes of a session.
@@ -128,7 +129,8 @@ session() {
 }
 
 # The valid TOG and each way of breaking it that is refused; the valid TOG with each wrong input or machine that is
-# refused; then what is not refused: two mistakes that a warning names, and two that nothing names.
+# refused; then what is not refused: two mistakes that a warning names, one that nothing names and one that reads as
+# data already on the chip, which an info line names and a spad without room for it refuses.
 mistakes() {
   local dir=examples/mistakes broken
   local tables="--cycle_table $dir/tog_cycles.tsv --unit_table $dir/tog_units.tsv"
@@ -167,6 +169,7 @@ mistakes() {
     tog -D$broken $dir/silent_tog.cpp -o $dir/$broken.so
     sim unrefused --config $V6E --tog_so $dir/$broken.so $tables --log_level trace
   done
+  sim first_error --config $dir/spad_16kb.gen.yml --tog_so $dir/CONSUMER_FIRST.so $tables
 }
 
 [ -x "$SIM" ] || { echo "$SIM is absent: build TOGSim first (README.md, Quick start)" >&2; exit 2; }

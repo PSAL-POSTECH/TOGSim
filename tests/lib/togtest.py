@@ -18,6 +18,7 @@ TIMEOUT_S = 600
 TYPED_WARNING = "uses the typed grouping"
 EVENT = re.compile(r"\[(\d+)\]\[Core (\d+)\]\[(\w+) *\]\[INST_ID=(\d+)\] ([A-Z_]+)(?: \((.*)\))?$", re.M)
 SCHEDULED = re.compile(r"TILE_SCHEDULED *\] spad_footprint=(\d+) max_dispatch=(\d+)")
+CORE_LINE = re.compile(r"\[(\d+)\]\[Core (\d+)\]\[(TILE_SCHEDULED|SPAD_HOLD|SPAD_HOLD_END) *\] (.*)$", re.M)
 SAID = re.compile(r"^(?:\[[^\]]*\] \[(?:error|critical)\] |\s*what\(\):\s*)(.*)$|^(togsim: .*)$", re.M)
 WARNED = re.compile(r"^\[[^\]]*\] \[warning\] (.*)$", re.M)
 _built, _locks, _guard = {}, {}, threading.Lock()
@@ -205,6 +206,12 @@ class Run:
     def scheduled(self):
         """(spad_footprint, max_dispatch) of every TILE_SCHEDULED line, in log order."""
         return [(int(m[1]), int(m[2])) for m in SCHEDULED.finditer(self.log)]
+
+    def core_lines(self, tag):
+        """(cycle, core, fields) of every trace line `tag` of a core that names no instruction (TILE_SCHEDULED,
+        SPAD_HOLD, SPAD_HOLD_END), in log order; the fields are integers."""
+        return [(int(m[1]), int(m[2]), {k: int(v) for k, v in (kv.split("=") for kv in m[4].split())})
+                for m in CORE_LINE.finditer(self.log) if m[3] == tag]
 
 
 class Ctx:
