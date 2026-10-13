@@ -33,7 +33,7 @@ def _dram_standard_name(dram_obj):
     return getattr(type(dram_obj), "name", None) or getattr(dram_obj, "name", None) or ""
 
 
-def make_config(dram_obj, clock_ratio=1, refresh_scope="Channel"):
+def make_config(dram_obj, clock_ratio=1, refresh_scope="Channel", addr_mapper=None):
     """Wrap a DRAM object in a single-channel GenericDRAM config for PyTorchSim.
 
     PyTorchSim creates one Ramulator2 instance per channel, so each config
@@ -50,13 +50,14 @@ def make_config(dram_obj, clock_ratio=1, refresh_scope="Channel"):
       - otherwise -> GenericDDR
     """
     dram_name = str(_dram_standard_name(dram_obj)).upper()
+    addr_mapper = addr_mapper or ramulator.addr_mapper.RoBaRaCoCh()
     if dram_name.startswith("HBM"):
         ctrl = ramulator.controller.HBM(
             dram=dram_obj,
             scheduler=ramulator.scheduler.FRFCFS(),
             refresh_manager=ramulator.refresh_manager.AllBank(scope=refresh_scope),
             row_policy=ramulator.row_policy.Open(),
-            addr_mapper=ramulator.addr_mapper.RoBaRaCoCh(),
+            addr_mapper=addr_mapper,
             read_buffer_size=64,
             write_buffer_size=64,
         )
@@ -66,7 +67,7 @@ def make_config(dram_obj, clock_ratio=1, refresh_scope="Channel"):
             scheduler=ramulator.scheduler.FRFCFS(),
             refresh_manager=ramulator.refresh_manager.AllBank(scope=refresh_scope),
             row_policy=ramulator.row_policy.Open(),
-            addr_mapper=ramulator.addr_mapper.RoBaRaCoCh(),
+            addr_mapper=addr_mapper,
         )
     else:
         ctrl = ramulator.controller.GenericDDR(
@@ -74,7 +75,7 @@ def make_config(dram_obj, clock_ratio=1, refresh_scope="Channel"):
             scheduler=ramulator.scheduler.FRFCFS(),
             refresh_manager=ramulator.refresh_manager.AllBank(scope=refresh_scope),
             row_policy=ramulator.row_policy.Open(),
-            addr_mapper=ramulator.addr_mapper.RoBaRaCoCh(),
+            addr_mapper=addr_mapper,
         )
     ms = ramulator.memory_system.GenericDRAM(
         clock_ratio=clock_ratio,
@@ -108,7 +109,8 @@ def gen_hbm2_tpuv2():
 
 def gen_hbm3_tpuv6e():
     dram = ramulator.dram.HBM3(org_preset="HBM3_8Gb", timing_preset="HBM3_6400Mbps", column=256)
-    return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
+    return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel",
+                       addr_mapper=ramulator.addr_mapper.MOP4CLXOR())
 
 def gen_ddr4():
     # Available timing presets — check python/ramulator/dram/ddr4.py
