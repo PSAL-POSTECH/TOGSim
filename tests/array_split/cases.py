@@ -1,29 +1,29 @@
-"""systolic_array_split with a segment TOG: a compute's Systolic rows are spread over the arrays of its core, and
+"""systolic_array_split with a segment TOG: a compute's TPUV6_MXU rows are spread over the arrays of its core, and
 what the split refuses, most of it before any TOG is loaded: a unit table or a config it cannot read."""
 from pathlib import Path
 
 from togtest import MIB, Case
 
 TOG = Path(__file__).resolve().parents[1] / "spad_footprint" / "state_stored_each_trip_tog.cpp"
-UNITS = [(0, "Systolic", "rows", 1, 512), (0, "Vpu", "cycles", 1, 50)]
+UNITS = [(0, "TPUV6_MXU", "rows", 1, 512), (0, "Vpu", "cycles", 1, 50)]
 REFUSED = {
     "refused.unit_table_without_array_unit": dict(
-        saying="systolic_array_split: the unit table has no array unit Systolic", exit=1, units=UNITS[1:]),
+        saying="systolic_array_split: the unit table has no array unit TPUV6_MXU", exit=1, units=UNITS[1:]),
     "refused.array_unit_named_without_split": dict(
-        saying="systolic_array_unit: Msa is ignored without systolic_array_split: round_robin", exit=134,
-        systolic_array_split="none", systolic_array_unit="Msa"),
+        saying="systolic_array_unit: MSA is ignored without systolic_array_split: round_robin", exit=134,
+        systolic_array_split="none", systolic_array_unit="MSA"),
     "refused.split_without_unit_table": dict(
         saying="give --unit_table, or set systolic_array_split: none", exit=1, units=None),
     "refused.spread_exceeds_one_array": dict(
-        saying="computes tile id 0, whose unit table row admits 256 rows to Systolic, and the unit takes 230 in the "
-               "tile's 230 cycles (1 per cycle)", exit=1, num_systolic_array_per_core=4, cycles=230,
-        units=[(0, "Systolic", "rows", 1, 256), (0, "Vpu", "cycles", 1, 50)]),
+        saying="computes tile id 0, whose unit table row admits 128 rows to TPUV6_MXU, and the unit takes 100 in the "
+               "tile's 100 cycles (1 per cycle)", exit=1, num_systolic_array_per_core=4, cycles=100,
+        units=[(0, "TPUV6_MXU", "rows", 1, 128), (0, "Vpu", "cycles", 1, 50)]),
 }
 
 
 def replay(t, cycles=600, units=UNITS, **machine):
     """A segment TOG of tests/spad_footprint/ (compute_type 0, two work-items of four computes) on tpuv6e (2 arrays
-    per core, 256 lanes) with `machine` set: its one tile runs `cycles`, `units` is the unit table."""
+    per core, 128 lanes) with `machine` set: its one tile runs `cycles`, `units` is the unit table."""
     return t.simulate(t.tog(TOG, tensors=(MIB, MIB)), t.machine(**machine), [cycles], units)
 
 

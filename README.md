@@ -113,7 +113,7 @@ Three files go with it:
 |---|---|---|
 | `tog_tensors.txt`, beside `tog.so` | `16384`<br>`16384` | The byte size of each tensor argument. |
 | `tog_cycles.tsv`, `--cycle_table` | `600<TAB>0` | Compute tile 0 (`tile_id` 0) takes 600 cycles. |
-| `tog_units.tsv`, `--unit_table` | `0<TAB>Systolic<TAB>rows<TAB>1<TAB>256`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | What each hardware unit did during one run of compute tile 0. |
+| `tog_units.tsv`, `--unit_table` | `0<TAB>TPUV6_MXU<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | What each hardware unit did during one run of compute tile 0. |
 
 [docs/tutorial.md](docs/tutorial.md) reads this TOG and its trace line by line, then builds up to
 asynchronous loads, many work-items, the array split and sessions.
@@ -153,7 +153,7 @@ matter; `examples/<name>/expected.txt` is that output.
 | `async_barrier` | Two asynchronous loads and the barrier that waits for them. | 858 |
 | `tiles` | Eight work-items on one, two and four cores. | 5021, 2635, 1487 |
 | `gemm` | Two kinds of compute, the unit table and the array split. | 1099 |
-| `session` | Two kernels from a command stream, on one partition and on two. | 1668, 908 |
+| `session` | Two kernels from a command stream, on one partition and on two. | 1668, 866 |
 | `mistakes` | What TOGSim refuses, what it warns about, and what it does not notice. | |
 
 ## Running
@@ -169,7 +169,7 @@ utilization of each unit per core and the DMA and DRAM bandwidth. `--log_level t
 each instruction was issued and finished. A refused run exits non-zero with a line that names the
 cause.
 
-The machine is the YAML file given to `--config`. `configs/` ships 22 of them, and
+The machine is the YAML file given to `--config`. `configs/` ships 19 of them, and
 `examples/minimal.yml` is one that depends on no other file.
 
 ## Documentation

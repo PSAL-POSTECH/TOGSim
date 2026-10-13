@@ -6,10 +6,12 @@ num_cores: N
 core_freq_mhz: N
 core_stats_print_period_cycles: N
 num_systolic_array_per_core: N
+systolic_array_split: round_robin
+systolic_array_unit: TPUV6_MXU
 vpu_num_lanes: N
 vpu_spad_size_kb_per_lane: N
 vpu_vector_length_bits: N
-tpu_systolic_queue_entries: N
+tpu_mxu_queue_entries: N
 dram_type: ramulator2
 dram_channels: N
 dram_stats_print_period_cycles: N
@@ -40,7 +42,7 @@ codegen_compiler_optimization: all
 [info] ========= Core stat =========
 [info] Core [N] : DMA active_cycles: N, DMA idle_cycles: N, DRAM BW: N.N GB/s (N responses)
 [info] Core [N] : Issue utilization(%): N.N, active_cycles: N, idle_cycles: N
-[info] Core [N] : Systolic utilization(%): N.N, active_cycles: N, idle_cycles: N
+[info] Core [N] : TPUV6_MXU utilization(%): N.N, active_cycles: N, idle_cycles: N
 [info] Core [N] : Total_cycles: N
 [info] Core [N] : Vpu utilization(%): N.N, active_cycles: N, idle_cycles: N
 [info] [DRAM] all N channels combined | N.N GB/s aggregate, N.N% of utilization (avg. per channel) | N reads, N writes (interval N cycles)
@@ -81,7 +83,7 @@ codegen_compiler_optimization: all
 [info] Core [N] : COMP     inst_count: N (GEMM: N, Vector: N, XLU: N)
 [info] Core [N] : MEMORY_BAR inst_count: N
 [info] ========= Core stat =========
-[info] Core [N] : Systolic utilization(%): N.N, active_cycles: N, idle_cycles: N
+[info] Core [N] : TPUV6_MXU utilization(%): N.N, active_cycles: N, idle_cycles: N
 [info] Core [N] : Vpu utilization(%): N.N, active_cycles: N, idle_cycles: N
 [info] Core [N] : Issue utilization(%): N.N, active_cycles: N, idle_cycles: N
 [info] Core [N] : DMA active_cycles: N, DMA idle_cycles: N, DRAM BW: N.N GB/s (N responses)

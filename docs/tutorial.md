@@ -135,7 +135,7 @@ Three small files stand beside the source:
 |---|---|---|
 | `tog_tensors.txt` | `16384`<br>`16384` | The TOG has two tensor arguments of 16384 bytes each. |
 | `tog_cycles.tsv` | `600<TAB>0` | Compute tile 0 takes 600 cycles. |
-| `tog_units.tsv` | `0<TAB>Systolic<TAB>rows<TAB>1<TAB>256`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | During one run of compute tile 0 the `Systolic` unit took in 256 rows at 1 row per cycle, and the `Vpu` unit was busy for 100 cycles. |
+| `tog_units.tsv` | `0<TAB>TPUV6_MXU<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | During one run of compute tile 0 the `TPUV6_MXU` unit, the systolic array, took in 128 rows at 1 row per cycle, and the `Vpu` unit was busy for 100 cycles. |
 
 `tog_tensors.txt` must be in the directory of `tog.so` under that name. The two tables are named on
 the command line: `--cycle_table` is always required, `--unit_table` on every shipped config. The
@@ -188,7 +188,7 @@ mkdir -p my_kernel
 cp examples/hello/hello_tog.cpp my_kernel/my_tog.cpp
 printf '16384\n16384\n' > my_kernel/tog_tensors.txt
 printf '600\t0\n' > my_kernel/tog_cycles.tsv
-printf '0\tSystolic\trows\t1\t256\n0\tVpu\tcycles\t1\t100\n' > my_kernel/tog_units.tsv
+printf '0\tTPUV6_MXU\trows\t1\t128\n0\tVpu\tcycles\t1\t100\n' > my_kernel/tog_units.tsv
 g++ -std=c++17 -shared -fPIC -O1 -Iinclude my_kernel/my_tog.cpp -o my_kernel/tog.so
 build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml \
   --tog_so my_kernel/tog.so --cycle_table my_kernel/tog_cycles.tsv \
@@ -361,16 +361,16 @@ Two `tile_id`s mean two rows in the cycle table and rows for both in the unit ta
 | File | Contents |
 |---|---|
 | `tog_cycles.tsv` | `600<TAB>0`<br>`150<TAB>0` |
-| `tog_units.tsv` | `0<TAB>Systolic<TAB>rows<TAB>1<TAB>512`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>50`<br>`1<TAB>Vpu<TAB>cycles<TAB>1<TAB>150` |
+| `tog_units.tsv` | `0<TAB>TPUV6_MXU<TAB>rows<TAB>1<TAB>512`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>50`<br>`1<TAB>Vpu<TAB>cycles<TAB>1<TAB>150` |
 
 **Unit rows and the array split.** So far the unit table only fed the utilization lines. It also
 changes how long a compute takes. A row says what one hardware unit did during one run of a
-compute tile: here compute tile 0 pushes 512 rows through the unit named `Systolic`, the systolic
+compute tile: here compute tile 0 pushes 512 rows through the unit named `TPUV6_MXU`, the systolic
 array, at one row per cycle, so 512 of its 600 cycles are array work; `Vpu`, the vector unit, is
 busy for 50 cycles.
 
 A core can have several systolic arrays (`num_systolic_array_per_core`, 2 on tpuv6e), and one
-array takes `vpu_num_lanes` rows (256 on tpuv6e) before a compute tile is split. With 512 rows
+array takes `vpu_num_lanes` rows (128 on tpuv6e) before a compute tile is split. With 512 rows
 TOGSim spreads the array work over both arrays, 256 rows each, and the compute takes
 600 - 512 + 256 = 344 cycles ([the formula](tog-abi.md#the-unit-table-and-the-array-split)).
 
@@ -382,10 +382,10 @@ The script runs that, then changes one thing at a time:
 
 | Run | Compute tile 0 | Compute tile 1 | `Total execution cycles` |
 |---|---|---|---|
-| 512 rows, 2 arrays, 256 lanes (as shipped) | 600 - 512 + 256 = 344 | 150 | 1099 |
-| `tog_units_256_rows.tsv`: 256 rows | 600 | 150 | 1611 |
+| 512 rows, 2 arrays, 128 lanes (as shipped) | 600 - 512 + 256 = 344 | 150 | 1099 |
+| `tog_units_128_rows.tsv`: 128 rows | 600 | 150 | 1611 |
 | 512 rows, `num_systolic_array_per_core: 1` | 600 | 150 | 1611 |
-| 256 rows, `vpu_num_lanes: 128` | 600 - 256 + 128 = 472 | 150 | 1355 |
+| 128 rows, `vpu_num_lanes: 64` | 600 - 128 + 64 = 536 | 150 | 1483 |
 | `systolic_array_split: none`, no unit table | 600 | 150 | 1611 |
 
 The first run:
@@ -394,15 +394,15 @@ The first run:
 [trace] [161][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=344 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [506][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=344 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [851][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : Systolic utilization(%): 46.59, active_cycles: 512, idle_cycles: 587
+[info] Core [0] : TPUV6_MXU utilization(%): 46.59, active_cycles: 512, idle_cycles: 587
 [info] Core [0] : Vpu utilization(%): 22.75, active_cycles: 250, idle_cycles: 849
 [info] Total execution cycles: 1099
 ```
 
 All three lines say `tile=0`, the third too although it runs `tile_id` 1: `tile=N` in the log is
-the work-item, and this TOG has one. Tell computes apart by `compute_cycle`. 256 rows fit one
-array of 256 lanes, so nothing is spread and the compute keeps its 600 cycles; on a machine with
-128 lanes the same 256 rows are split again.
+the work-item, and this TOG has one. Tell computes apart by `compute_cycle`. 128 rows fit one
+array of 128 lanes, so nothing is spread and the compute keeps its 600 cycles; on a machine with
+64 lanes the same 128 rows are split again.
 
 ## 5. Several kernels: session mode
 
@@ -443,20 +443,21 @@ examples/run.sh session
 [info] [Scheduler 0] Enqueued kernel_id: 1, tog_path: examples/session/k1/tog.so, operation: kernel, request_time_cycles: 0
 [trace] [948][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
 [info] Total execution cycles: 1668
-+ build/bin/Simulator --config configs/systolic_ws_128x128_c2_simple_noc_tpuv3_partition.yml --models_list examples/session/commands_two_partitions.txt --log_level trace
+# examples/session/two_partitions.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with num_cores: 2, num_partition: 2, partition: {core_0: 0, core_1: 1}
++ build/bin/Simulator --config examples/session/two_partitions.gen.yml --models_list examples/session/commands_two_partitions.txt --log_level trace
 [info] [Scheduler 0] Enqueued kernel_id: 0, tog_path: examples/session/k0/tog.so, operation: kernel, request_time_cycles: 0
 [info] [Scheduler 1] Enqueued kernel_id: 1, tog_path: examples/session/k1/tog.so, operation: kernel, request_time_cycles: 0
-[trace] [160][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=472 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [161][Core 1][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
-[info] Total execution cycles: 908
+[trace] [145][Core 1][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [147][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[info] Total execution cycles: 866
 ```
 
 - **First run, one partition.** Kernel 1 starts after kernel 0 is done, and each kernel's compute
-  follows its own tables: 600 cycles and 256 rows for `k0`, which fit one array of tpuv6e, so 600;
+  follows its own tables: 600 cycles and 128 rows for `k0`, which fit one array of tpuv6e, so 600;
   900 cycles and 512 rows for `k1`, so 900 - 512 + 256 = 644.
-- **Second run, two partitions.** The machine has two cores, one in each partition, and the
-  kernels run side by side: 908 cycles. Its arrays have 128 lanes, so `k0`'s 256 rows are split
-  here, 600 - 256 + 128 = 472, and `k1`'s 512 rows are spread over the two arrays as before.
+- **Second run, two partitions.** A copy of tpuv6e with two cores, one in each partition
+  (`num_partition: 2` and its `partition` map), and the kernels run side by side: 866 cycles, each
+  compute as in the first run.
 
 In a session the total is followed by one more line, `Wall-clock time for simulation`.
 
@@ -489,7 +490,7 @@ takes 840 cycles.
 | Mistake | Total | What happens | The warning |
 |---|---|---|---|
 | `TENSOR_PAST_LIST`: an `arg_id` `tog_tensors.txt` has no line for | 819 | The tensor is placed at address 0, on top of tensor 0: `dram=0x0000000000000000` on the store's trace line. | `its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0` |
-| a unit table whose rows are all for `tile_id` 1, while the TOG computes `tile_id` 0 | 840 | The compute adds nothing to any unit, and the array split leaves it whole: `Systolic utilization(%): 0.00`. | `the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units` |
+| a unit table whose rows are all for `tile_id` 1, while the TOG computes `tile_id` 0 | 840 | The compute adds nothing to any unit, and the array split leaves it whole: `TPUV6_MXU utilization(%): 0.00`. | `the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units` |
 
 ```text
 + build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/TENSOR_PAST_LIST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace

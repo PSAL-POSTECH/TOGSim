@@ -154,22 +154,22 @@ def lanes_restated_runs(t):
 
 
 def stated_twice_disagreeing_refused(t):
-    """core_spad_size_kb: 48 on tpuv6e as shipped, whose 512 KB x 256 lanes are 131072 KB: the config is refused
+    """core_spad_size_kb: 48 on tpuv6e as shipped, whose 1024 KB x 128 lanes are 131072 KB: the config is refused
     before anything runs, naming both."""
     run = replay(t, 16 * KB, None, core_spad_size_kb=48)
-    run.expect_refused("core_spad_size_kb: 48 is not vpu_spad_size_kb_per_lane x vpu_num_lanes = 512 x 256 = 131072",
+    run.expect_refused("core_spad_size_kb: 48 is not vpu_spad_size_kb_per_lane x vpu_num_lanes = 1024 x 128 = 131072",
                        exit=134)
 
 
-MXU = REPO / "configs" / "systolic_ws_256x256_c1_simple_noc_tpuv6e_mxu.yml"
+TPUV6E = REPO / "configs" / "systolic_ws_256x256_c1_simple_noc_tpuv6e.yml"
 
 
-def mxu_spad_is_its_lanes(t):
-    """configs/..._tpuv6e_mxu.yml as shipped, with its Mxu unit table, states 1024 KB on each of 128 lanes and no
+def tpuv6e_spad_is_its_lanes(t):
+    """configs/..._tpuv6e.yml as shipped, with its TPUV6_MXU unit table, states 1024 KB on each of 128 lanes and no
     core_spad_size_kb: the TOG one byte over 131072 KB is refused, naming that spad."""
     big = 131072 * KB - HELD + 1
     so = t.tog(TOG, (f"BIG_BYTES={big}",), tensors=(MIB, 256 * MIB, MIB))
-    run = t.simulate(so, MXU, cycles=[200], units=[(0, "Mxu", "rows", 1, 0), (0, "Vpu", "cycles", 1, 200)],
+    run = t.simulate(so, TPUV6E, cycles=[200], units=[(0, "TPUV6_MXU", "rows", 1, 0), (0, "Vpu", "cycles", 1, 200)],
                      timeout=TIMEOUT_S)
     expect_refused_before_the_run(run, refusal(0, HELD + big, 131072), so)
 
@@ -203,5 +203,5 @@ CASES = [
     Case("lanes.refused.one_byte_over", lanes_one_byte_over_refused),
     Case("lanes.restated_runs", lanes_restated_runs),
     Case("refused.stated_twice_disagreeing", stated_twice_disagreeing_refused),
-    Case("lanes.refused.tpuv6e_mxu_one_byte_over", mxu_spad_is_its_lanes),
+    Case("lanes.refused.tpuv6e_one_byte_over", tpuv6e_spad_is_its_lanes),
 ]

@@ -42,8 +42,8 @@ def held_through_overlap_refused(t):
 
 
 def gemm512(t, grid=(1, 1), cycles=GEMM512_CYCLES, units=GEMM512_UNITS, **machine):
-    """The gemm512 TOG as a `grid` of work-items on tpuv6e (2 arrays per core, 256 lanes) with `machine` set;
-    `cycles` are those of tiles 0-5, `units` the unit table (tile 5: 1024 Systolic rows, 201 Vpu cycles)."""
+    """The gemm512 TOG as a `grid` of work-items on tpuv6e (2 arrays per core, 128 lanes) with `machine` set;
+    `cycles` are those of tiles 0-5, `units` the unit table (tile 5: 1024 TPUV6_MXU rows, 201 Vpu cycles)."""
     return t.simulate(t.tog("gemm512_tog.cpp", shape=grid), t.machine(**machine), cycles, units)
 
 
@@ -90,11 +90,11 @@ def two_cores_run_side_by_side(t):
                  f"cross-core overlap {side_by_side}")
 
 
-def admitted(tile, unit, count):
-    """GEMM512_UNITS with the admitted count of (tile, unit) set to `count`."""
-    hit = [r for r in GEMM512_UNITS if r[:2] == [str(tile), unit]]
+def admitted(tile, unit, count, units=GEMM512_UNITS):
+    """`units` (GEMM512_UNITS) with the admitted count of (tile, unit) set to `count`."""
+    hit = [r for r in units if r[:2] == [str(tile), unit]]
     assert len(hit) == 1, f"gemm512_units.tsv has {len(hit)} rows for tile {tile} unit {unit}"
-    return [r[:4] + [str(count)] if r is hit[0] else r for r in GEMM512_UNITS]
+    return [r[:4] + [str(count)] if r is hit[0] else r for r in units]
 
 
 def matmul_cycles(cycles):
@@ -105,22 +105,23 @@ SPLIT = {
     "matmul_over_two_arrays": dict(
         matmul=1077, why="1589 - 1024 + 1024/2"),
     "one_subtile_is_not_split": dict(
-        matmul=1589, why="256 rows are one subtile, N_eff 1", units=admitted(MATMUL_TILE, "Systolic", 256)),
+        matmul=1589, why="128 rows are one subtile, N_eff 1", units=admitted(MATMUL_TILE, "TPUV6_MXU", 128)),
     "vector_unit_bounds_the_split": dict(
         matmul=1265, why="1589 - 1024 + 700, Vpu 700 > 1024/2", units=admitted(MATMUL_TILE, "Vpu", 700)),
     "shorter_matmul_over_two_arrays": dict(
         matmul=588, why="1100 - 1024 + 1024/2", cycles=matmul_cycles(1100)),
 }
 OVER_ONE_ARRAY = dict(
-    saying="computes tile id 5, whose unit table row admits 256 rows to Systolic, and the unit takes 230 in the "
-           "tile's 230 cycles (1 per cycle)",
-    exit=1, num_systolic_array_per_core=4, cycles=matmul_cycles(230), units=admitted(MATMUL_TILE, "Systolic", 256))
+    saying="computes tile id 5, whose unit table row admits 128 rows to TPUV6_MXU, and the unit takes 100 in the "
+           "tile's 100 cycles (1 per cycle)",
+    exit=1, num_systolic_array_per_core=4, cycles=matmul_cycles(100),
+    units=admitted(MATMUL_TILE, "TPUV6_MXU", 128, admitted(MATMUL_TILE, "Vpu", 100)))
 SPLIT_REFUSED = {
     "refused.spread_exceeds_one_array": OVER_ONE_ARRAY,
     "refused.spread_exceeds_one_array.icnt_32_ports_at_1751_mhz": dict(
         OVER_ONE_ARRAY, icnt_injection_ports_per_core=32, core_freq_mhz=1751),
-    "refused.spread_exceeds_one_array.icnt_32_ports_at_1751_mhz_statistics_every_230_cycles": dict(
-        OVER_ONE_ARRAY, icnt_injection_ports_per_core=32, core_freq_mhz=1751, core_stats_print_period_cycles=230),
+    "refused.spread_exceeds_one_array.icnt_32_ports_at_1751_mhz_statistics_every_100_cycles": dict(
+        OVER_ONE_ARRAY, icnt_injection_ports_per_core=32, core_freq_mhz=1751, core_stats_print_period_cycles=100),
     "refused.spread_exceeds_one_array.statistics_every_10000_cycles": dict(
         OVER_ONE_ARRAY, core_stats_print_period_cycles=10000),
 }
@@ -128,7 +129,7 @@ SPLIT_REFUSED = {
 
 def split(matmul, why, **given):
     """Every matmul (compute_type 1) states `matmul` as its compute_cycle: cc - B_sys + max(B_sys / N_eff, the other
-    units' B), B_sys the Systolic rows, N_eff = min(arrays, ceil(rows / lanes)) (Core::split_compute_cycles)."""
+    units' B), B_sys the TPUV6_MXU rows, N_eff = min(arrays, ceil(rows / lanes)) (Core::split_compute_cycles)."""
     def case(t):
         run = gemm512(t, **given).expect_ok()
         seen = sorted({c.cycles for c in run.computes() if c.compute_type == 1})

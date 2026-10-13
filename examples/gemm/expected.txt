@@ -4,14 +4,14 @@
 [trace] [161][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=344 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [506][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=344 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [851][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : Systolic utilization(%): 46.59, active_cycles: 512, idle_cycles: 587
+[info] Core [0] : TPUV6_MXU utilization(%): 46.59, active_cycles: 512, idle_cycles: 587
 [info] Core [0] : Vpu utilization(%): 22.75, active_cycles: 250, idle_cycles: 849
 [info] Total execution cycles: 1099
-+ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/gemm/tog.so --cycle_table examples/gemm/tog_cycles.tsv --log_level trace --unit_table examples/gemm/tog_units_256_rows.tsv
++ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/gemm/tog.so --cycle_table examples/gemm/tog_cycles.tsv --log_level trace --unit_table examples/gemm/tog_units_128_rows.tsv
 [trace] [161][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [762][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1363][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : Systolic utilization(%): 31.78, active_cycles: 512, idle_cycles: 1099
+[info] Core [0] : TPUV6_MXU utilization(%): 15.89, active_cycles: 256, idle_cycles: 1355
 [info] Core [0] : Vpu utilization(%): 15.52, active_cycles: 250, idle_cycles: 1361
 [info] Total execution cycles: 1611
 # examples/gemm/one_array.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with num_systolic_array_per_core: 1
@@ -19,18 +19,18 @@
 [trace] [161][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [762][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1363][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : Systolic utilization(%): 63.56, active_cycles: 1024, idle_cycles: 587
+[info] Core [0] : TPUV6_MXU utilization(%): 63.56, active_cycles: 1024, idle_cycles: 587
 [info] Core [0] : Vpu utilization(%): 15.52, active_cycles: 250, idle_cycles: 1361
 [info] Total execution cycles: 1611
-# examples/gemm/128_lanes.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with vpu_num_lanes: 128
-+ build/bin/Simulator --config examples/gemm/128_lanes.gen.yml --tog_so examples/gemm/tog.so --cycle_table examples/gemm/tog_cycles.tsv --log_level trace --unit_table examples/gemm/tog_units_256_rows.tsv
-[trace] [161][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=472 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [634][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=472 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [1107][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : Systolic utilization(%): 18.89, active_cycles: 256, idle_cycles: 1099
-[info] Core [0] : Vpu utilization(%): 18.45, active_cycles: 250, idle_cycles: 1105
-[info] Total execution cycles: 1355
-# examples/gemm/no_split.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with systolic_array_split: none
+# examples/gemm/64_lanes.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with vpu_num_lanes: 64
++ build/bin/Simulator --config examples/gemm/64_lanes.gen.yml --tog_so examples/gemm/tog.so --cycle_table examples/gemm/tog_cycles.tsv --log_level trace --unit_table examples/gemm/tog_units_128_rows.tsv
+[trace] [161][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=536 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [698][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=536 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1235][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
+[info] Core [0] : TPUV6_MXU utilization(%): 8.63, active_cycles: 128, idle_cycles: 1355
+[info] Core [0] : Vpu utilization(%): 16.86, active_cycles: 250, idle_cycles: 1233
+[info] Total execution cycles: 1483
+# examples/gemm/no_split.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with systolic_array_split: none, no systolic_array_unit
 + build/bin/Simulator --config examples/gemm/no_split.gen.yml --tog_so examples/gemm/tog.so --cycle_table examples/gemm/tog_cycles.tsv --log_level trace
 [trace] [161][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [762][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)

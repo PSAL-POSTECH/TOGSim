@@ -1,5 +1,5 @@
 """The cost of a kernel's compute nodes, as the cycle table and the unit table TOGSim reads: a compute's cycles (the
-overlapping column is always 0) and the Systolic rows systolic_array_split spreads over a core's arrays. A short
+overlapping column is always 0) and the SYSTOLIC rows systolic_array_split spreads over a core's arrays. A short
 last tile is a tile id of its own, costed by the same formulas at what is left. Estimates, not gem5 measurements."""
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from .node_mapping import ELEMENTWISE, REDUCTION, NodeDesc
 #: vslidedown at 2,4,6,8...; each vfmax consumes the last -- one chain, so linear.
 FOLD_WIDTH = 8
 
-SYSTOLIC_UNIT = ("Systolic", "rows", 1)
+SYSTOLIC_UNIT = ("SYSTOLIC", "rows", 1)
 VECTOR_UNIT = ("Vpu", "cycles", 1)
 
 

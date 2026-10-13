@@ -34,7 +34,7 @@ that selects nothing). A failing case says what it expected, what it saw and whe
 | `tests/spad_capacity/` | A work-item that needs more of the spad at once than a core has (`core_spad_size_kb`) is refused while its TOG is loaded, with `--tog_so` and with `--models_list` (the first kernel or the second): one byte over, one KB short, a later work-item, a single load larger than the spad; a fill the reader does not wait for is not counted. One that fills the spad to the byte runs, and so does one that names more bytes than the spad and never holds them together, each to a pinned total; `core_spad_size_kb: 0`, or no such key, refuses nothing. A run that was measured traces what one that was not traces. The spad of `vpu_spad_size_kb_per_lane` x `vpu_num_lanes` holds and refuses what the same spad in `core_spad_size_kb` does; a `core_spad_size_kb` beside them that differs is refused. |
 | `tests/spad_footprint/` | Buffers are as large as the TOG states; an unsized one is refused. |
 | `tests/typed/` | The deprecated `compute_type` 1, 2 and 3. What they pin is not typed-only: among it, the spad a work-item needs at once. |
-| `tests/unit_capacity/` | A compute tile whose unit table rows admit more than a unit takes in the tile's cycles is refused while its TOG is loaded, with `--tog_so` and with `--models_list` (the first kernel or the second): one more than the tile holds, for the array unit on one array, over two arrays and without the split, for a vector unit alone and beside a split array, and for a unit of capacity 12; the tile filled exactly runs. 256 rows in 230 cycles are refused at five timings and statistics intervals, and a tile of 0 cycles admits nothing. A tile that no compute names is not measured. |
+| `tests/unit_capacity/` | A compute tile whose unit table rows admit more than a unit takes in the tile's cycles is refused while its TOG is loaded, with `--tog_so` and with `--models_list` (the first kernel or the second): one more than the tile holds, for the array unit on one array, over two arrays and without the split, for a vector unit alone and beside a split array, and for a unit of capacity 12; the tile filled exactly runs. 128 rows on one array in 100 cycles are refused at five timings and statistics intervals, and a tile of 0 cycles admits nothing. A tile that no compute names is not measured. |
 | `tests/unit/` | Tensor tiling and DMA addresses, without the simulator. |
 | `tests/warnings/` | What still runs and is said once in a `[warning]` line: a `tile_id` without unit-table rows, an `arg_id` beyond `tog_tensors.txt`. |
 
@@ -58,7 +58,7 @@ from togtest import Case
 
 def one_compute_runs_600_cycles(t):
     run = t.simulate(t.tog("my_tog.cpp", tensors=(16384, 16384)), t.machine(), cycles=[600],
-                     units=[(0, "Systolic", "rows", 1, 256)])
+                     units=[(0, "TPUV6_MXU", "rows", 1, 128)])
     run.expect_total_cycles(840)
 
 

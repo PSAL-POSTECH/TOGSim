@@ -68,7 +68,7 @@ line. The final statistics of the hello TOG on tpuv6e (the third run of `example
 [info] Core [0] : COMP     inst_count: 1 (GEMM: 0, Vector: 1, XLU: 0)
 [info] Core [0] : MEMORY_BAR inst_count: 0
 [info] ========= Core stat =========
-[info] Core [0] : Systolic utilization(%): 30.48, active_cycles: 256, idle_cycles: 584
+[info] Core [0] : TPUV6_MXU utilization(%): 15.24, active_cycles: 128, idle_cycles: 712
 [info] Core [0] : Vpu utilization(%): 11.90, active_cycles: 100, idle_cycles: 740
 [info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 808, DRAM BW: 68.000 GB/s (1024 responses)
 [info] Core [0] : NUMA local memory: 1024 requests, remote memory: 0 requests
@@ -84,8 +84,8 @@ line. The final statistics of the hello TOG on tpuv6e (the third run of `example
 - **`Instructions count`** is what each core ran: loads, stores, computes, barriers. A compute of
   zero cycles is not counted; it is reported as `skipped inst_count`. All computes with
   `compute_type` 0 are under `Vector`.
-- **`<unit> utilization(%)`**: one line per unit of the unit table. 256 rows at 1 per cycle are 256
-  active cycles of 840, or 30.48%. With more than one core each core prints its block, and a
+- **`<unit> utilization(%)`**: one line per unit of the unit table. 128 rows at 1 per cycle are 128
+  active cycles of 840, or 15.24%. With more than one core each core prints its block, and a
   `Total : <unit> utilization(%)` line per unit follows.
 - **`DMA active_cycles`** are the cycles the core's DMA engine spent sending requests: 2 DMAs of
   512 requests at 32 per cycle. **`DRAM BW`** is the bytes DRAM answered (32 x 1024 here) over the

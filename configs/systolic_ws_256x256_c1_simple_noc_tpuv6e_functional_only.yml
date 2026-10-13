@@ -1,12 +1,17 @@
+# One TPU v6e TensorCore as libtpu drives it: two 256x256 matrix units (two in every LLO dump), vregs of 8 sublanes
+# x 128 lanes x 32 bit, VMEM 134217728 B (the compile's vmem_report) = 1024 KB x 128 lanes. The array unit is
+# TPUV6_MXU, vcix-accelerator libtpuv6.so's port; at 1751 MHz its two 16-bit rows a cycle give 918 TFLOP/s over both.
 num_cores: 1
 core_freq_mhz: 1751
 core_stats_print_period_cycles: 200
 num_systolic_array_per_core: 2
+systolic_array_split: round_robin
+systolic_array_unit: TPUV6_MXU
 
-vpu_num_lanes: 256
-vpu_spad_size_kb_per_lane: 512
-vpu_vector_length_bits: 512
-tpu_systolic_queue_entries: 256
+vpu_num_lanes: 128
+vpu_spad_size_kb_per_lane: 1024
+vpu_vector_length_bits: 256
+tpu_mxu_queue_entries: 512
 
 dram_type: ramulator2
 dram_channels: 32

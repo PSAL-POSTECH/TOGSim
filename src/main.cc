@@ -131,8 +131,9 @@ void launchKernel(Simulator* simulator, unsigned int kernel_id, std::string onnx
   if (fs::exists(units_tsv))
     unit_tile_base = simulator->add_kernel_unit_table(units_tsv);
   else if (simulator->get_config().systolic_array_split)
-    throw std::runtime_error("[TOGSim] systolic_array_split (on by default) reads each tile's Systolic rows; no "
-                             "tog_units.tsv next to " + onnx_path + " (or set systolic_array_split: none)");
+    throw std::runtime_error("[TOGSim] systolic_array_split (on by default) reads each tile's " +
+                             simulator->get_config().systolic_array_unit + " rows; no tog_units.tsv next to " +
+                             onnx_path + " (or set systolic_array_split: none)");
   std::unique_ptr<TileGraph> tile_graph =
       build_tog_tilegraph(simulator, tog_so, cycle_tsv, partition_id, unit_tile_base);
   if (!tile_graph)
@@ -291,8 +292,8 @@ int main(int argc, char** argv) {
     cmd_parser.set_if_defined("unit_table", &unit_table_path);
     if (!unit_table_path.empty()) simulator->set_unit_table(UnitTable::load(unit_table_path));
     if (simulator->get_config().systolic_array_split && unit_table_path.empty()) {
-      spdlog::error("[TOGSim] systolic_array_split (on by default) reads each tile's Systolic rows; give "
-                    "--unit_table, or set systolic_array_split: none");
+      spdlog::error("[TOGSim] systolic_array_split (on by default) reads each tile's {} rows; give "
+                    "--unit_table, or set systolic_array_split: none", simulator->get_config().systolic_array_unit);
       exit(EXIT_FAILURE);
     }
     if (cycle_table_path.empty()) {

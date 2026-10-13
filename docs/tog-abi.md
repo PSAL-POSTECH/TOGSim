@@ -207,7 +207,8 @@ models one core at the level of a single compute has to supply them.
 
 - **In the compiler flow** gem5 does: its model of the core runs each kind of compute tile and
   reports its cycles and, for each hardware unit, what the unit took in. That is also why
-  the array unit is called `Systolic`: it is gem5's name for it.
+  the array unit is called `SYSTOLIC`, or `TPUV6_MXU` on tpuv6e: they are the names vcix's
+  libtpu.so and libtpuv6.so give it.
 - **By hand**, take the numbers from whatever you trust for your core: an RTL or cycle-accurate
   simulation of one compute tile, or an estimate. Every example in `examples/` uses made-up round
   numbers.
@@ -251,7 +252,7 @@ tile_id	unit	unit_of_work	capacity_per_cycle	admitted
 | Field | Meaning |
 |---|---|
 | `tile_id` | The compute tile the row describes. |
-| `unit` | The name of a hardware unit. Names are yours, except that the systolic array must be called `Systolic` (or what the config's `systolic_array_unit` says). |
+| `unit` | The name of a hardware unit. Names are yours, except that the systolic array must be called `SYSTOLIC` (or what the config's `systolic_array_unit` says: `TPUV6_MXU` on tpuv6e). |
 | `unit_of_work` | What the unit counts: `rows`, `cycles`, ... A name; it appears in messages. The same on every row of a unit. |
 | `capacity_per_cycle` | How many of those the unit can take in per cycle. An integer above 0, the same on every row of a unit. |
 | `admitted` | How many the unit took in during **one** run of the compute tile. |
@@ -274,14 +275,14 @@ tile whose array rows exceed `vpu_num_lanes` is spread over several arrays and g
 compute tile of `cc` cycles:
 
 ```text
-B_sys  = Systolic admitted / Systolic capacity_per_cycle          cycles of array work in the compute
-N_eff  = min(num_systolic_array_per_core, max(1, ceil(Systolic admitted / vpu_num_lanes)))
+B_sys  = array admitted / array capacity_per_cycle              cycles of array work in the compute
+N_eff  = min(num_systolic_array_per_core, max(1, ceil(array admitted / vpu_num_lanes)))
 cycles = cc                                                       if N_eff is 1
 cycles = clamp(ceil(cc - B_sys + max(B_sys / N_eff, every other unit's admitted / capacity)), 1, cc)
 ```
 
-With the gemm numbers: `cc` 600, 512 rows, 2 arrays, 256 lanes give `N_eff` 2 and
-600 - 512 + max(256, 50) = 344. The `Systolic` utilization line counts a split compute as
+Here `array` is the unit `systolic_array_unit` names. With the gemm numbers: `cc` 600, 512 rows, 2
+arrays, 128 lanes give `N_eff` 2 and 600 - 512 + max(256, 50) = 344. The array unit's utilization line counts a split compute as
 `B_sys / N_eff`, the busy time of one array.
 
 **What a tile's cycles hold.** A unit cannot be busy for longer than the compute runs, so every row
@@ -294,15 +295,15 @@ admitted <= capacity_per_cycle x cycles x N_eff     the array unit: each of its 
 ```
 
 A TOG with a compute whose `tile_id` has a row above that is
-[refused](#what-gets-a-run-refused) while it is loaded, before anything is simulated: 256 rows at
-1 per cycle do not fit a tile of 230 cycles on one array, and a tile of 0 cycles admits nothing.
+[refused](#what-gets-a-run-refused) while it is loaded, before anything is simulated: 128 rows at
+1 per cycle do not fit a tile of 100 cycles on one array, and a tile of 0 cycles admits nothing.
 Under the split a tile needs about `cc >= B_sys`: 512 rows fit a `cc` of 512 (the compute then
 runs 256 cycles, 256 rows on each of two arrays) and 513 rows do not. The refusal does not depend
 on when the compute runs or on `core_stats_print_period_cycles`. Only the `tile_id`s that a
 compute names are measured.
 
 Because the split is on by default and no shipped config turns it off, **every shipped config
-needs a unit table that has `Systolic` rows**. To run without one, set
+needs a unit table that has rows of its array unit**. To run without one, set
 `systolic_array_split: none` in the machine config (`examples/minimal.yml` does).
 
 ## What gets a run refused
@@ -325,10 +326,10 @@ needs a unit table that has `Systolic` rows**. To run without one, set
 | `[TOGSim] --tog_so needs --cycle_table: the TOG's computes take their cycles from it` | 1 | No `--cycle_table`. | Give the table. |
 | `[TOGSim] cycle table <file> cannot be opened: the TOG's computes take their cycles from it` | 1 | The path of the cycle table is wrong. | Fix the path. |
 | `[TOGSim] TOG <so>: work-item 0 (key 0) computes tile id 0, which the cycle table does not hold (it has no line)` | 1 | The cycle table has a header line, so no row was read. | Remove the header. |
-| `[TOGSim] systolic_array_split (on by default) reads each tile's Systolic rows; give --unit_table, or set systolic_array_split: none` | 1 | No `--unit_table` on a machine with the array split. | Give the table, or turn the split off. |
+| `[TOGSim] systolic_array_split (on by default) reads each tile's TPUV6_MXU rows; give --unit_table, or set systolic_array_split: none` | 1 | No `--unit_table` on a machine with the array split. | Give the table, or turn the split off. |
 | `[TOGSim] --unit_table <file> line 1: expected 5 tab-separated fields (...), got 1` | 1 | The line is separated by spaces, or is a comment. | Use tabs and nothing else. |
 | `[TOGSim] --unit_table <file> line 1: tile_id 'tile_id' is not a non-negative integer` | 1 | The table has a header line. | Remove it. |
-| `[TOGSim] systolic_array_split: the unit table has no array unit Systolic` | 1 | The table has no row for the array unit. | Add a `Systolic` row, or turn the split off. |
+| `[TOGSim] systolic_array_split: the unit table has no array unit TPUV6_MXU` | 1 | The table has no row for the array unit. | Add a row of it, or turn the split off. |
 | `[TOGSim] <dir>/tog_tensors.txt is absent: the TOG's tensor arguments have no addresses` | 1 | No `tog_tensors.txt` beside `tog.so`. | Create it. |
 | `togsim: dlopen failed: valid.so: cannot open shared object file: No such file or directory` | 1 | `--tog_so` has no `/` in it, so the loader searches the library path, not the current directory. | Write `./valid.so`. |
 | `[TOGSim] TOG <so>: work-item 0 (key 0) needs 32768 bytes in the spad at once, and a core's spad holds 16384 (core_spad_size_kb: 16)` | 1 | A work-item holds more bytes in the spad [at once](#buffers-and-the-scratchpad) than `core_spad_size_kb`. | Raise it to at least those bytes, or free a buffer before the next is filled. |
@@ -354,7 +355,7 @@ TOGSim has more refusals than a first TOG runs into. These are not in the exampl
 | `--unit_table <file>: cannot open` | The unit table is not there. |
 | `unit <name> disagrees with line <n> on unit_of_work/capacity` | Two rows of one unit differ in `unit_of_work` or `capacity_per_cycle`. |
 | `second row for tile <id> unit <name>` | Two rows for the same `tile_id` and unit. |
-| `TOG <so>: work-item <n> (key <k>) computes tile id <id>, whose unit table row admits 256 rows to Systolic, and the unit takes 230 in the tile's 230 cycles (1 per cycle)` | A row of that compute tile admits more than the unit takes in [the tile's cycles](#the-unit-table-and-the-array-split). With the array split the line ends `(1 per cycle on each of 2 arrays; the array split leaves 256 of the cycle table's 512 cycles)`. |
+| `TOG <so>: work-item <n> (key <k>) computes tile id <id>, whose unit table row admits 128 rows to TPUV6_MXU, and the unit takes 100 in the tile's 100 cycles (1 per cycle)` | A row of that compute tile admits more than the unit takes in [the tile's cycles](#the-unit-table-and-the-array-split). With the array split the line ends `(1 per cycle on each of 2 arrays; the array split leaves 256 of the cycle table's 512 cycles)`. |
 | `exceeds capacity`, then `[TOGSim] --unit_table: a unit ...` | During the run a unit took in more than its capacity allows in the cycles it had, in one statistics interval or in the whole run: a check on the sum of the computes that ran, which the tiles that fit their cycles do not reach. |
 | `--unit_table is keyed by one TOG's tile_ids` | `--unit_table` was given with `--models_list`. |
 | `no tog.so next to <tog_path>`, `no tog_units.tsv next to <tog_path>`, `cycle table <dir>/tog_cycles.tsv cannot be opened` | A `LAUNCH_KERNEL` whose directory lacks the file. |
@@ -377,6 +378,6 @@ If you emit TOGs from another frontend, this is the whole contract:
 6. Write `tog_tensors.txt` (and `tog_shape.txt` if the kernel reads shape arguments) beside the
    `.so`.
 7. Write the cycle table, one row per `tile_id` and no header, and the unit table, with at least
-   one row per `tile_id` and a `Systolic` row for every compute tile that uses the array.
+   one row per `tile_id` and a row of the array unit for every compute tile that uses the array.
 8. Replay once with `--log_level trace` and check that there is no `[warning]` line, and the
    computes, addresses and issue order.

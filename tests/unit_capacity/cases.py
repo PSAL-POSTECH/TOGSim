@@ -10,7 +10,7 @@ TILE = 1                    # the tile id the TOG's one compute names
 
 def rows(tile=TILE, **admitted):
     """Unit table rows of `tile`: `admitted` of each unit named, the array (1 row per cycle) first."""
-    units = dict(Systolic=("rows", 1), Vpu=("cycles", 1), Issue=("micro-ops", 12))
+    units = dict(TPUV6_MXU=("rows", 1), Vpu=("cycles", 1), Issue=("micro-ops", 12))
     return [(tile, unit, *units[unit], admitted[unit]) for unit in units if unit in admitted]
 
 
@@ -24,7 +24,7 @@ def refusal(admitted, work, unit, takes, window, capacity=1, arrays=1, table=Non
 
 
 def replay(t, cycles, units, *defines, **machine):
-    """--tog_so: the TOG on tpuv6e (2 arrays per core, 256 lanes) with `machine` set; tile 1 takes `cycles`, tile 0
+    """--tog_so: the TOG on tpuv6e (2 arrays per core, 128 lanes) with `machine` set; tile 1 takes `cycles`, tile 0
     ten cycles, `units` is the unit table."""
     return t.simulate(t.tog(TOG, defines, tensors=(MIB, MIB)), t.machine(**machine), [10, cycles], units)
 
@@ -60,20 +60,20 @@ def expect_computes(run, *cycles):
 
 LIMITS = {
     "array_unit_on_one_array": (
-        230, dict(Systolic=230), 230, "Systolic", refusal(231, "rows", "Systolic", 230, 230),
+        100, dict(TPUV6_MXU=100), 100, "TPUV6_MXU", refusal(101, "rows", "TPUV6_MXU", 100, 100),
         dict(num_systolic_array_per_core=4)),
     "array_unit_over_two_arrays": (
-        512, dict(Systolic=512), 256, "Systolic", refusal(513, "rows", "Systolic", 512, 256, arrays=2, table=512),
+        512, dict(TPUV6_MXU=512), 256, "TPUV6_MXU", refusal(513, "rows", "TPUV6_MXU", 512, 256, arrays=2, table=512),
         {}),
     "array_unit_without_the_split": (
-        512, dict(Systolic=512), 512, "Systolic", refusal(513, "rows", "Systolic", 512, 512),
+        512, dict(TPUV6_MXU=512), 512, "TPUV6_MXU", refusal(513, "rows", "TPUV6_MXU", 512, 512),
         dict(systolic_array_split="none")),
     "vector_unit": (
-        600, dict(Systolic=0, Vpu=600), 600, "Vpu", refusal(601, "cycles", "Vpu", 600, 600), {}),
+        600, dict(TPUV6_MXU=0, Vpu=600), 600, "Vpu", refusal(601, "cycles", "Vpu", 600, 600), {}),
     "vector_unit_beside_a_split_array": (
-        700, dict(Systolic=512, Vpu=700), 700, "Vpu", refusal(701, "cycles", "Vpu", 700, 700), {}),
+        700, dict(TPUV6_MXU=512, Vpu=700), 700, "Vpu", refusal(701, "cycles", "Vpu", 700, 700), {}),
     "unit_of_capacity_12": (
-        600, dict(Systolic=0, Issue=7200), 600, "Issue", refusal(7201, "micro-ops", "Issue", 7200, 600, capacity=12),
+        600, dict(TPUV6_MXU=0, Issue=7200), 600, "Issue", refusal(7201, "micro-ops", "Issue", 7200, 600, capacity=12),
         {}),
 }
 
@@ -100,28 +100,28 @@ TIMINGS = {
 
 
 def refused_at_every_timing(machine):
-    """256 rows on one array (of four) in 230 cycles, with a row of TIMINGS set: the refusal is the tile's, whenever
+    """128 rows on one array (of four) in 100 cycles, with a row of TIMINGS set: the refusal is the tile's, whenever
     its compute would have run and however long a statistics interval is."""
-    saying = refusal(256, "rows", "Systolic", 230, 230)
+    saying = refusal(128, "rows", "TPUV6_MXU", 100, 100)
     return lambda t: expect_refused_before_the_run(
-        replay(t, 230, rows(Systolic=256), num_systolic_array_per_core=4, **machine), saying, t.work_dir / "tog.so")
+        replay(t, 100, rows(TPUV6_MXU=128), num_systolic_array_per_core=4, **machine), saying, t.work_dir / "tog.so")
 
 
 def no_cycles_admit_nothing(t):
     """A tile of 0 cycles whose rows admit nothing runs; one Vpu cycle in it is refused."""
-    replay(t, 0, rows(Systolic=0, Vpu=0)).expect_ok()
-    expect_refused_before_the_run(replay(t, 0, rows(Systolic=0, Vpu=1)), refusal(1, "cycles", "Vpu", 0, 0),
+    replay(t, 0, rows(TPUV6_MXU=0, Vpu=0)).expect_ok()
+    expect_refused_before_the_run(replay(t, 0, rows(TPUV6_MXU=0, Vpu=1)), refusal(1, "cycles", "Vpu", 0, 0),
                                   t.work_dir / "tog.so")
 
 
 def tile_no_compute_names_is_not_measured(t):
     """Tile 0 admits 999 rows in its ten cycles and no compute names it: the run is that of the table without those
     rows. Named (TILE_ID=0), it is refused: the split leaves the tile one cycle, and two arrays take two rows."""
-    fits, over = rows(Systolic=512), rows(Systolic=512) + rows(0, Systolic=999)
+    fits, over = rows(TPUV6_MXU=512), rows(TPUV6_MXU=512) + rows(0, TPUV6_MXU=999)
     totals = [replay(t, 600, units).expect_ok().total_cycles() for units in (fits, over)]
     if totals[0] != totals[1]:
         raise Failure(f"expected one total with and without the rows of tile 0, got {totals}")
-    saying = refusal(999, "rows", "Systolic", 2, 1, arrays=2, table=10, tile=0)
+    saying = refusal(999, "rows", "TPUV6_MXU", 2, 1, arrays=2, table=10, tile=0)
     expect_refused_before_the_run(replay(t, 600, over, "TILE_ID=0"), saying, t.work_dir / "tog.so")
 
 
@@ -133,26 +133,26 @@ def expect_launch_refused(run, command, saying, so):
 
 
 def session_filled_exactly_runs(t):
-    expect_computes(session(t, (512, rows(Systolic=512)), (512, rows(Systolic=512))), 256, 256)
+    expect_computes(session(t, (512, rows(TPUV6_MXU=512)), (512, rows(TPUV6_MXU=512))), 256, 256)
 
 
 def session_one_more_refused(t):
     """The launch is refused: the line is the command's, and names the kernel's tog.so."""
-    expect_launch_refused(session(t, (512, rows(Systolic=513))), 0,
-                          refusal(513, "rows", "Systolic", 512, 256, arrays=2, table=512), t.work_dir / "k0" / "tog.so")
+    expect_launch_refused(session(t, (512, rows(TPUV6_MXU=513))), 0,
+                          refusal(513, "rows", "TPUV6_MXU", 512, 256, arrays=2, table=512), t.work_dir / "k0" / "tog.so")
 
 
 def session_second_kernel_refused(t):
     """Kernel 0 fills its tile and kernel 1 admits one row more: the session ends at kernel 1's launch, and the line
     names the tile id as kernel 1's TOG does, not its row in the joined table."""
-    expect_launch_refused(session(t, (512, rows(Systolic=512)), (512, rows(Systolic=513))), 1,
-                          refusal(513, "rows", "Systolic", 512, 256, arrays=2, table=512), t.work_dir / "k1" / "tog.so")
+    expect_launch_refused(session(t, (512, rows(TPUV6_MXU=512)), (512, rows(TPUV6_MXU=513))), 1,
+                          refusal(513, "rows", "TPUV6_MXU", 512, 256, arrays=2, table=512), t.work_dir / "k1" / "tog.so")
 
 
 CASES = [case for name, how in LIMITS.items() for case in (
     Case(f"{name}.filled_exactly_runs", filled_exactly_runs(*how)),
     Case(f"{name}.refused.one_more", one_more_refused(*how)))] + [
-    Case(f"refused.256_rows_in_230_cycles.{name}", refused_at_every_timing(machine))
+    Case(f"refused.128_rows_in_100_cycles.{name}", refused_at_every_timing(machine))
     for name, machine in TIMINGS.items()] + [
     Case("no_cycles_admit_nothing", no_cycles_admit_nothing),
     Case("tile_no_compute_names_is_not_measured", tile_no_compute_names_is_not_measured),
