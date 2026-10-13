@@ -284,6 +284,23 @@ With the gemm numbers: `cc` 600, 512 rows, 2 arrays, 256 lanes give `N_eff` 2 an
 600 - 512 + max(256, 50) = 344. The `Systolic` utilization line counts a split compute as
 `B_sys / N_eff`, the busy time of one array.
 
+**What a tile's cycles hold.** A unit cannot be busy for longer than the compute runs, so every row
+of a compute tile must fit the cycles the tile gets, which are `cycles` above (`cc` without the
+split, with `N_eff` 1, or when `cc` is 0):
+
+```text
+admitted <= capacity_per_cycle x cycles             every unit but the array
+admitted <= capacity_per_cycle x cycles x N_eff     the array unit: each of its N_eff arrays takes its share
+```
+
+A TOG with a compute whose `tile_id` has a row above that is
+[refused](#what-gets-a-run-refused) while it is loaded, before anything is simulated: 256 rows at
+1 per cycle do not fit a tile of 230 cycles on one array, and a tile of 0 cycles admits nothing.
+Under the split a tile needs about `cc >= B_sys`: 512 rows fit a `cc` of 512 (the compute then
+runs 256 cycles, 256 rows on each of two arrays) and 513 rows do not. The refusal does not depend
+on when the compute runs or on `core_stats_print_period_cycles`. Only the `tile_id`s that a
+compute names are measured.
+
 Because the split is on by default and no shipped config turns it off, **every shipped config
 needs a unit table that has `Systolic` rows**. To run without one, set
 `systolic_array_split: none` in the machine config (`examples/minimal.yml` does).
@@ -337,7 +354,8 @@ TOGSim has more refusals than a first TOG runs into. These are not in the exampl
 | `--unit_table <file>: cannot open` | The unit table is not there. |
 | `unit <name> disagrees with line <n> on unit_of_work/capacity` | Two rows of one unit differ in `unit_of_work` or `capacity_per_cycle`. |
 | `second row for tile <id> unit <name>` | Two rows for the same `tile_id` and unit. |
-| `exceeds capacity`, then `[TOGSim] --unit_table: a unit ...` | A unit took in more than its capacity allows in the cycles it had. |
+| `TOG <so>: work-item <n> (key <k>) computes tile id <id>, whose unit table row admits 256 rows to Systolic, and the unit takes 230 in the tile's 230 cycles (1 per cycle)` | A row of that compute tile admits more than the unit takes in [the tile's cycles](#the-unit-table-and-the-array-split). With the array split the line ends `(1 per cycle on each of 2 arrays; the array split leaves 256 of the cycle table's 512 cycles)`. |
+| `exceeds capacity`, then `[TOGSim] --unit_table: a unit ...` | During the run a unit took in more than its capacity allows in the cycles it had, in one statistics interval or in the whole run: a check on the sum of the computes that ran, which the tiles that fit their cycles do not reach. |
 | `--unit_table is keyed by one TOG's tile_ids` | `--unit_table` was given with `--models_list`. |
 | `no tog.so next to <tog_path>`, `no tog_units.tsv next to <tog_path>`, `cycle table <dir>/tog_cycles.tsv cannot be opened` | A `LAUNCH_KERNEL` whose directory lacks the file. |
 | `unit <name> is not one the first kernel's table has` | In a session, a later kernel's unit table names a new unit. |

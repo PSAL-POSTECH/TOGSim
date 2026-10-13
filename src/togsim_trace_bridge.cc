@@ -173,9 +173,9 @@ struct BuildState {
   }
 
   // ---- index + footprint --------------------------------------------------
-  // Open the TOG and replay every work-item once: a DMA'd buffer is as large as the TOG states, and a TOG
-  // is refused for a buffer it does not size or a compute whose tile id the cycle table does not hold.
-  // What still runs is named in one warning each: tile ids without unit table rows, arg_ids beyond the tensors.
+  // Open the TOG and replay every work-item once: a DMA'd buffer is as large as the TOG states, and a TOG is refused
+  // for a buffer it does not size, or a compute whose tile id the cycle table does not hold or whose unit table rows
+  // exceed what a unit takes in the tile's cycles. Warned once each: tile ids without unit rows, stray arg_ids.
   bool index(const char* so_path, const int64_t* shape_args, int32_t n_shape,
              const uint64_t* tensor_base, int32_t n_tensors,
              const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,
@@ -185,7 +185,7 @@ struct BuildState {
                    cyc, ovl, n_tiles, partition_cores, n_partition_cores))
       return false;
     const std::vector<int64_t>& stated = tog.spad_buffer_bytes();
-    std::set<uint64_t> unitless;
+    std::set<uint64_t> unitless, fitted;
     std::set<int64_t> stray_args;
     for (size_t i = 0; i < tog.num_items(); i++)
       for (const TraceRec& t : tog.run_item(i)) {
@@ -197,6 +197,12 @@ struct BuildState {
                                  : std::string("it has no line")));
         if (t.kind == TraceRec::COMPUTE && units && !units->has_rows(unit_tile_base + (int64_t)t.tile_id))
           unitless.insert(t.tile_id);
+        if (t.kind == TraceRec::COMPUTE && units && fitted.insert(t.tile_id).second) {
+          const std::string over = units->overfull(unit_tile_base + (int64_t)t.tile_id, (uint64_t)t.cycle);
+          if (!over.empty())
+            throw std::runtime_error(fmt::format("[TOGSim] TOG {}: work-item {} (key {}) computes tile id {}, {}",
+                                                 so_path, i, tog.item_key(i), t.tile_id, over));
+        }
         if (t.kind == TraceRec::COMPUTE && typed::is_typed(t.compute_type))
           typed::Units::warn_deprecated_once(so_path);
         if (t.kind != TraceRec::DMA) continue;

@@ -15,7 +15,8 @@ REFUSED = {
     "refused.split_without_unit_table": dict(
         saying="give --unit_table, or set systolic_array_split: none", exit=1, units=None),
     "refused.spread_exceeds_one_array": dict(
-        saying="Systolic spread", exit=1, num_systolic_array_per_core=4, cycles=230,
+        saying="computes tile id 0, whose unit table row admits 256 rows to Systolic, and the unit takes 230 in the "
+               "tile's 230 cycles (1 per cycle)", exit=1, num_systolic_array_per_core=4, cycles=230,
         units=[(0, "Systolic", "rows", 1, 256), (0, "Vpu", "cycles", 1, 50)]),
 }
 

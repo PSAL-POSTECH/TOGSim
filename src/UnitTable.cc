@@ -101,6 +101,22 @@ UnitTable::Window UnitTable::window(int64_t tile_id, uint64_t cc) const {
   return {(uint64_t)std::clamp(shortened, 1.0, (double)cc), n_eff};
 }
 
+std::string UnitTable::overfull(int64_t tile_id, uint64_t cc) const {
+  const Window w = window(tile_id, cc);
+  for (auto& [u, admitted] : rows(tile_id)) {
+    const Unit& unit = _units[u];
+    const uint64_t arrays = (int64_t)u == _array_unit ? w.n_eff : 1;
+    const unsigned __int128 takes = (unsigned __int128)unit.capacity * arrays * w.cycles;
+    if ((unsigned __int128)admitted <= takes) continue;
+    return fmt::format("whose unit table row admits {} {} to {}, and the unit takes {} in the tile's {} cycles ({} per "
+                       "cycle{}{})", admitted, unit.unit_of_work, unit.name, (uint64_t)takes, w.cycles, unit.capacity,
+                       arrays > 1 ? fmt::format(" on each of {} arrays", arrays) : "",
+                       w.cycles != cc ? fmt::format("; the array split leaves {} of the cycle table's {} cycles",
+                                                    w.cycles, cc) : "");
+  }
+  return {};
+}
+
 bool UnitTable::print(const std::string& who, size_t u, uint64_t admitted, uint64_t cycles, bool check) const {
   const Unit& unit = _units[u];
   const uint64_t cap = unit.capacity;
