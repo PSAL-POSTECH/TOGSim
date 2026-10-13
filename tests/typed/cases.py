@@ -111,11 +111,18 @@ SPLIT = {
     "shorter_matmul_over_two_arrays": dict(
         matmul=588, why="1100 - 1024 + 1024/2", cycles=matmul_cycles(1100)),
 }
+OVER_ONE_ARRAY = dict(
+    saying="computes tile id 5, whose unit table row admits 256 rows to Systolic, and the unit takes 230 in the "
+           "tile's 230 cycles (1 per cycle)",
+    exit=1, num_systolic_array_per_core=4, cycles=matmul_cycles(230), units=admitted(MATMUL_TILE, "Systolic", 256))
 SPLIT_REFUSED = {
-    "refused.spread_exceeds_one_array": dict(
-        saying="Systolic spread", exit=1, num_systolic_array_per_core=4, cycles=matmul_cycles(230),
-        core_stats_print_period_cycles=20,
-        units=admitted(MATMUL_TILE, "Systolic", 256)),
+    "refused.spread_exceeds_one_array": OVER_ONE_ARRAY,
+    "refused.spread_exceeds_one_array.icnt_32_ports_at_1751_mhz": dict(
+        OVER_ONE_ARRAY, icnt_injection_ports_per_core=32, core_freq_mhz=1751),
+    "refused.spread_exceeds_one_array.icnt_32_ports_at_1751_mhz_statistics_every_230_cycles": dict(
+        OVER_ONE_ARRAY, icnt_injection_ports_per_core=32, core_freq_mhz=1751, core_stats_print_period_cycles=230),
+    "refused.spread_exceeds_one_array.statistics_every_10000_cycles": dict(
+        OVER_ONE_ARRAY, core_stats_print_period_cycles=10000),
 }
 
 
@@ -131,8 +138,12 @@ def split(matmul, why, **given):
 
 
 def split_refused(saying, exit, **given):
-    """The run is refused with `saying` and that exit status."""
-    return lambda t: gemm512(t, **given).expect_refused(saying, exit)
+    """The TOG is refused with `saying` and that exit status while it is loaded: no instruction is traced."""
+    def case(t):
+        run = gemm512(t, **given).expect_refused(saying, exit)
+        if run.events():
+            run.fail("expected the refusal before anything was simulated, found instruction trace lines")
+    return case
 
 
 CASES = [

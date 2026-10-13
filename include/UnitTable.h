@@ -46,6 +46,9 @@ class UnitTable {
   // cc - B_sys and runs the longest of B_sys / N_eff and every other unit's B_u, never longer than `cc`.
   // Without the split, with N_eff 1 or with cc 0: cc as is, on one array.
   Window window(int64_t tile_id, uint64_t cc) const;
+  // The first unit one run of `tile_id` asks more of than the unit takes in that window (admitted > capacity x
+  // cycles, x N_eff for the array unit), as the clause a refusal ends with; empty when every unit's work fits.
+  std::string overfull(int64_t tile_id, uint64_t cc) const;
   // The (unit, admitted) rows of one run of `tile_id`; empty for an unknown tile.
   const std::vector<std::pair<size_t, uint64_t>>& rows(int64_t tile_id) const {
     static const std::vector<std::pair<size_t, uint64_t>> none;
