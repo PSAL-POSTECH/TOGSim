@@ -135,7 +135,7 @@ def version_left_open_refused(t):
 
 def work_items(t, body, sizes, spad_kb, items=1, cores=1):
     """--tog_so: `items` work-items of work_item_tog.cpp, each the calls `body`, with buffers of `sizes` bytes (buffer
-    0 first), on `cores` tpuv6e cores with a `spad_kb` KB spad each; a load or store takes 8 MiB of its tensor at most."""
+    0 first), on `cores` tpuv6e cores with a `spad_kb` KB spad each."""
     tog = t.tog("work_item_tog.cpp", (f"BODY={body}", f"SIZES={','.join(str(b) for b in sizes)}", f"ITEMS={items}"),
                 tensors=(256 * MIB, 256 * MIB))
     machine = t.machine(**spad_alone(spad_kb), systolic_array_split="none", num_cores=cores)
@@ -197,6 +197,14 @@ def unread_output_does_not_count_for_what_it_waits_for(t):
     work_items(t, body, sizes, 32, items=2).expect_ok()
     expect_refused_before_the_run(work_items(t, body, sizes, 31, items=2), refusal(0, 32 * KB, 31),
                                   t.work_dir / "tog.so")
+
+
+def updated_in_place_and_never_read(t):
+    """Buffer 1 (16 KB) is loaded and then only updated in place: nothing frees it before its work-item ends. The
+    compute that updates it waits for its load and for a second 16 KB load: 32 KB at once, not 16."""
+    body, sizes = "L(1); L(2); C({1, 2}, {1})", (0, 16 * KB, 16 * KB)
+    work_items(t, body, sizes, 32).expect_ok()
+    expect_refused_before_the_run(work_items(t, body, sizes, 31), refusal(0, 32 * KB, 31), t.work_dir / "tog.so")
 
 
 def two_in_flight_only_when_two_of_what_one_needs_fit(t):
@@ -331,6 +339,7 @@ CASES = [
     Case("unread_load.counts_for_what_does_not_wait_for_it.stated_last",
          unread_load_counts_for_what_does_not_wait_for_it("L(2); C({2}, {}); L(1)")),
     Case("unread_output_does_not_count_for_what_it_waits_for", unread_output_does_not_count_for_what_it_waits_for),
+    Case("refused.updated_in_place_and_never_read", updated_in_place_and_never_read),
     Case("two_in_flight_only_when_two_of_what_one_needs_fit", two_in_flight_only_when_two_of_what_one_needs_fit),
     Case("buffer_ids_are_per_work_item.loaded_and_read", buffer_ids_are_per_work_item("L(1); C({1}, {})")),
     Case("buffer_ids_are_per_work_item.loaded_only", buffer_ids_are_per_work_item("L(1)")),

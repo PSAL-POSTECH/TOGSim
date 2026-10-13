@@ -1,5 +1,5 @@
 """--models_list: a command stream launches kernels, each from a directory holding tog.so and its tables."""
-from togtest import MIB, REPO, Case, spad_alone, write_table
+from togtest import MIB, REPO, TIMEOUT_S, Case, spad_alone, write_table
 
 PARTITIONED = REPO / "configs" / "systolic_ws_128x128_c2_simple_noc_tpuv3_partition.yml"
 KERNELS = {0: dict(cycles=600, rows=256), 1: dict(cycles=900, rows=512)}
@@ -10,11 +10,11 @@ def units(kernel_id, array="TPUV6_MXU"):
     return [(0, array, "rows", 1, KERNELS[kernel_id]["rows"]), (0, "Vpu", "cycles", 1, 100)]
 
 
-def kernel(t, kernel_id, table=True, tog=True, array="TPUV6_MXU", items=2):
+def kernel(t, kernel_id, table=True, tog=True, array="TPUV6_MXU", items=2, defines=()):
     """<work dir>/k<id>/: tog.so (of `items` work-items), tog_tensors.txt, tog_cycles.tsv and tog_units.tsv of
     KERNELS[id] naming `array` (`table` may replace the unit table or, False, leave it out; `tog` False leaves tog.so
     out). Returns the directory."""
-    home = t.tog("kernel_tog.cpp", (f"ITEMS={items}",), tensors=(MIB, MIB), into=f"k{kernel_id}").parent
+    home = t.tog("kernel_tog.cpp", (f"ITEMS={items}", *defines), tensors=(MIB, MIB), into=f"k{kernel_id}").parent
     write_table(home / "tog_cycles.tsv", [(KERNELS[kernel_id]["cycles"], 0)])
     if table:
         write_table(home / "tog_units.tsv", units(kernel_id, array) if table is True else table)
@@ -23,11 +23,12 @@ def kernel(t, kernel_id, table=True, tog=True, array="TPUV6_MXU", items=2):
     return home
 
 
-def session(t, config, lines, *more):
+def session(t, config, lines, *more, timeout=TIMEOUT_S):
     """Run the command stream `lines` on `config` at --log_level trace; `more` is appended to the command line."""
     stream = t.work_dir / "commands.txt"
     stream.write_text("".join(f"{line}\n" for line in lines))
-    return t.execute("Simulator", ["--config", config, "--models_list", stream, "--log_level", "trace", *more])
+    return t.execute("Simulator", ["--config", config, "--models_list", stream, "--log_level", "trace", *more],
+                     timeout)
 
 
 def launch(home, kernel_id, partition=0):
@@ -78,7 +79,8 @@ def second_kernel_runs(items, cores):
     every work-item of both is replayed, whatever `items` is, and each kernel's completion is logged."""
     def case(t):
         homes = [kernel(t, 0, items=items), kernel(t, 1)]
-        run = session(t, t.machine(num_cores=cores), [launch(homes[0], 0), launch(homes[1], 1)]).expect_ok()
+        run = session(t, t.machine(num_cores=cores), [launch(homes[0], 0), launch(homes[1], 1)], timeout=60)
+        run.expect_ok()
         ran = sorted(c.cycles for c in run.computes())
         if ran != [472] * items + [644] * 2:
             run.fail(f"expected kernel 0's {items} computes of 472 cycles and kernel 1's two of 644, got {ran}")
@@ -86,6 +88,15 @@ def second_kernel_runs(items, cores):
             if f"[Scheduler 0] Kernel {kernel_id} has completed" not in run.log:
                 run.fail(f"expected kernel {kernel_id}'s completion line")
     return case
+
+
+def second_kernel_runs_after_one_that_ends_at_once(t):
+    """Kernel 0 is one work-item that makes no call, so it ends in the cycle it is handed to the core and leaves the
+    core idle; kernel 1 was launched behind it with no DEVICE_SYNC between, and is replayed all the same."""
+    homes = [kernel(t, 0, items=1, defines=("NO_CALLS",)), kernel(t, 1)]
+    run = session(t, t.machine(), [launch(homes[0], 0), launch(homes[1], 1)], timeout=60).expect_ok()
+    if sorted(c.cycles for c in run.computes()) != [644] * 2:
+        run.fail(f"expected kernel 1's two computes of 644 cycles, got {sorted(c.cycles for c in run.computes())}")
 
 
 def two_loads(t, kernel_id, first, second=0):
@@ -139,6 +150,7 @@ CASES = [
     Case("two_partitions_side_by_side", two_partitions_side_by_side),
     *[Case(f"second_kernel_runs.after_{items}_items.{cores}_cores", second_kernel_runs(items, cores))
       for items in (1, 2, 3, 4, 5) for cores in (1, 2)],
+    Case("second_kernel_runs.after_one_that_ends_at_once", second_kernel_runs_after_one_that_ends_at_once),
     Case("kernels_free_their_own_spad_bytes", kernels_free_their_own_spad_bytes),
     Case("refused.unit_table_flag", unit_table_flag_refused),
     Case("refused.kernel_without_unit_table", kernel_without_unit_table_refused),
