@@ -60,11 +60,13 @@ void Core::process_due_events() {
   }
 }
 
-// The LAST reader of a buffer-version issued (bridge tags only that consumer):
-// free the version's bytes back to the per-core spad.
+// A reader of buffer versions is issued: a version whose last reader this is gives its bytes back.
 void Core::release_sram(const std::shared_ptr<Instruction>& inst) {
   if (!_sram_capacity) return;
   for (int64_t id : inst->get_sram_release()) {
+    auto readers = _sram_readers.find(id);
+    if (readers == _sram_readers.end() || --readers->second > 0) continue;
+    _sram_readers.erase(readers);
     auto it = _sram_allocs.find(id);
     if (it == _sram_allocs.end()) continue;
     _sram_used -= it->second;
@@ -116,6 +118,8 @@ void Core::issue(std::shared_ptr<Tile> op) {
   }
   for (const auto& inst : op->get_instructions()) {
     inst->set_owner_dirty(&_issue_dirty);   // dep-resolved enqueues re-arm THIS core
+    if (_sram_capacity)
+      for (int64_t id : inst->get_sram_release()) _sram_readers[id]++;
     if (inst->is_ready())
       op->enqueue_ready(inst);
   }
