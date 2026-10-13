@@ -18,7 +18,7 @@ l2d_config: S:128:128:512,32,L:T:m:W:L,A:192:4,32:0,32
 icnt_type: simple
 icnt_latency_cycles: 10
 icnt_freq_mhz: 1751
-icnt_injection_ports_per_core: 16
+icnt_injection_ports_per_core: 32
 
 pytorchsim_functional_mode: 1
 pytorchsim_timing_mode: 1
