@@ -9,7 +9,9 @@ void Scheduler::enqueue_graph(std::unique_ptr<TileGraph> tile_graph) {
   refresh_status();
 }
 
+// The front kernel leaves the queue once it has handed out its last work-item.
 const std::shared_ptr<Tile> Scheduler::peek_tile(int core_id, int slot_id, CoreType ctype) {
+  refresh_status();
   if (_tile_graph.empty() || _tile_graph.at(0)->get_arrival_time() > *_core_cycle)
     return std::make_unique<Tile>(Tile(Tile::Status::EMPTY));
   if (ctype == CoreType::WS_MESH)
@@ -38,10 +40,11 @@ bool Scheduler::empty() {
   return false;
 }
 
+// A kernel queued behind the front one is work for the core as well.
 bool Scheduler::empty(int core_id) {
-  if (_tile_graph.empty())
-    return true;
-  return _tile_graph.at(0)->empty(core_id);
+  for (const auto& graph : _tile_graph)
+    if (!graph->empty(core_id)) return false;
+  return true;
 }
 
 void Scheduler::refresh_status() {

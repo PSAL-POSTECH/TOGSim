@@ -10,11 +10,11 @@ def units(kernel_id, array="TPUV6_MXU"):
     return [(0, array, "rows", 1, KERNELS[kernel_id]["rows"]), (0, "Vpu", "cycles", 1, 100)]
 
 
-def kernel(t, kernel_id, table=True, tog=True, array="TPUV6_MXU"):
-    """<work dir>/k<id>/: tog.so, tog_tensors.txt, tog_cycles.tsv and tog_units.tsv of KERNELS[id] naming `array`
-    (`table` may replace the unit table or, False, leave it out; `tog` False leaves tog.so out). Returns the
-    directory."""
-    home = t.tog("kernel_tog.cpp", tensors=(MIB, MIB), into=f"k{kernel_id}").parent
+def kernel(t, kernel_id, table=True, tog=True, array="TPUV6_MXU", items=2):
+    """<work dir>/k<id>/: tog.so (of `items` work-items), tog_tensors.txt, tog_cycles.tsv and tog_units.tsv of
+    KERNELS[id] naming `array` (`table` may replace the unit table or, False, leave it out; `tog` False leaves tog.so
+    out). Returns the directory."""
+    home = t.tog("kernel_tog.cpp", (f"ITEMS={items}",), tensors=(MIB, MIB), into=f"k{kernel_id}").parent
     write_table(home / "tog_cycles.tsv", [(KERNELS[kernel_id]["cycles"], 0)])
     if table:
         write_table(home / "tog_units.tsv", units(kernel_id, array) if table is True else table)
@@ -73,6 +73,21 @@ def two_partitions_side_by_side(t):
     run.total_cycles()
 
 
+def second_kernel_runs(items, cores):
+    """Kernel 0 of `items` work-items, then kernel 1 of two, launched with no DEVICE_SYNC between on `cores` cores:
+    every work-item of both is replayed, whatever `items` is, and each kernel's completion is logged."""
+    def case(t):
+        homes = [kernel(t, 0, items=items), kernel(t, 1)]
+        run = session(t, t.machine(num_cores=cores), [launch(homes[0], 0), launch(homes[1], 1)]).expect_ok()
+        ran = sorted(c.cycles for c in run.computes())
+        if ran != [472] * items + [644] * 2:
+            run.fail(f"expected kernel 0's {items} computes of 472 cycles and kernel 1's two of 644, got {ran}")
+        for kernel_id in (0, 1):
+            if f"[Scheduler 0] Kernel {kernel_id} has completed" not in run.log:
+                run.fail(f"expected kernel {kernel_id}'s completion line")
+    return case
+
+
 def two_loads(t, kernel_id, first, second=0):
     """<work dir>/k<id>/: the two-loads TOG with loads of `first` and `second` bytes, and KERNELS[id]'s tables."""
     home = t.tog("two_loads_tog.cpp", (f"FIRST_BYTES={first}", f"SECOND_BYTES={second}"), tensors=(MIB,),
@@ -122,6 +137,8 @@ def second_kernel_with_another_unit_refused(t):
 CASES = [
     Case("two_kernels_one_after_the_other", two_kernels_one_after_the_other),
     Case("two_partitions_side_by_side", two_partitions_side_by_side),
+    *[Case(f"second_kernel_runs.after_{items}_items.{cores}_cores", second_kernel_runs(items, cores))
+      for items in (1, 2, 3, 4, 5) for cores in (1, 2)],
     Case("kernels_free_their_own_spad_bytes", kernels_free_their_own_spad_bytes),
     Case("refused.unit_table_flag", unit_table_flag_refused),
     Case("refused.kernel_without_unit_table", kernel_without_unit_table_refused),
