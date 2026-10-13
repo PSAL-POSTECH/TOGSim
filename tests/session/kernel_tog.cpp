@@ -1,6 +1,10 @@
-// One kernel of a session: two work-items (so a two-core partition uses both cores), each a 16 KB load, one
+// One kernel of a session: ITEMS work-items (two, so a two-core partition uses both cores), each a 16 KB load, one
 // compute tile and a 16 KB store. compute_type 0: the segment grouping.
 #include "togsim_runtime.h"
+
+#ifndef ITEMS
+#define ITEMS 2
+#endif
 
 #define ROWS 64
 #define COLS 64
@@ -17,7 +21,7 @@ static void tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
 
 extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape_args) {
   (void)shape_args; (void)n_shape_args;
-  for (int64_t i = 0; i < 2; i++) {
+  for (int64_t i = 0; i < ITEMS; i++) {
     int64_t iv[1] = {i};
     togsim_dispatch(ctx, tile, iv, 1, i);
   }
