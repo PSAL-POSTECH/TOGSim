@@ -331,8 +331,7 @@ def needs_at_once_measured_beside_the_held_bytes(t):
 
 def loads_everything_it_reads_is_unchanged(t, session):
     """The same four work-items with every buffer loaded, the form every TOG had before: nothing is held, no hold
-    is traced, and the footprint, the number in flight and the total are those of the tree before held buffers were
-    defined (origin/main a1c4209, measured there)."""
+    is traced, and the footprint, the number in flight and the total are those of main, which has no held buffers."""
     run, _ = replay(t, "L(1); L(2); C({1, 2}, {3}); S(3)", sizes(b1=12 * KB, b2=12 * KB, b3=24 * KB), 96, items=4,
                     session=session)
     run.expect_total_cycles(1171)
