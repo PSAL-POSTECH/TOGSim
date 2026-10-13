@@ -23,6 +23,12 @@ WARNED = re.compile(r"^\[[^\]]*\] \[warning\] (.*)$", re.M)
 _built, _locks, _guard = {}, {}, threading.Lock()
 
 
+def spad_alone(kb):
+    """Machine keys for a spad of `kb` KB stated alone: tpuv6e's vpu_spad_size_kb_per_lane, which with its lanes
+    would make the spad 128 MB, left out (None: no core_spad_size_kb either, so no limit)."""
+    return dict(vpu_spad_size_kb_per_lane=None, core_spad_size_kb=kb)
+
+
 def no_core_dumps():
     """Keep a run that aborts (a rejected config exits 134) from dumping core, for this process and its children.
     A piped core_pattern (systemd-coredump) still runs its helper at RLIMIT_CORE 0; 1 is what the kernel skips."""
@@ -225,17 +231,20 @@ class Ctx:
 
     def machine(self, base=TPUV6E, **keys):
         """<work dir>/machine.yml: configs/<base> with each of `keys` set (in place where the base has it, appended
-        otherwise) and the Ramulator2 / BookSim2 paths made absolute, as the file leaves configs/."""
+        otherwise; None: left out) and the Ramulator2 / BookSim2 paths made absolute, as the file leaves configs/."""
         src = REPO / "configs" / base
         lines, left = [], dict(keys)
         for line in src.read_text().splitlines():
             m = re.match(r"([A-Za-z_]\w*):\s*(.*)$", line)
+            if m and m[1] in left and left[m[1]] is None:
+                del left[m[1]]
+                continue
             if m and m[1] in left:
                 line = f"{m[1]}: {left.pop(m[1])}"
             elif m and m[1] in ("ramulator_config_path", "booksim_config_path") and not os.path.isabs(m[2]):
                 line = f"{m[1]}: {os.path.normpath(src.parent / m[2])}"
             lines.append(line)
-        lines += [f"{k}: {v}" for k, v in left.items()]
+        lines += [f"{k}: {v}" for k, v in left.items() if v is not None]
         out = self.work_dir / "machine.yml"
         out.write_text("\n".join(lines) + "\n")
         return out

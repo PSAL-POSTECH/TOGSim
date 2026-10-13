@@ -27,7 +27,6 @@ codegen_external_mapping_file: ""
 codegen_autotune_max_retry: N
 codegen_autotune_template_topk: N
 codegen_compiler_optimization: all
-core_spad_size_kb: N
 [info] [Config/Core] core_id: N, partition_id: N (no partition section)
 [info] [Config/Core] Core N: core_freq_mhz: N, systolic_arrays_per_core: N
 [info] [Config/DRAM] Ramulator2 config path: <path>

@@ -28,8 +28,3 @@ codegen_external_mapping_file: ''
 codegen_autotune_max_retry: 10
 codegen_autotune_template_topk: 4
 codegen_compiler_optimization: all
-
-# Per-core VMEM (vector/scratchpad) size, so TOGSim charges tiles for it instead
-# of modelling an infinite spad: vpu_spad_size_kb_per_lane x vpu_num_lanes,
-# the same identity the v2/v3/v4 configs hold (128 x 128 = 16384). 512 x 256 = 128 MB.
-core_spad_size_kb: 131072

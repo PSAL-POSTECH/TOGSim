@@ -1,5 +1,5 @@
 """--models_list: a command stream launches kernels, each from a directory holding tog.so and its tables."""
-from togtest import MIB, REPO, Case, write_table
+from togtest import MIB, REPO, Case, spad_alone, write_table
 
 PARTITIONED = REPO / "configs" / "systolic_ws_128x128_c2_simple_noc_tpuv3_partition.yml"
 KERNELS = {
@@ -83,7 +83,7 @@ def kernels_free_their_own_spad_bytes(t):
     8 KB and then 28 KB, kernel 1 16 KB, which is taken while the 28 KB load waits. Kernel 0's compute frees
     kernel 0's 8 KB only: the 28 KB load is issued once kernel 1's compute has freed the 16 KB, not before."""
     homes = [two_loads(t, 0, 8 * 1024, 28 * 1024), two_loads(t, 1, 16 * 1024)]
-    machine = t.machine(core_spad_size_kb=32, systolic_array_split="none")
+    machine = t.machine(**spad_alone(32), systolic_array_split="none")
     run = session(t, machine, [launch(homes[0], 0), launch(homes[1], 1), SYNC]).expect_ok()
     issued = [e for e in run.events() if e.tag == "INST_ISSUED"]
     big = [e.cycle for e in issued if e.opcode == "MOVIN" and e.fields.get("size") == f"[{28 * 1024}]"]

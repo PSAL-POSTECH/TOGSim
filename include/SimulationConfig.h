@@ -24,9 +24,9 @@ struct SimulationConfig {
   uint32_t core_freq_mhz;
   uint32_t core_print_interval = 0;
   uint32_t num_systolic_array_per_core = 1;
-  // Per-core VMEM/spad capacity (KB) for the DMA throttle (sec 10.4): a
-  // load that would overflow the spad waits for a consumer to free a tile. 0 = unset
-  // -> disabled.
+  // Per-core spad capacity (KB) for the DMA throttle: a load that would overflow it waits for a
+  // consumer to free a tile. vpu_spad_size_kb_per_lane x vpu_num_lanes when the config gives both,
+  // else the config's core_spad_size_kb (core_spad_kb in Common.cc); 0 = no limit.
   uint32_t core_spad_size_kb = 0;
   // DEPRECATED typed grouping. SA weight-buffer depth: weight tiles a systolic array holds; a
   // preload stalls until a slot frees (its matmuls finished). 2 = weight double-buffer

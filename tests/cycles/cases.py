@@ -2,7 +2,7 @@
 A golden moves only with a deliberate change to the timing model, a shipped config or a submodule; say which."""
 from pathlib import Path
 
-from togtest import Case
+from togtest import Case, spad_alone
 
 TESTS = Path(__file__).resolve().parents[1]
 GOLDEN = {
@@ -11,10 +11,10 @@ GOLDEN = {
         machine=dict(systolic_array_split="none")),
     "piecewise_loads_and_stores_in_a_48kb_spad": dict(
         total=1255, tog="spad_footprint/piecewise_fill_tog.cpp", cycles=[200],
-        machine=dict(core_spad_size_kb=48, systolic_array_split="none")),
+        machine=dict(**spad_alone(48), systolic_array_split="none")),
     "indirect_store_without_its_index_dump": dict(
         total=572, tog="spad_footprint/indirect_store_tog.cpp", cycles=[200],
-        machine=dict(core_spad_size_kb=48, systolic_array_split="none")),
+        machine=dict(**spad_alone(48), systolic_array_split="none")),
     "computes_split_over_two_arrays": dict(
         total=2993, tog="spad_footprint/state_stored_each_trip_tog.cpp", cycles=[600], compute=344,
         units=[(0, "Systolic", "rows", 1, 512), (0, "Vpu", "cycles", 1, 50)], machine=dict()),

@@ -17,7 +17,3 @@ icnt_type: booksim2
 icnt_freq_mhz: 700
 icnt_injection_ports_per_core: 16
 booksim_config_path: ../configs/booksim2_configs/fly_c16_m16.icnt
-
-
-# Per-core VMEM (vector/scratchpad) size: TPUv2/v3/v4 = 16 MB.
-core_spad_size_kb: 16384
