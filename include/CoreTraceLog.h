@@ -23,7 +23,7 @@ namespace core_trace_log {
 inline bool trace_enabled() { return spdlog::should_log(spdlog::level::trace); }
 
 std::string format_dma_inst_issued_detail(Instruction& inst);
-/** Opcode + (detail...) for DMA issue / skip traces. */
+/** Opcode + (detail...) for DMA issue traces. */
 std::string format_dma_inst_issued_trace_line(Instruction& inst);
 /** Opcode + (detail...) for COMP / BAR / MOVIN / MOVOUT finished or issued lines. */
 std::string format_instruction_detail_line(Instruction& inst);

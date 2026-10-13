@@ -20,8 +20,6 @@ inline constexpr const char* kTileScheduled = "TILE_SCHEDULED";
 
 inline constexpr const char* kInstructionIssued = "INST_ISSUED";
 inline constexpr const char* kInstructionFinished = "INST_FINISHED";
-/** Async MOVIN skipped: same tag still in flight. */
-inline constexpr const char* kInstructionSkipped = "INST_SKIP";
 
 inline constexpr const char* kAsyncDmaAllRequestsIssued = "ASYNC_DMA_ISSUE";
 inline constexpr const char* kFirstDramResponse = "DRAM_RESP_FIRST";

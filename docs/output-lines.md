@@ -169,7 +169,6 @@ Some lines are spelled differently in the two places they appear: the final
 | `TILE_SCHEDULED` | A work-item is handed to a core. | `spad_footprint` in bytes; `max_dispatch`, the work-items that core keeps in flight (1 or 2). |
 | `INST_ISSUED` | An instruction starts. | For a DMA: `dram` (its address), `size`, `stride`, `elem_bits`, `async`, `indirect`. For `COMP`: `compute_cycle` (after any array split), `tile` (the work-item index, not the `tile_id`). |
 | `INST_FINISHED` | An instruction is done. | |
-| `INST_SKIP` | An asynchronous load is not sent because a load with the same tag was already issued. | |
 | `ASYNC_DMA_ISSUE` | An asynchronous load has sent all its requests. | |
 | `DRAM_RESP_FIRST` | The first DRAM response of a DMA arrives. | |
 | `DRAM_RESP_DONE` | All data of an asynchronous load has arrived. | |

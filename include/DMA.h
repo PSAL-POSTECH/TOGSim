@@ -62,15 +62,6 @@ class DMA {
     }
   }
 
-  bool tag_key_exist(int subgraph_id, std::vector<int64_t>& key) {
-    auto subgraph_it = tag_table.find(subgraph_id);
-    if (subgraph_it == tag_table.end())
-      return false;
-
-    auto& key_map = subgraph_it->second;
-    auto key_it = key_map.find(key);
-    return key_it != key_map.end();
-  }
   uint32_t get_tag_finish(int subgraph_id, std::vector<int64_t>& key) {
     auto subgraph_it = tag_table.find(subgraph_id);
     auto& key_map = subgraph_it->second;
