@@ -298,11 +298,11 @@ TPUV6E = REPO / "configs" / "tpuv6e.yml"
 
 
 def tpuv6e_spad_is_its_lanes(t):
-    """configs/tpuv6e.yml as shipped, with its TPUV6_MXU unit table, states 1024 KB on each of 128 lanes and no
+    """configs/tpuv6e.yml as shipped, with its TPUV6E_MXU unit table, states 1024 KB on each of 128 lanes and no
     core_spad_size_kb: the TOG one byte over 131072 KB is refused, naming that spad."""
     big = 131072 * KB - HELD + 1
     so = t.tog(TOG, (f"BIG_BYTES={big}",), tensors=(MIB, 256 * MIB, MIB))
-    run = t.simulate(so, TPUV6E, cycles=[200], units=[(0, "TPUV6_MXU", "rows", 1, 0), (0, "Vpu", "cycles", 1, 200)],
+    run = t.simulate(so, TPUV6E, cycles=[200], units=[(0, "TPUV6E_MXU", "rows", 1, 0), (0, "Vpu", "cycles", 1, 200)],
                      timeout=TIMEOUT_S)
     expect_refused_before_the_run(run, refusal(0, HELD + big, 131072), so)
 

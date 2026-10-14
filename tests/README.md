@@ -59,7 +59,7 @@ from togtest import Case
 
 def one_compute_runs_600_cycles(t):
     run = t.simulate(t.tog("my_tog.cpp", tensors=(16384, 16384)), t.machine(), cycles=[600],
-                     units=[(0, "TPUV6_MXU", "rows", 1, 128)])
+                     units=[(0, "TPUV6E_MXU", "rows", 1, 128)])
     run.expect_total_cycles(840)
 
 

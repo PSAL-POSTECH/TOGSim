@@ -104,7 +104,7 @@ that needs more sets `num_cores` (and `partition`) over one of them. All 7 use
 - `tpuv6e` is the machine the tests and the examples use: one TPU v6e
   TensorCore as libtpu drives it, two 256x256 arrays, 128 lanes of 1024 KB (VMEM 128 MB) and 256-bit
   vectors (8 sublanes x 32 bit), and `systolic_array_split: round_robin` over the array unit
-  `TPUV6_MXU` (`systolic_array_unit`). It prints statistics every 200 cycles; the others every 10000.
+  `TPUV6E_MXU` (`systolic_array_unit`). It prints statistics every 200 cycles; the others every 10000.
 - Every shipped config states `isa`, `vcix` and `address_map` and names its array unit: `TPUV3_MXU` on the
   `tpuv3` ones, `TPUV4_MXU` on the `tpuv4` ones. Their vcix models (`vcix_tpuv3`, `vcix_tpuv4`) do not exist yet,
   so their `vcix` is `{}`.

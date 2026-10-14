@@ -68,7 +68,7 @@ line. The final statistics of the hello TOG on tpuv6e (the third run of `example
 [info] Core [0] : COMP     inst_count: 1 (GEMM: 0, Vector: 1, XLU: 0)
 [info] Core [0] : MEMORY_BAR inst_count: 0
 [info] ========= Core stat =========
-[info] Core [0] : TPUV6_MXU utilization(%): 15.24, active_cycles: 128, idle_cycles: 712
+[info] Core [0] : TPUV6E_MXU utilization(%): 15.24, active_cycles: 128, idle_cycles: 712
 [info] Core [0] : Vpu utilization(%): 11.90, active_cycles: 100, idle_cycles: 740
 [info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 808, DRAM BW: 68.000 GB/s (1024 responses)
 [info] Core [0] : NUMA local memory: 1024 requests, remote memory: 0 requests

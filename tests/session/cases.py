@@ -4,12 +4,12 @@ from togtest import MIB, TIMEOUT_S, Case, spad_alone, write_table
 KERNELS = {0: dict(cycles=600, rows=256), 1: dict(cycles=900, rows=512)}
 
 
-def units(kernel_id, array="TPUV6_MXU"):
+def units(kernel_id, array="TPUV6E_MXU"):
     """KERNELS[id]'s unit table: its rows of the machine's array unit `array`, and 100 cycles of the Vpu."""
     return [(0, array, "rows", 1, KERNELS[kernel_id]["rows"]), (0, "Vpu", "cycles", 1, 100)]
 
 
-def kernel(t, kernel_id, table=True, tog=True, array="TPUV6_MXU", items=2, defines=()):
+def kernel(t, kernel_id, table=True, tog=True, array="TPUV6E_MXU", items=2, defines=()):
     """<work dir>/k<id>/: tog.so (of `items` work-items), tog_tensors.txt, tog_cycles.tsv and tog_units.tsv of
     KERNELS[id] naming `array` (`table` may replace the unit table or, False, leave it out; `tog` False leaves tog.so
     out). Returns the directory."""

@@ -145,9 +145,9 @@ mistakes() {
   printf 'cycle\toverlapping\n600\t0\n' > $dir/cycles_header.gen.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/cycles_header.gen.tsv --unit_table $dir/tog_units.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_cycles.tsv
-  printf '0 TPUV6_MXU rows 1 128\n' > $dir/spaces.gen.tsv
+  printf '0 TPUV6E_MXU rows 1 128\n' > $dir/spaces.gen.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_cycles.tsv --unit_table $dir/spaces.gen.tsv
-  printf 'tile_id\tunit\tunit_of_work\tcapacity_per_cycle\tadmitted\n0\tTPUV6_MXU\trows\t1\t128\n' > $dir/header.gen.tsv
+  printf 'tile_id\tunit\tunit_of_work\tcapacity_per_cycle\tadmitted\n0\tTPUV6E_MXU\trows\t1\t128\n' > $dir/header.gen.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_cycles.tsv --unit_table $dir/header.gen.tsv
   printf '0\tVpu\tcycles\t1\t100\n' > $dir/no_array_unit.gen.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_cycles.tsv --unit_table $dir/no_array_unit.gen.tsv
@@ -163,7 +163,7 @@ mistakes() {
   sim first_error --config $dir/no_num_cores.gen.yml --tog_so $dir/valid.so --cycle_table $dir/tog_cycles.tsv
   tog $dir/silent_tog.cpp -o $dir/silent_valid.so
   sim unrefused --config $V6E --tog_so $dir/silent_valid.so $tables --log_level trace
-  printf '1\tTPUV6_MXU\trows\t1\t128\n1\tVpu\tcycles\t1\t100\n' > $dir/rows_of_tile_1.gen.tsv
+  printf '1\tTPUV6E_MXU\trows\t1\t128\n1\tVpu\tcycles\t1\t100\n' > $dir/rows_of_tile_1.gen.tsv
   sim result --config $V6E --tog_so $dir/silent_valid.so --cycle_table $dir/tog_cycles.tsv --unit_table $dir/rows_of_tile_1.gen.tsv
   for broken in TENSOR_PAST_LIST NULL_STRIDES CONSUMER_FIRST; do
     tog -D$broken $dir/silent_tog.cpp -o $dir/$broken.so

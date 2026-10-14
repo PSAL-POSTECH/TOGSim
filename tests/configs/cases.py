@@ -35,7 +35,7 @@ def every_config_is_listed(t):
 def breaks_convention(config):
     """What the config `config` (a parsed YAML mapping) lacks of the convention: an isa list with exactly one vcix_*
     and one zvl<N>b entry, vcix and a non-empty address_map as mappings, and systolic_array_unit named after the
-    vcix_* entry as TPUV6_MXU is after vcix_tpuv6. Empty when it follows it."""
+    vcix_* entry as TPUV6E_MXU is after vcix_tpuv6e. Empty when it follows it."""
     isa = config.get("isa")
     vcix = [entry for entry in isa if str(entry).startswith("vcix_")] if isinstance(isa, list) else []
     lacks = [] if len(vcix) == 1 else [f"an isa list with exactly one vcix_* entry (isa: {isa})"]
@@ -74,7 +74,7 @@ def convention_names_what_is_missing(t):
                          ("an isa without zvl<N>b", {"isa": [e for e in v6e["isa"] if not e.startswith("zvl")]}),
                          ("vcix: null", {"vcix": None}), ("an empty address_map", {"address_map": {}}),
                          ("systolic_array_unit: null", {"systolic_array_unit": None}),
-                         ("TPUV3_MXU beside vcix_tpuv6", {"systolic_array_unit": "TPUV3_MXU"})):
+                         ("TPUV3_MXU beside vcix_tpuv6e", {"systolic_array_unit": "TPUV3_MXU"})):
         if not breaks_convention({**v6e, **broken}):
             raise Failure(f"expected {what} to break the convention, it did not")
 
