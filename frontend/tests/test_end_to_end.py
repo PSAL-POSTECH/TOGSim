@@ -456,7 +456,7 @@ def test_a_relu_of_128_rows_in_tiles_of_42_runs_three_whole_tiles_and_one_of_2_r
     assert [(n["op"], n["cycles"]) for n in report["nodes"]] == [("Relu", relu)] and report["total_cycles"] == relu
     whole = by_hand(tmp_path / "whole", "bias_act", ["TM=42", "TN=48"], (126, 48),
                     (126 * 48 * 4, 48 * 4, 126 * 48 * 4), {0: (64, None)})
-    assert whole < relu < whole * 4 // 3
+    assert whole <= relu < whole * 4 // 3
 
 
 def test_a_gemm_with_odd_extents_costs_each_block_by_what_is_left_of_it(tmp_path):

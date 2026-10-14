@@ -103,7 +103,7 @@ def session_second_kernel_refused(t):
 def names_more_than_it_holds_runs(t):
     """APART: 16 KB and 32 KB are named, 48 KB against a 32 KB spad, and each is consumed before the other is
     needed. The big load waits for the spad, and the run ends."""
-    expect_both_ran(replay(t, 32 * KB, 32, "APART"), 977)
+    expect_both_ran(replay(t, 32 * KB, 32, "APART"), 1248)
 
 
 def apart_one_byte_over_refused(t):
@@ -123,7 +123,7 @@ def version_left_open_runs(t):
     """APART, LEFT_OPEN: the TOG ends with a 16 KB load nothing reads, so the measuring leaves a buffer version open.
     The run numbers its versions from the start all the same and ends at its total. That load keeps its bytes until
     its work-item ends, so the 32 KB load beside it needs a 48 KB spad."""
-    expect_both_ran(replay(t, 32 * KB, 48, "APART", "LEFT_OPEN"), 977)
+    expect_both_ran(replay(t, 32 * KB, 48, "APART", "LEFT_OPEN"), 1248)
 
 
 def version_left_open_refused(t):
@@ -155,7 +155,7 @@ def unread_load_kept_to_the_end_of_its_work_item(t):
     the third load is issued only once the compute that frees the second is; and it leaves with its work-item, so the
     second work-item finds the spad empty and runs the same way."""
     run = work_items(t, UNREAD, (0, 16 * KB, 16 * KB, 16 * KB), 32, items=2)
-    expect_both_ran(run, 1148)
+    expect_both_ran(run, 1149)
     loads, computes = issued(run, "MOVIN"), issued(run, "COMP")
     if len(loads) != 6 or len(computes) != 4 or loads[2] < computes[0] or loads[5] < computes[2]:
         run.fail(f"expected each work-item's third load issued once its first compute was, got loads @{loads} and "
@@ -253,7 +253,7 @@ def every_reader_holds_its_buffer(t):
     """Three computes read 64 KB and 512 KB together and a fourth, stated last, the 64 KB alone: each of the three
     is issued with both in the spad, whichever reader the TOG states last. 576 KB holds that and 575 KB does not."""
     sizes = (0, 64 * KB, 512 * KB)
-    work_items(t, FOUR_READERS, sizes, 576).expect_total_cycles(1351)
+    work_items(t, FOUR_READERS, sizes, 576).expect_total_cycles(1521)
     expect_refused_before_the_run(work_items(t, FOUR_READERS, sizes, 575), refusal(0, 576 * KB, 575),
                                   t.work_dir / "tog.so")
 

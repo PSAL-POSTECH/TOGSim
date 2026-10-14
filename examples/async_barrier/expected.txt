@@ -31,9 +31,9 @@
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/async_barrier/two_steps.so --cycle_table examples/async_barrier/tog_cycles.tsv --unit_table examples/async_barrier/tog_units.tsv --log_level trace
 [trace] [160][Core 0][INST_ISSUED    ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [761][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[info] Total execution cycles: 1459
+[info] Total execution cycles: 1700
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DTWO_STEPS -DSYNC examples/async_barrier/async_barrier_tog.cpp -o examples/async_barrier/two_steps_sync.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/async_barrier/two_steps_sync.so --cycle_table examples/async_barrier/tog_cycles.tsv --unit_table examples/async_barrier/tog_units.tsv --log_level trace
 [trace] [144][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [745][Core 0][INST_ISSUED    ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[info] Total execution cycles: 1443
+[info] Total execution cycles: 1700

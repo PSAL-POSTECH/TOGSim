@@ -254,7 +254,7 @@ synchronous, no barrier) and with `-DTWO_STEPS` (a first compute that reads only
 | TOG | Asynchronous loads and a barrier | Synchronous loads |
 |---|---|---|
 | one compute reads both operands | 858 | 858 |
-| `-DTWO_STEPS`: a first compute reads only A | 1459, first compute at 160 | 1443, first compute at 144 |
+| `-DTWO_STEPS`: a first compute reads only A | 1700, first compute at 160 | 1700, first compute at 144 |
 
 A barrier holds every reader of its loads' buffers until the whole batch has arrived. A
 synchronous load releases its readers when its own data has arrived, which is cycle 143 for A.
@@ -303,9 +303,9 @@ one key changed. The first three:
 
 | Machine | `Total execution cycles` | What the trace shows |
 |---|---|---|
-| tpuv6e (`num_cores: 1`) | 5021 | Computes are issued at 144, 744, 1344, ...: one at a time, 600 cycles apart. |
-| `num_cores: 2` | 2635 | Work-items 0, 2, 4, 6 are on core 0 and 1, 3, 5, 7 on core 1. The first computes start at 142 and 156. |
-| `num_cores: 4` | 1487 | Two work-items per core. The first computes start at 176 to 198. |
+| tpuv6e (`num_cores: 1`) | 5138 | Computes are issued at 144, 744, 1344, ...: one at a time, 600 cycles apart. |
+| `num_cores: 2` | 3039 | Work-items 0, 2, 4, 6 are on core 0 and 1, 3, 5, 7 on core 1. The first computes start at 142 and 156. |
+| `num_cores: 4` | 1490 | Two work-items per core. The first computes start at 176 to 198. |
 
 The run with `num_cores: 2`, where `tile=N` is the work-item's index in dispatch order:
 
@@ -319,13 +319,13 @@ The run with `num_cores: 2`, where `tile=N` is the work-item's index in dispatch
 [trace] [742][Core 0][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
 [trace] [756][Core 1][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
 ...
-[info] Total execution cycles: 2635
+[info] Total execution cycles: 3039
 ```
 
 Two things to take from these runs:
 
-- **More cores are not proportionally faster.** Two cores take 2635 cycles and four take 1487,
-  against 5021 for one. All cores load through the same DRAM and interconnect: on four
+- **More cores are not proportionally faster.** Two cores take 3039 cycles and four take 1490,
+  against 5138 for one. All cores load through the same DRAM and interconnect: on four
   cores the first computes start at 176 to 198, against 144 on one core.
 - **Do not rely on the order of work-items.** On one core the computes run in the order
   `tile=` 0, 1, 2, 4, 5, 6, 7, 3. A TOG can order instructions inside a work-item, with buffers,
@@ -383,10 +383,10 @@ The script runs that, then changes one thing at a time:
 | Run | Compute tile 0 | Compute tile 1 | `Total execution cycles` |
 |---|---|---|---|
 | 512 rows, 2 arrays, 128 lanes (as shipped) | 600 - 512 + 256 = 344 | 150 | 1099 |
-| `tog_units_128_rows.tsv`: 128 rows | 600 | 150 | 1611 |
-| 512 rows, `num_systolic_array_per_core: 1` | 600 | 150 | 1611 |
+| `tog_units_128_rows.tsv`: 128 rows | 600 | 150 | 1913 |
+| 512 rows, `num_systolic_array_per_core: 1` | 600 | 150 | 1913 |
 | 128 rows, `vpu_num_lanes: 64` | 600 - 128 + 64 = 536 | 150 | 1483 |
-| `systolic_array_split: none`, no unit table | 600 | 150 | 1611 |
+| `systolic_array_split: none`, no unit table | 600 | 150 | 1913 |
 
 The first run:
 
@@ -441,8 +441,8 @@ examples/run.sh session
 [info] [Scheduler 0] Enqueued kernel_id: 0, tog_path: examples/session/k0/tog.so, operation: kernel, request_time_cycles: 0
 [trace] [142][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [info] [Scheduler 0] Enqueued kernel_id: 1, tog_path: examples/session/k1/tog.so, operation: kernel, request_time_cycles: 0
-[trace] [948][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
-[info] Total execution cycles: 1668
+[trace] [982][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
+[info] Total execution cycles: 1703
 # examples/session/two_partitions.gen.yml: configs/tpuv6e.yml with num_cores: 2, num_partition: 2, partition: {core_0: 0, core_1: 1}
 + build/bin/Simulator --config examples/session/two_partitions.gen.yml --models_list examples/session/commands_two_partitions.txt --log_level trace
 [info] [Scheduler 0] Enqueued kernel_id: 0, tog_path: examples/session/k0/tog.so, operation: kernel, request_time_cycles: 0
@@ -489,7 +489,7 @@ takes 840 cycles.
 
 | Mistake | Total | What happens | The warning |
 |---|---|---|---|
-| `TENSOR_PAST_LIST`: an `arg_id` `tog_tensors.txt` has no line for | 819 | The tensor is placed at address 0, on top of tensor 0: `dram=0x0000000000000000` on the store's trace line. | `its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0` |
+| `TENSOR_PAST_LIST`: an `arg_id` `tog_tensors.txt` has no line for | 830 | The tensor is placed at address 0, on top of tensor 0: `dram=0x0000000000000000` on the store's trace line. | `its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0` |
 | a unit table whose rows are all for `tile_id` 1, while the TOG computes `tile_id` 0 | 840 | The compute adds nothing to any unit, and the array split leaves it whole: `TPUV6E_MXU utilization(%): 0.00`. | `the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units` |
 
 ```text

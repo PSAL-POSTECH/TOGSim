@@ -40,9 +40,8 @@ def make_config(dram_obj, clock_ratio=1, refresh_scope="Channel", addr_mapper=No
     always has exactly one controller (channel=1 in org is enforced by v2.1).
     The wrapper overrides 'frontend' to ExternalFrontEnd automatically.
 
-    refresh_scope: level name for AllBank refresh.
-      - DDR4 / LPDDR5 / LPDDR5X -> "Channel"
-      - HBM2 / HBM3             -> "PseudoChannel"
+    Refresh: HBM refreshes one bank at a time (PerBank: the other banks keep serving, JESD238 6.3.2.6);
+    DDR4 / LPDDR5 / LPDDR5X refresh all banks of refresh_scope ("Channel") at once (AllBank).
 
     Controller choice (matches C++ controller impls):
       - HBM*      -> ramulator.controller.HBM
@@ -55,7 +54,7 @@ def make_config(dram_obj, clock_ratio=1, refresh_scope="Channel", addr_mapper=No
         ctrl = ramulator.controller.HBM(
             dram=dram_obj,
             scheduler=ramulator.scheduler.FRFCFS(),
-            refresh_manager=ramulator.refresh_manager.AllBank(scope=refresh_scope),
+            refresh_manager=ramulator.refresh_manager.PerBank(),
             row_policy=ramulator.row_policy.Open(),
             addr_mapper=addr_mapper,
             read_buffer_size=64,
@@ -91,22 +90,20 @@ def make_config(dram_obj, clock_ratio=1, refresh_scope="Channel", addr_mapper=No
 
 def gen_hbm2():
     # Available timing presets: HBM2_1600Mbps, HBM2_2000Mbps, HBM2_2400Mbps
-    # HBM2 has no Rank level — AllBank refresh scope must be PseudoChannel
     dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_2000Mbps")
-    return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
+    return make_config(dram, clock_ratio=1)
 
 def gen_hbm2_tpuv4():
     dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_2400Mbps")
-    return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
+    return make_config(dram, clock_ratio=1)
 
 def gen_hbm2_tpuv3():
     dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_1880Mbps")
-    return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
+    return make_config(dram, clock_ratio=1)
 
 def gen_hbm3_tpuv6e():
     dram = ramulator.dram.HBM3(org_preset="HBM3_8Gb", timing_preset="HBM3_6400Mbps", column=256)
-    return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel",
-                       addr_mapper=ramulator.addr_mapper.MOP4CLXOR())
+    return make_config(dram, clock_ratio=1, addr_mapper=ramulator.addr_mapper.MOP4CLXOR())
 
 def gen_ddr4():
     # Available timing presets — check python/ramulator/dram/ddr4.py

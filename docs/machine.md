@@ -62,7 +62,7 @@ build/bin/Simulator --config build/two_cores.yml --tog_so examples/tiles/tog.so 
 ```
 
 ```text
-[2026-10-12 14:29:13.593] [info] Total execution cycles: 2635
+[2026-10-12 14:29:13.593] [info] Total execution cycles: 3039
 ```
 
 The `sed` changes a key the base config has. A key it lacks, such as `systolic_array_split` on
@@ -81,22 +81,22 @@ done
 ```
 
 ```text
-num_cores 1 5021
-num_cores 2 2635
-num_cores 4 1487
+num_cores 1 5138
+num_cores 2 3039
+num_cores 4 1490
 ```
 
 Before and after, for the knobs the examples turn (all on tpuv6e, one key changed):
 
 | Example | Key changed | Before | After | What the trace shows |
 |---|---|---|---|---|
-| tiles (8 work-items) | `num_cores: 1` to `2` | 5021 | 2635 | Four work-items per core. |
-| tiles | `num_cores: 1` to `4` | 5021 | 1487 | Two work-items per core. |
-| tiles | `vpu_spad_size_kb_per_lane: 1024` (131072 KB) to `core_spad_size_kb: 48` alone | 5021 | 6205 | `max_dispatch=1`: a work-item needs 32768 bytes, more than half the spad, so only one is in flight. |
-| tiles | `dram_channels: 32` to `16` | 5021 | 5021 | The first compute starts at 147 instead of 144; the total is the same. |
-| gemm (512 rows) | `num_systolic_array_per_core: 2` to `1` | 1099 | 1611 | `compute_cycle=600` instead of 344. |
-| gemm (128 rows) | `vpu_num_lanes: 128` to `64` | 1611 | 1483 | `compute_cycle=536` instead of 600. |
-| gemm | `systolic_array_split: round_robin` to `none` | 1099 | 1611 | `compute_cycle=600`, and the built-in unit lines. |
+| tiles (8 work-items) | `num_cores: 1` to `2` | 5138 | 3039 | Four work-items per core. |
+| tiles | `num_cores: 1` to `4` | 5138 | 1490 | Two work-items per core. |
+| tiles | `vpu_spad_size_kb_per_lane: 1024` (131072 KB) to `core_spad_size_kb: 48` alone | 5138 | 6519 | `max_dispatch=1`: a work-item needs 32768 bytes, more than half the spad, so only one is in flight. |
+| tiles | `dram_channels: 32` to `16` | 5138 | 5331 | The first compute starts at 147 instead of 144. |
+| gemm (512 rows) | `num_systolic_array_per_core: 2` to `1` | 1099 | 1913 | `compute_cycle=600` instead of 344. |
+| gemm (128 rows) | `vpu_num_lanes: 128` to `64` | 1913 | 1483 | `compute_cycle=536` instead of 600. |
+| gemm | `systolic_array_split: round_robin` to `none` | 1099 | 1913 | `compute_cycle=600`, and the built-in unit lines. |
 
 `examples/run.sh` makes these copies with its `machine` function and prints one
 `# <copy>: <base> with <key>` line for each.
