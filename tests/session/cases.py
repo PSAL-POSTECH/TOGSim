@@ -63,7 +63,7 @@ def two_partitions_side_by_side(t):
     """On the two-partition config (core 0 / core 1, 2 arrays, 128 lanes) kernel 0 goes to partition 0 and kernel 1
     to partition 1 with no DEVICE_SYNC between: core 0 runs only kernel 0's computes (472 = 600 - 256 + 256/2),
     core 1 only kernel 1's (644), and the two cores' compute windows overlap."""
-    homes = [kernel(t, 0, array="SYSTOLIC"), kernel(t, 1, array="SYSTOLIC")]
+    homes = [kernel(t, 0, array="TPUV3_MXU"), kernel(t, 1, array="TPUV3_MXU")]
     run = session(t, PARTITIONED, [launch(homes[0], 0, partition=0), launch(homes[1], 1, partition=1)]).expect_ok()
     ran = run.computes()
     by_core = {core: sorted(c.cycles for c in ran if c.core == core) for core in sorted({c.core for c in ran})}

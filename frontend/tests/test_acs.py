@@ -5,7 +5,7 @@ from togsim_frontend.acs.node_mapping import (ELEMENTWISE, KERNELS, KernelDesc, 
                                               tile_ids)
 from togsim_frontend.onnx_frontend.tiling import Hardware
 
-HW = Hardware(sa=8, vlane=8, vlen_bits=256)
+HW = Hardware(sa=8, vlane=8, vlen_bits=256, array_unit="TPUV3_MXU")
 GEMM_TILE = {"rows": 32, "depth": 64, "cols": 256, "elems": 32 * 256}
 
 
@@ -24,13 +24,13 @@ def test_a_systolic_tile_is_its_matmul_rows_plus_the_array_drain():
 
 def test_the_unit_table_carries_the_rows_the_array_split_divides():
     units = acs_cycles.build_units(lookup("gemm"), GEMM_TILE, HW)
-    assert units == [(0, "SYSTOLIC", "rows", 1, 0), (0, "Vpu", "cycles", 1, 128),
-                     (1, "SYSTOLIC", "rows", 1, 8192), (1, "Vpu", "cycles", 1, 0)]
+    assert units == [(0, "TPUV3_MXU", "rows", 1, 0), (0, "Vpu", "cycles", 1, 128),
+                     (1, "TPUV3_MXU", "rows", 1, 8192), (1, "Vpu", "cycles", 1, 0)]
 
 
 def test_a_kernel_without_a_compute_still_names_the_array_unit():
     """An empty unit table is refused under the default systolic_array_split."""
-    assert acs_cycles.build_units(lookup("concat"), EXAMPLE_TILE["concat"], HW)[0] == (0, "SYSTOLIC", "rows", 1, 0)
+    assert acs_cycles.build_units(lookup("concat"), EXAMPLE_TILE["concat"], HW)[0] == (0, "TPUV3_MXU", "rows", 1, 0)
     assert acs_cycles.build_table(lookup("flatten"), EXAMPLE_TILE["flatten"], HW) == [(0, 0)]
 
 
@@ -40,7 +40,7 @@ def test_the_tables_are_written_as_togsim_reads_them(tmp_path):
     acs_cycles.write_units(acs_cycles.build_units(desc, GEMM_TILE, HW), str(tmp_path / "tog_units.tsv"))
     assert (tmp_path / "tog_cycles.tsv").read_text() == "128\t0\n8206\t0\n# origins: acs\n"
     lines = (tmp_path / "tog_units.tsv").read_text().splitlines()
-    assert lines[2] == "1\tSYSTOLIC\trows\t1\t8192" and all(len(line.split("\t")) == 5 for line in lines)
+    assert lines[2] == "1\tTPUV3_MXU\trows\t1\t8192" and all(len(line.split("\t")) == 5 for line in lines)
 
 
 def test_vector_work_is_charged_in_full():
@@ -62,7 +62,7 @@ def test_the_cost_function_can_be_replaced():
     try:
         acs_cycles.set_cost_function(lambda node, tile, hw: acs_cycles.Cost(99, systolic_rows=7))
         assert acs_cycles.build_table(desc, {"elems": 1}, HW) == [(99, 0)]
-        assert acs_cycles.build_units(desc, {"elems": 1}, HW)[0] == (0, "SYSTOLIC", "rows", 1, 7)
+        assert acs_cycles.build_units(desc, {"elems": 1}, HW)[0] == (0, "TPUV3_MXU", "rows", 1, 7)
     finally:
         acs_cycles.set_cost_function(acs_cycles.default_cost)
 
@@ -132,6 +132,6 @@ def test_the_tables_hold_a_row_per_tile_id_costed_and_zeros_between():
     table = acs_cycles.build_table(lookup("gemm"), tiles, HW)
     units = acs_cycles.build_units(lookup("gemm"), tiles, HW)
     assert table == [(0, 0), (0, 0), (20, 0), (256 * 5 + 14, 0)]
-    assert units == [(2, "SYSTOLIC", "rows", 1, 0), (2, "Vpu", "cycles", 1, 20),
-                     (3, "SYSTOLIC", "rows", 1, 1280), (3, "Vpu", "cycles", 1, 0)]
+    assert units == [(2, "TPUV3_MXU", "rows", 1, 0), (2, "Vpu", "cycles", 1, 20),
+                     (3, "TPUV3_MXU", "rows", 1, 1280), (3, "Vpu", "cycles", 1, 0)]
     assert acs_cycles.uncovered([2, 3], table, units) == [] and acs_cycles.uncovered([0, 2, 5], table, units) == [0, 5]

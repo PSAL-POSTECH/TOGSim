@@ -1,5 +1,5 @@
 """The cost of a kernel's compute nodes, as the cycle table and the unit table TOGSim reads: a compute's cycles (the
-overlapping column is always 0) and the SYSTOLIC rows systolic_array_split spreads over a core's arrays. A short
+overlapping column is always 0) and the array unit's rows systolic_array_split spreads over a core's arrays. A short
 last tile is a tile id of its own, costed by the same formulas at what is left. Estimates, not gem5 measurements."""
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from .node_mapping import ELEMENTWISE, REDUCTION, NodeDesc
 #: vslidedown at 2,4,6,8...; each vfmax consumes the last -- one chain, so linear.
 FOLD_WIDTH = 8
 
-SYSTOLIC_UNIT = ("SYSTOLIC", "rows", 1)
 VECTOR_UNIT = ("Vpu", "cycles", 1)
 
 
@@ -90,7 +89,7 @@ def build_units(kernel_desc, tiles: dict, hw: Hardware) -> list[tuple]:
     """The unit table rows, (tile_id, unit, unit_of_work, capacity_per_cycle, admitted), two per tile id costed."""
     rows = []
     for tile_id, cost in costs(kernel_desc, tiles, hw).items():
-        rows.append((tile_id, *SYSTOLIC_UNIT, cost.systolic_rows))
+        rows.append((tile_id, hw.array_unit, "rows", 1, cost.systolic_rows))
         rows.append((tile_id, *VECTOR_UNIT, cost.vector_cycles))
     return rows
 

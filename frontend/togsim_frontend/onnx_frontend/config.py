@@ -31,9 +31,9 @@ def core_spad_kb(cfg: dict) -> int:
 
 def read_hardware(config_path: str, sa: int | None = None,
                   elem_bits: int = 32) -> Hardware:
-    """The machine of the config at `config_path`, with `sa` or else vpu_num_lanes, the rows one array takes in
-    TOGSim, and the spad TOGSim gives a core of it (core_spad_kb). A ValueError says what is missing, not an integer,
-    or below what a machine has: one lane, one array row, one element per lane, no spad; or a spad TOGSim refuses."""
+    """The machine of the config at `config_path`: `sa` or else vpu_num_lanes (the rows one array takes), the spad
+    TOGSim gives a core (core_spad_kb), the array unit (systolic_array_unit). A ValueError says what is missing, not
+    an integer, below one lane, array row or element per lane, a negative spad or one TOGSim refuses."""
     with open(config_path) as fh:
         cfg = yaml.safe_load(fh) or {}
     if not isinstance(cfg, dict):
@@ -60,4 +60,6 @@ def read_hardware(config_path: str, sa: int | None = None,
     except ValueError as exc:
         raise ValueError(f"{config_path}: {exc}") from None
 
-    return Hardware(sa=resolved, vlane=vlane, vlen_bits=vlen, elem_bits=elem_bits, spad_bytes=spad_kb * 1024)
+    return Hardware(sa=resolved, vlane=vlane, vlen_bits=vlen,
+                    array_unit=str(cfg.get("systolic_array_unit", "SYSTOLIC")),
+                    elem_bits=elem_bits, spad_bytes=spad_kb * 1024)

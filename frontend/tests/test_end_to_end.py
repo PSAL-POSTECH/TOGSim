@@ -24,6 +24,7 @@ from togsim_frontend.onnx_frontend.onnx_ops import OPS
 pytestmark = pytest.mark.skipif(not paths.simulator().is_file() and not os.environ.get("TOGSIM_REQUIRE_SIMULATOR"),
                                 reason=f"{paths.simulator()} is absent: build the simulator first")
 CONFIG = paths.root() / "configs" / "tpuv3_8x8.yml"
+ARRAY = yaml.safe_load(CONFIG.read_text())["systolic_array_unit"]
 MIB = 1 << 20
 TOTAL = re.compile(r"Total execution cycles: (\d+)")
 
@@ -57,14 +58,16 @@ def units_of(cycles, systolic_rows=None):
     systolic_rows[i] rows, or the vector unit."""
     rows = systolic_rows or {}
     return [row for i, c in (cycles.items() if isinstance(cycles, dict) else enumerate(cycles))
-            for row in ((i, "SYSTOLIC", "rows", 1, rows.get(i, 0)), (i, "Vpu", "cycles", 1, 0 if i in rows else c))]
+            for row in ((i, ARRAY, "rows", 1, rows.get(i, 0)), (i, "Vpu", "cycles", 1, 0 if i in rows else c))]
 
 
 @pytest.fixture(scope="module")
 def unsplit_config(tmp_path_factory):
-    """The 8x8 config with systolic_array_split off, so a compute runs the cycles its table row gives."""
+    """The 8x8 config with systolic_array_split off and so no systolic_array_unit, so a compute runs the cycles its
+    table row gives."""
     config = yaml.safe_load(CONFIG.read_text())
     config["systolic_array_split"] = "none"
+    del config["systolic_array_unit"]
     config["ramulator_config_path"] = os.path.normpath(CONFIG.parent / config["ramulator_config_path"])
     path = tmp_path_factory.mktemp("config") / CONFIG.name
     path.write_text(yaml.safe_dump(config))
@@ -151,7 +154,7 @@ def test_a_run_with_a_tensor_or_a_unit_row_missing_is_seen_as_a_warning(tmp_path
     tog_dir = frontend.prepare_node(node, OPS["Relu"][0], {"x": MATRIX}, read_hardware(str(CONFIG)), str(tmp_path))
     tensors = (tmp_path / tog_dir / "tog_tensors.txt")
     tensors.write_text("".join(tensors.read_text().splitlines(keepends=True)[:-1]))
-    (tmp_path / tog_dir / "tog_units.tsv").write_text("1\tSYSTOLIC\trows\t1\t0\n")
+    (tmp_path / tog_dir / "tog_units.tsv").write_text(f"1\t{ARRAY}\trows\t1\t0\n")
     frontend.simulate(tog_dir, str(CONFIG))
     said = warnings(tmp_path)
     assert len(said) == 2 and any("its DMAs name arg_id 2" in line for line in said)
@@ -419,7 +422,7 @@ def test_the_dma_check_sees_a_load_and_a_store_that_leave_their_tensor():
 
 
 def hand_costs(tiles, sa=8, lanes=8, throughput=64, instructions=0):
-    """What ACS charges, written out again: {tile id: (cycles, SYSTOLIC rows or None)} for `tiles`, {tile id: (rows,
+    """What ACS charges, written out again: {tile id: (cycles, array unit rows or None)} for `tiles`, {tile id: (rows,
     depth, cols)} of a systolic block or {tile id: elements} of a vector tile running `instructions` per element."""
     costs = {}
     for tile_id, tile in tiles.items():

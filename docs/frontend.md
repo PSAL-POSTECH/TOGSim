@@ -11,7 +11,7 @@ own tests and its own CI job. Like the [kernel library](kernels.md), it comes fr
   calibrated against gem5, and no result built on them should be read as a measurement.** A vector
   tile costs `ceil(elements / (lanes * elements per lane))` cycles per elementwise instruction; a
   systolic block costs the rows its matmuls feed (one per cycle) plus the `2*SA - 2` stages the
-  last one drains through, and those rows are its `SYSTOLIC` rows in the unit table. The
+  last one drains through, and those rows are its rows of the config's `systolic_array_unit` in the unit table. The
   `overlapping` column is always `0`. A short last tile is costed by the same formulas at the
   extents it has: a vector tile by its elements, a block by `depth * ceil(columns / (SA * lanes))`
   preloads of its rows. So a block 3 channels deep is 3 preloads where an 8-deep one is 8 (the

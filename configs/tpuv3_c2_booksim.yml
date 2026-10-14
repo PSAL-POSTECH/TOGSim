@@ -1,11 +1,18 @@
+# tpuv3_c2 with the BookSim2 interconnect. The array unit TPUV3_MXU and the ISA's vcix_tpuv3 name a vcix model and compiler support
+# that do not exist yet; vcix holds that model's keys once it states them.
 num_cores: 2
 core_freq_mhz: 940
 core_stats_print_period_cycles: 10000
 num_systolic_array_per_core: 2
+systolic_array_unit: TPUV3_MXU
 
 vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 128
 vpu_vector_length_bits: 256
+
+isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv3]
+vcix: {}
+address_map: {spad_vaddr: 0xd0000000, spad_paddr: 0x2000000000, dram_base: 0x80000000, dram_size: 107374182400}
 
 dram_type: ramulator2
 dram_freq_mhz: 940
