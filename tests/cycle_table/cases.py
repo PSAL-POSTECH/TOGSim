@@ -130,8 +130,8 @@ def session_that_launches_nothing_needs_no_table(t):
 def unit_rows_beyond_the_cycle_table_are_ignored(t):
     """Unit table rows of tile id 3, which a one-line cycle table does not hold, are rows no compute reaches: the run
     is not refused and totals what it does without them."""
-    rows = [(0, "TPUV6_MXU", "rows", 1, 512), (0, "Vpu", "cycles", 1, 50)]
-    beyond = rows + [(3, "TPUV6_MXU", "rows", 1, 512), (3, "Vpu", "cycles", 1, 50)]
+    rows = [(0, "TPUV6E_MXU", "rows", 1, 512), (0, "Vpu", "cycles", 1, 50)]
+    beyond = rows + [(3, "TPUV6E_MXU", "rows", 1, 512), (3, "Vpu", "cycles", 1, 50)]
     totals = [replay(t, [600], "TILE_ID=0", units=u).expect_ok().total_cycles()
               for u in (rows, beyond)]
     if totals[0] != totals[1]:

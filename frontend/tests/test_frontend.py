@@ -325,7 +325,7 @@ def test_the_array_unit_is_the_configs_and_the_split_needs_one(tmp_path):
     ({"systolic_array_unit": ""}, "systolic_array_unit: '' is not a name"),
     ({"systolic_array_unit": None}, "systolic_array_unit: None is not a name"),
     ({"systolic_array_unit": 7}, "systolic_array_unit: 7 is not a name"),
-    ({"systolic_array_split": "none"}, "systolic_array_unit: TPUV6_MXU is ignored without systolic_array_split"),
+    ({"systolic_array_split": "none"}, "systolic_array_unit: TPUV6E_MXU is ignored without systolic_array_split"),
     ({"systolic_array_split": "sideways"}, r"systolic_array_split: sideways \(none \| round_robin\)"),
 ])
 def test_an_array_unit_or_split_togsim_refuses_is_refused(over, said, tmp_path):
@@ -338,7 +338,7 @@ def test_an_array_unit_or_split_togsim_refuses_is_refused(over, said, tmp_path):
 
 def test_the_vector_length_is_the_zvl_entry_of_isa():
     """VLEN is N of the one zvl<N>b entry; a config with isa and no such entry, or two, or no isa, is refused."""
-    assert vector_length({"isa": ["m", "v", "zvl512b", "vcix_tpuv6"]}) == 512
+    assert vector_length({"isa": ["m", "v", "zvl512b", "vcix_tpuv6e"]}) == 512
     assert {read_hardware(str(c)).vlen_bits for c in (paths.root() / "configs").glob("*.yml")} == {256}
     for cfg, said in (({"isa": ["m", "v"]}, "has no zvl<N>b entries"), ({}, "missing required key 'isa'"),
                       ({"isa": ["zvl128b", "zvl256b"]}, "has 2 zvl<N>b entries")):
