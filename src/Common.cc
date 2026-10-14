@@ -50,9 +50,9 @@ static uint32_t core_spad_kb(ConfigReader& config) {
   return (uint32_t)kb;
 }
 
-// Keys of a machine config that other tools read and TOGSim does not: the compiler's isa, vcix and address_map, and
-// the frontend's vpu_vector_length_bits. Any other key nothing in initialize_config looks up is named in a warning.
-static const std::set<std::string> kReadElsewhere = {"isa", "vcix", "address_map", "vpu_vector_length_bits"};
+// Keys of a machine config that other tools read and TOGSim does not: isa (the compiler's, and the frontend's vector
+// length), vcix and address_map. Any other key nothing in initialize_config looks up is named in a warning.
+static const std::set<std::string> kReadElsewhere = {"isa", "vcix", "address_map"};
 
 SimulationConfig initialize_config(const YAML::Node& yaml,
                                      const std::string& config_file_path) {
@@ -98,10 +98,17 @@ SimulationConfig initialize_config(const YAML::Node& yaml,
     parsed_config.systolic_array_split = split == "round_robin";
   }
   if (config["systolic_array_unit"]) {
-    parsed_config.systolic_array_unit = config["systolic_array_unit"].as<std::string>();
+    const YAML::Node unit = config["systolic_array_unit"];
+    if (!unit.IsScalar() || unit.Scalar().empty())
+      throw std::runtime_error(fmt::format("systolic_array_unit: {} is not a name, the unit table's name of the "
+                                           "array unit", YAML::Dump(unit)));
+    parsed_config.systolic_array_unit = unit.Scalar();
     if (!parsed_config.systolic_array_split)
       throw std::runtime_error(fmt::format("systolic_array_unit: {} is ignored without systolic_array_split: "
                                            "round_robin", parsed_config.systolic_array_unit));
+  } else if (parsed_config.systolic_array_split) {
+    throw std::runtime_error("systolic_array_split: round_robin (the default) needs systolic_array_unit, the unit "
+                             "table's name of the array unit; systolic_array_split: none runs without it");
   }
   if (config["vpu_num_lanes"])
     parsed_config.vpu_num_lanes = config["vpu_num_lanes"].as<uint32_t>();

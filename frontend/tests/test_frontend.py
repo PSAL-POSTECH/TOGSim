@@ -3,6 +3,7 @@ import os
 import subprocess
 
 import pytest
+import yaml
 from onnx import helper
 
 from togsim_frontend import paths
@@ -13,11 +14,11 @@ from togsim_frontend.onnx_frontend import emit
 from togsim_frontend.onnx_frontend import run as frontend
 from togsim_frontend.onnx_frontend import shapes
 from togsim_frontend.onnx_frontend import tiling
-from togsim_frontend.onnx_frontend.config import core_spad_kb, read_hardware
+from togsim_frontend.onnx_frontend.config import core_spad_kb, read_hardware, vector_length
 from togsim_frontend.onnx_frontend.onnx_ops import OPS, resolve
 from togsim_frontend.onnx_frontend.tiling import Hardware, check_systolic, systolic_tile, unsupported
 
-HW = Hardware(sa=8, vlane=8, vlen_bits=256)
+HW = Hardware(sa=8, vlane=8, vlen_bits=256, array_unit="TPUV3_MXU")
 GEMM = OPS["Gemm"][0]
 
 
@@ -184,29 +185,30 @@ def test_too_narrow_for_the_array_is_refused():
 def test_the_systolic_tile_is_the_same_on_every_machine():
     """At most 32 x 256 x 64, whatever the array: the machine decides whether that tile fits, not its size."""
     assert systolic_tile(512, 1024, 512, HW) == (32, 256, 64)
-    assert systolic_tile(512, 1024, 512, Hardware(sa=4, vlane=4, vlen_bits=128)) == (32, 256, 64)
+    hw = Hardware(sa=4, vlane=4, vlen_bits=128, array_unit="TPUV3_MXU")
+    assert systolic_tile(512, 1024, 512, hw) == (32, 256, 64)
     assert systolic_tile(64, 128, 16, HW) == (32, 128, 16)
 
 
 def test_a_machine_the_tiles_are_whole_matmul_instructions_on_is_supported():
     """Whatever its spad: a node's tile is held against that, and it is no larger than the node."""
     assert unsupported(HW) == []
-    assert unsupported(Hardware(sa=4, vlane=16, vlen_bits=256)) == []
-    assert unsupported(Hardware(sa=8, vlane=8, vlen_bits=256, spad_bytes=1024)) == []
+    assert unsupported(Hardware(sa=4, vlane=16, vlen_bits=256, array_unit="TPUV3_MXU")) == []
+    assert unsupported(Hardware(sa=8, vlane=8, vlen_bits=256, array_unit="TPUV3_MXU", spad_bytes=1024)) == []
 
 
 def test_a_machine_is_refused_for_each_fact_the_tiles_do_not_fit():
     """SA has to divide a tile's rows and depth, and SA * lanes its columns."""
-    rows, = unsupported(Hardware(sa=16, vlane=4, vlen_bits=256))
+    rows, = unsupported(Hardware(sa=16, vlane=4, vlen_bits=256, array_unit="TPUV3_MXU"))
     assert "8 rows of a Attention tile are not a multiple of the array's 16 rows" in rows
-    cols = unsupported(Hardware(sa=8, vlane=16, vlen_bits=256))
+    cols = unsupported(Hardware(sa=8, vlane=16, vlen_bits=256, array_unit="TPUV3_MXU"))
     assert len(cols) == 1 and "64 columns of a Attention tile" in cols[0] and "128 (SA * vpu_num_lanes = 8 * 16)" in cols[0]
-    assert len(unsupported(Hardware(sa=256, vlane=256, vlen_bits=512))) == 5
+    assert len(unsupported(Hardware(sa=256, vlane=256, vlen_bits=512, array_unit="TPUV3_MXU"))) == 5
 
 
 def test_of_the_configs_here_only_the_8x8_one_is_a_supported_machine():
     configs = sorted((paths.root() / "configs").glob("*.yml"))
-    assert len(configs) == 11
+    assert len(configs) == 7
     assert [c.name for c in configs if not unsupported(read_hardware(str(c)))] == \
         ["tpuv3_8x8.yml"]
 
@@ -230,8 +232,7 @@ def stated_spad_bytes(tmp_path, stem, macros):
 #: The spad TOGSim gives a core of each config here, in KB. TOGSim states it nowhere a program reads it but its log,
 #: so it is written out: vpu_spad_size_kb_per_lane x vpu_num_lanes, as each config gives both.
 SPAD_KB = {**{f"{name}.yml": 128 * 128 for name in (
-               "tpuv3_booksim", "tpuv3", "tpuv3_half", "tpuv4", "tpuv3_c2_booksim", "tpuv3_c2", "tpuv3_c2_partition",
-               "tpuv4_c2")},
+               "tpuv3_booksim", "tpuv3", "tpuv3_half", "tpuv4")},
            "tpuv6e.yml": 1024 * 128,
            "tpuv3_32x32.yml": 32 * 32, "tpuv3_8x8.yml": 32 * 8}
 
@@ -260,9 +261,9 @@ def test_a_conv_or_gemm_holds_every_buffer_its_kernel_states_and_the_largest_con
     conv = stated_spad_bytes(tmp_path, "conv", ["TILE_M=32", "TILE_N=256", "TILE_K=64", "TILE_I_H=8", "SA=8"])
     gemm = stated_spad_bytes(tmp_path, "gemm", ["TM=32", "TN=256", "TK=64"])
     assert sum(conv) == 393216 and sum(gemm) == 106496
-    hw = Hardware(sa=8, vlane=8, vlen_bits=256, spad_bytes=393216)
+    hw = Hardware(sa=8, vlane=8, vlen_bits=256, array_unit="TPUV3_MXU", spad_bytes=393216)
     assert tiling.spad_refusal("conv", conv, hw) is None and tiling.spad_refusal("gemm", gemm, hw) is None
-    small = Hardware(sa=8, vlane=8, vlen_bits=256, spad_bytes=393216 - 1024)
+    small = Hardware(sa=8, vlane=8, vlen_bits=256, array_unit="TPUV3_MXU", spad_bytes=393216 - 1024)
     assert tiling.spad_refusal("conv", conv, small) == ("a work-item of kernel conv holds its 3 spad buffers at once, "
                                                         "393216 bytes, and a core's spad is 392192: TOGSim refuses the "
                                                         "TOG")
@@ -303,8 +304,46 @@ def test_the_second_pass_of_layernorm_and_global_avgpool_keeps_the_128_row_tile_
 
 def test_the_array_dimension_is_vpu_num_lanes_unless_sa_is_given(tmp_path):
     config = tmp_path / "machine.yml"
-    config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\n")
+    config.write_text("vpu_num_lanes: 8\nisa: [v, zvl256b]\nsystolic_array_unit: TPUV3_MXU\n")
     assert read_hardware(str(config)).sa == 8 and read_hardware(str(config), 16).sa == 16
+
+
+def test_the_array_unit_is_the_configs_and_the_split_needs_one(tmp_path):
+    """The unit table names systolic_array_unit; without the split there is none, and no array rows."""
+    config = tmp_path / "machine.yml"
+    config.write_text("vpu_num_lanes: 8\nisa: [v, zvl256b]\n")
+    with pytest.raises(ValueError, match=r"round_robin \(the default\) needs systolic_array_unit"):
+        read_hardware(str(config))
+    config.write_text("vpu_num_lanes: 8\nisa: [v, zvl256b]\nsystolic_array_split: none\n")
+    unsplit = read_hardware(str(config))
+    assert unsplit.array_unit is None
+    assert {row[1] for row in acs_cycles.build_units(lookup("gemm"), {"rows": 8}, unsplit)} == {"Vpu"}
+    assert read_hardware(str(paths.root() / "configs" / "tpuv4.yml")).array_unit == "TPUV4_MXU"
+
+
+@pytest.mark.parametrize("over,said", [
+    ({"systolic_array_unit": ""}, "systolic_array_unit: '' is not a name"),
+    ({"systolic_array_unit": None}, "systolic_array_unit: None is not a name"),
+    ({"systolic_array_unit": 7}, "systolic_array_unit: 7 is not a name"),
+    ({"systolic_array_split": "none"}, "systolic_array_unit: TPUV6_MXU is ignored without systolic_array_split"),
+    ({"systolic_array_split": "sideways"}, r"systolic_array_split: sideways \(none \| round_robin\)"),
+])
+def test_an_array_unit_or_split_togsim_refuses_is_refused(over, said, tmp_path):
+    """tpuv6e with an array unit that is not a name, a unit beside the split off, or a split TOGSim does not know."""
+    config, v6e = tmp_path / "machine.yml", paths.root() / "configs" / "tpuv6e.yml"
+    config.write_text(yaml.safe_dump({**yaml.safe_load(v6e.read_text()), **over}))
+    with pytest.raises(ValueError, match=said):
+        read_hardware(str(config))
+
+
+def test_the_vector_length_is_the_zvl_entry_of_isa():
+    """VLEN is N of the one zvl<N>b entry; a config with isa and no such entry, or two, or no isa, is refused."""
+    assert vector_length({"isa": ["m", "v", "zvl512b", "vcix_tpuv6"]}) == 512
+    assert {read_hardware(str(c)).vlen_bits for c in (paths.root() / "configs").glob("*.yml")} == {256}
+    for cfg, said in (({"isa": ["m", "v"]}, "has no zvl<N>b entries"), ({}, "missing required key 'isa'"),
+                      ({"isa": ["zvl128b", "zvl256b"]}, "has 2 zvl<N>b entries")):
+        with pytest.raises(ValueError, match=said):
+            vector_length(cfg)
 
 
 @pytest.mark.parametrize("op,kernels", sorted(OPS.items()))

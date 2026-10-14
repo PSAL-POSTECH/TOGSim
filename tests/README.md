@@ -23,7 +23,7 @@ that selects nothing). A failing case says what it expected, what it saw and whe
 |---|---|
 | `tests/abi/` | A TOG built against another ABI version is refused; the same TOG at this version replays. |
 | `tests/array_split/` | The array split of a segment TOG, and what it refuses. |
-| `tests/configs/` | Every shipped config replays a small TOG, and is refused without a unit table. |
+| `tests/configs/` | Every shipped config replays a small TOG, and is refused without a unit table. Every one follows tpuv6e's convention: an `isa` with exactly one `vcix_*` entry, `vcix`, `address_map` and `systolic_array_unit`. |
 | `tests/cycle_table/` | A run without a cycle table, or with a `tile_id` the table does not hold, is refused. |
 | `tests/cycles/` | `Total execution cycles` of four hand-written TOGs on tpuv6e, as goldens. |
 | `tests/examples/` | `examples/run.sh <name>` prints `examples/<name>/expected.txt`; the fenced blocks of the READMEs and of `docs/` quote only lines of those files and of the examples' sources; every row of the README's refusal table is a refusal the mistakes example prints. |

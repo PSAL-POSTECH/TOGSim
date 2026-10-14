@@ -227,8 +227,8 @@ models one core at the level of a single compute has to supply them.
 
 - **In the compiler flow** gem5 does: its model of the core runs each kind of compute tile and
   reports its cycles and, for each hardware unit, what the unit took in. That is also why
-  the array unit is called `SYSTOLIC`, or `TPUV6_MXU` on tpuv6e: they are the names vcix's
-  libtpu.so and libtpuv6.so give it.
+  the array unit is called what the config's `systolic_array_unit` says: `TPUV6_MXU` is the name
+  vcix's libtpuv6.so gives it; `TPUV3_MXU` and `TPUV4_MXU` name vcix models that do not exist yet.
 - **By hand**, take the numbers from whatever you trust for your core: an RTL or cycle-accurate
   simulation of one compute tile, or an estimate. Every example in `examples/` uses made-up round
   numbers.
@@ -272,7 +272,7 @@ tile_id	unit	unit_of_work	capacity_per_cycle	admitted
 | Field | Meaning |
 |---|---|
 | `tile_id` | The compute tile the row describes. |
-| `unit` | The name of a hardware unit. Names are yours, except that the systolic array must be called `SYSTOLIC` (or what the config's `systolic_array_unit` says: `TPUV6_MXU` on tpuv6e). |
+| `unit` | The name of a hardware unit. Names are yours, except that the systolic array must be called what the config's `systolic_array_unit` says (`TPUV6_MXU` on tpuv6e). |
 | `unit_of_work` | What the unit counts: `rows`, `cycles`, ... A name; it appears in messages. The same on every row of a unit. |
 | `capacity_per_cycle` | How many of those the unit can take in per cycle. An integer above 0, the same on every row of a unit. |
 | `admitted` | How many the unit took in during **one** run of the compute tile. |

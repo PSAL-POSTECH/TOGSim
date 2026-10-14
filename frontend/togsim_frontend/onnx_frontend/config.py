@@ -29,11 +29,26 @@ def core_spad_kb(cfg: dict) -> int:
     return kb
 
 
+def vector_length(cfg: dict) -> int:
+    """The vector length in bits, from the zvl<N>b entry of the config's isa (RISC-V Zvl<N>b: VLEN >= N). A ValueError
+    says the config has no isa, or an isa without exactly one zvl<N>b entry."""
+    if "isa" not in cfg:
+        raise ValueError("missing required key 'isa'")
+    isa = cfg["isa"]
+    if not isinstance(isa, list):
+        raise ValueError(f"isa: {isa!r} is not a list of extensions")
+    zvl = [e for e in isa if isinstance(e, str) and e.startswith("zvl") and e.endswith("b") and e[3:-1].isdigit()]
+    if len(zvl) != 1:
+        raise ValueError(f"isa: {isa} has {len(zvl) or 'no'} zvl<N>b entries, and the frontend takes the vector "
+                         f"length from exactly one")
+    return int(zvl[0][3:-1])
+
+
 def read_hardware(config_path: str, sa: int | None = None,
                   elem_bits: int = 32) -> Hardware:
-    """The machine of the config at `config_path`, with `sa` or else vpu_num_lanes, the rows one array takes in
-    TOGSim, and the spad TOGSim gives a core of it (core_spad_kb). A ValueError says what is missing, not an integer,
-    or below what a machine has: one lane, one array row, one element per lane, no spad; or a spad TOGSim refuses."""
+    """The machine of the config at `config_path`: `sa` or else vpu_num_lanes, the vector length (vector_length), the
+    spad TOGSim gives a core (core_spad_kb), the array unit (systolic_array_unit; None with systolic_array_split none).
+    A ValueError says what is missing, not an integer, below one lane, array row or element per lane, or refused."""
     with open(config_path) as fh:
         cfg = yaml.safe_load(fh) or {}
     if not isinstance(cfg, dict):
@@ -41,17 +56,20 @@ def read_hardware(config_path: str, sa: int | None = None,
 
     try:
         vlane = int(cfg["vpu_num_lanes"])
-        vlen = int(cfg["vpu_vector_length_bits"])
         spad = {key: int(cfg[key]) for key in SPAD_KEYS if cfg.get(key) is not None}
     except KeyError as exc:
         raise ValueError(f"{config_path}: missing required key {exc}") from None
     except TypeError:
-        raise ValueError(f"{config_path}: vpu_num_lanes, vpu_vector_length_bits, vpu_spad_size_kb_per_lane and "
-                         f"core_spad_size_kb are not all integers") from None
+        raise ValueError(f"{config_path}: vpu_num_lanes, vpu_spad_size_kb_per_lane and core_spad_size_kb are not all "
+                         f"integers") from None
+    try:
+        vlen = vector_length(cfg)
+    except ValueError as exc:
+        raise ValueError(f"{config_path}: {exc}") from None
     resolved = sa if sa is not None else vlane
     for what, value, least in (("vpu_num_lanes", vlane, 1),
                                ("the systolic array dimension (--sa, else vpu_num_lanes)", resolved, 1),
-                               ("vpu_vector_length_bits", vlen, elem_bits),
+                               ("the vector length (zvl<N>b of isa)", vlen, elem_bits),
                                *((key, value, 0) for key, value in spad.items())):
         if value < least:
             raise ValueError(f"{config_path}: {what} is {value}, below {least}")
@@ -59,5 +77,19 @@ def read_hardware(config_path: str, sa: int | None = None,
         spad_kb = core_spad_kb(cfg)
     except ValueError as exc:
         raise ValueError(f"{config_path}: {exc}") from None
+    split = cfg.get("systolic_array_split", "round_robin")
+    if split not in ("none", "round_robin"):
+        raise ValueError(f"{config_path}: systolic_array_split: {split} (none | round_robin)")
+    unit = cfg.get("systolic_array_unit")
+    if "systolic_array_unit" in cfg and not (isinstance(unit, str) and unit):
+        raise ValueError(f"{config_path}: systolic_array_unit: {unit!r} is not a name, the unit table's name of the "
+                         f"array unit")
+    if unit is None and split == "round_robin":
+        raise ValueError(f"{config_path}: systolic_array_split: round_robin (the default) needs systolic_array_unit, "
+                         f"the unit table's name of the array unit")
+    if unit is not None and split == "none":
+        raise ValueError(f"{config_path}: systolic_array_unit: {unit} is ignored without systolic_array_split: "
+                         f"round_robin")
 
-    return Hardware(sa=resolved, vlane=vlane, vlen_bits=vlen, elem_bits=elem_bits, spad_bytes=spad_kb * 1024)
+    return Hardware(sa=resolved, vlane=vlane, vlen_bits=vlen, array_unit=unit,
+                    elem_bits=elem_bits, spad_bytes=spad_kb * 1024)
