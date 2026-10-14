@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-TPUV6E = "systolic_ws_256x256_c1_simple_noc_tpuv6e.yml"
+TPUV6E = "tpuv6e.yml"
 MIB = 1 << 20
 TIMEOUT_S = 600
 TYPED_WARNING = "uses the typed grouping"

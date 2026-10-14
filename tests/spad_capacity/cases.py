@@ -294,11 +294,11 @@ def stated_twice_disagreeing_refused(t):
                        exit=134)
 
 
-TPUV6E = REPO / "configs" / "systolic_ws_256x256_c1_simple_noc_tpuv6e.yml"
+TPUV6E = REPO / "configs" / "tpuv6e.yml"
 
 
 def tpuv6e_spad_is_its_lanes(t):
-    """configs/..._tpuv6e.yml as shipped, with its TPUV6_MXU unit table, states 1024 KB on each of 128 lanes and no
+    """configs/tpuv6e.yml as shipped, with its TPUV6_MXU unit table, states 1024 KB on each of 128 lanes and no
     core_spad_size_kb: the TOG one byte over 131072 KB is refused, naming that spad."""
     big = 131072 * KB - HELD + 1
     so = t.tog(TOG, (f"BIG_BYTES={big}",), tensors=(MIB, 256 * MIB, MIB))

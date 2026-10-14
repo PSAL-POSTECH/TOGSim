@@ -16,8 +16,8 @@ from togsim_frontend.acs.node_mapping import KERNELS
 
 simulator = pytest.mark.skipif(not paths.simulator().is_file() and not os.environ.get("TOGSIM_REQUIRE_SIMULATOR"),
                                reason=f"{paths.simulator()} is absent: build the simulator first")
-CONFIG = paths.root() / "configs" / "systolic_ws_8x8_c1_simple_noc_tpuv3.yml"
-UNSUPPORTED = paths.root() / "configs" / "systolic_ws_256x256_c1_simple_noc_tpuv6e.yml"
+CONFIG = paths.root() / "configs" / "tpuv3_8x8.yml"
+UNSUPPORTED = paths.root() / "configs" / "tpuv6e.yml"
 FRONTEND, ACS = "togsim_frontend.onnx_frontend", "togsim_frontend.acs"
 
 
@@ -172,7 +172,7 @@ def test_a_node_whose_tile_ids_the_tables_do_not_cover_exits_3(tmp_path):
 ])
 @pytest.mark.parametrize("module", [FRONTEND, ACS])
 def test_a_config_that_cannot_be_read_exits_4(module, text, said, tmp_path):
-    config = tmp_path / "systolic_ws_8x8_c1.yml"
+    config = tmp_path / "machine.yml"
     if text is not None:
         config.write_text(text)
     args = [model(tmp_path, "Relu"), "--out", tmp_path / "out"] if module == FRONTEND else ["gemm", "-o", tmp_path]
@@ -182,23 +182,13 @@ def test_a_config_that_cannot_be_read_exits_4(module, text, said, tmp_path):
     assert "Traceback" not in done.stderr and not (tmp_path / "out").exists()
 
 
-@pytest.mark.parametrize("module", [FRONTEND, ACS])
-def test_a_config_whose_name_does_not_carry_the_array_dimension_exits_4_without_sa(module, tmp_path):
-    config = tmp_path / "machine.yml"
-    config.write_text(CONFIG.read_text())
-    args = [model(tmp_path, "Sin"), "--out", tmp_path / "out"] if module == FRONTEND else ["gemm", "-o", tmp_path]
-    done = run(module, *args, "--config", config)
-    assert done.returncode == status.EXIT_BAD_INPUT and "Pass --sa" in done.stderr
-    assert run(module, *args, "--config", config, "--sa", "8").returncode in (status.EXIT_OK, status.EXIT_NODES_NOT_RUN)
-
-
 @pytest.mark.parametrize("sa", [0, -8])
 @pytest.mark.parametrize("module", [FRONTEND, ACS])
 def test_an_array_dimension_below_1_exits_4(module, sa, tmp_path):
     args = [model(tmp_path, "Relu"), "--out", tmp_path / "out"] if module == FRONTEND else ["gemm", "-o", tmp_path]
     done = run(module, *args, "--config", CONFIG, "--sa", sa)
     assert done.returncode == status.EXIT_BAD_INPUT, done.stderr
-    assert f"the systolic array dimension (--sa, else the config's name) is {sa}, below 1" in done.stderr
+    assert f"the systolic array dimension (--sa, else vpu_num_lanes) is {sa}, below 1" in done.stderr
     assert "Traceback" not in done.stderr and not (tmp_path / "out").exists()
 
 
@@ -238,7 +228,7 @@ def test_a_simulator_that_is_absent_fails_or_reports_no_total_exits_6_with_no_re
 @simulator
 def test_a_config_the_simulator_itself_refuses_exits_6(tmp_path):
     """The two keys the frontend reads make a machine it accepts; the Simulator needs the rest of the config."""
-    config = tmp_path / "systolic_ws_8x8_c1.yml"
+    config = tmp_path / "machine.yml"
     config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\n")
     done = frontend(tmp_path, model(tmp_path, "Relu"), config=config)
     assert done.returncode == status.EXIT_TOOL_FAILED, done.stderr

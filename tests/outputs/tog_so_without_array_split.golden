@@ -10,7 +10,6 @@ systolic_array_split: none
 vpu_num_lanes: N
 vpu_spad_size_kb_per_lane: N
 vpu_vector_length_bits: N
-tpu_mxu_queue_entries: N
 dram_type: ramulator2
 dram_channels: N
 dram_stats_print_period_cycles: N
@@ -21,13 +20,6 @@ icnt_type: simple
 icnt_latency_cycles: N
 icnt_freq_mhz: N
 icnt_injection_ports_per_core: N
-pytorchsim_functional_mode: N
-pytorchsim_timing_mode: N
-codegen_mapping_strategy: autotune
-codegen_external_mapping_file: ""
-codegen_autotune_max_retry: N
-codegen_autotune_template_topk: N
-codegen_compiler_optimization: all
 [info] [Config/Core] core_id: N, partition_id: N (no partition section)
 [info] [Config/Core] Core N: core_freq_mhz: N, systolic_arrays_per_core: N
 [info] [Config/DRAM] Ramulator2 config path: <path>

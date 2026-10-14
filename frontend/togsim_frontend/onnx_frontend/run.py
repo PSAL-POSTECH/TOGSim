@@ -111,7 +111,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default="togsim_onnx_result",
                     help="directory for the per-node runs and report.json (default: %(default)s)")
     ap.add_argument("--sa", type=int, default=None,
-                    help="systolic array dimension; inferred from the config name")
+                    help="systolic array dimension; vpu_num_lanes by default")
     ap.add_argument("--no-optimize", action="store_true",
                     help="skip the ORT fusion pass")
     args = ap.parse_args(argv)

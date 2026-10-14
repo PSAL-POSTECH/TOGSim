@@ -20,7 +20,7 @@ HOLDS_EVERY_BUFFER = frozenset({"gemm", "conv"})
 
 
 class Hardware:
-    sa: int                 # systolic array dimension (see note in config.py)
+    sa: int                 # systolic array dimension: vpu_num_lanes unless --sa
     vlane: int              # vpu_num_lanes
     vlen_bits: int          # vpu_vector_length_bits
     elem_bits: int = 32

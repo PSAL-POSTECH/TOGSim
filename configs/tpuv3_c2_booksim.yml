@@ -6,7 +6,6 @@ num_systolic_array_per_core: 2
 vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 128
 vpu_vector_length_bits: 256
-tpu_systolic_queue_entries: 256
 
 dram_type: ramulator2
 dram_freq_mhz: 940
@@ -14,14 +13,7 @@ dram_channels: 32
 dram_stats_print_period_cycles: 10000
 ramulator_config_path: ../configs/ramulator2_configs/HBM2_TPUv3.yaml
 
-icnt_type: simple
-icnt_latency_cycles: 10
+icnt_type: booksim2
 icnt_freq_mhz: 940
 icnt_injection_ports_per_core: 16
-num_partition: 2
-partition:
-  core_0: 0
-  core_1: 1
-
-pytorchsim_functional_mode: 1
-pytorchsim_timing_mode: 1
+booksim_config_path: ../configs/booksim2_configs/fly_c32_m32.icnt

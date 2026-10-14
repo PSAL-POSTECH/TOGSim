@@ -43,7 +43,7 @@ def main(argv=None) -> int:
     ap.add_argument("-o", "--out", default=".",
                     help="directory for tog_cycles.tsv and tog_units.tsv (default: the current one)")
     ap.add_argument("--sa", type=int, default=None,
-                    help="systolic array dimension; inferred from the config name")
+                    help="systolic array dimension; vpu_num_lanes by default")
     for name, what in (("rows", "rows"), ("elems", "element count"), ("depth", "reduction depth"),
                        ("cols", "column count")):
         ap.add_argument(f"--{name}", type=int, default=None,

@@ -23,7 +23,7 @@ from togsim_frontend.onnx_frontend.onnx_ops import OPS
 
 pytestmark = pytest.mark.skipif(not paths.simulator().is_file() and not os.environ.get("TOGSIM_REQUIRE_SIMULATOR"),
                                 reason=f"{paths.simulator()} is absent: build the simulator first")
-CONFIG = paths.root() / "configs" / "systolic_ws_8x8_c1_simple_noc_tpuv3.yml"
+CONFIG = paths.root() / "configs" / "tpuv3_8x8.yml"
 MIB = 1 << 20
 TOTAL = re.compile(r"Total execution cycles: (\d+)")
 

@@ -3,29 +3,24 @@ from togtest import MIB, REPO, Case, Failure
 
 CONFIGS = REPO / "configs"
 SHIPPED = [
-    "systolic_ws_128x128_c1_booksim_tpuv2",
-    "systolic_ws_128x128_c1_booksim_tpuv3",
-    "systolic_ws_128x128_c1_simple_noc_tpuv2",
-    "systolic_ws_128x128_c1_simple_noc_tpuv3",
-    "systolic_ws_128x128_c1_simple_noc_tpuv3_functional_only",
-    "systolic_ws_128x128_c1_simple_noc_tpuv3_half",
-    "systolic_ws_128x128_c1_simple_noc_tpuv3_timing_only",
-    "systolic_ws_128x128_c1_simple_noc_tpuv4",
-    "systolic_ws_128x128_c2_booksim_tpuv3",
-    "systolic_ws_128x128_c2_simple_noc_tpuv2",
-    "systolic_ws_128x128_c2_simple_noc_tpuv3",
-    "systolic_ws_128x128_c2_simple_noc_tpuv3_ils",
-    "systolic_ws_128x128_c2_simple_noc_tpuv3_partition",
-    "systolic_ws_128x128_c2_simple_noc_tpuv4",
-    "systolic_ws_256x256_c1_simple_noc_tpuv6e",
-    "systolic_ws_256x256_c1_simple_noc_tpuv6e_functional_only",
-    "systolic_ws_256x256_c1_simple_noc_tpuv6e_timing_only",
-    "systolic_ws_32x32_c1_simple_noc_tpuv3",
-    "systolic_ws_8x8_c1_simple_noc_tpuv3",
+    "tpuv2_booksim",
+    "tpuv3_booksim",
+    "tpuv2",
+    "tpuv3",
+    "tpuv3_half",
+    "tpuv4",
+    "tpuv3_c2_booksim",
+    "tpuv2_c2",
+    "tpuv3_c2",
+    "tpuv3_c2_partition",
+    "tpuv4_c2",
+    "tpuv6e",
+    "tpuv3_32x32",
+    "tpuv3_8x8",
 ]
 RUNS_WITHOUT_UNIT_TABLE = []
 #: The array unit a config names with systolic_array_unit, where it is not the default SYSTOLIC.
-ARRAY_UNIT = {name: "TPUV6_MXU" for name in SHIPPED if "_tpuv6e" in name}
+ARRAY_UNIT = {name: "TPUV6_MXU" for name in SHIPPED if name.startswith("tpuv6e")}
 
 
 def units(name):

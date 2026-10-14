@@ -68,6 +68,6 @@ mkdir -p /tmp/gemm && g++ -std=c++17 -shared -fPIC -Iinclude kernels/gemm_tog.cp
 printf '131072\n262144\n131072\n' > /tmp/gemm/tog_tensors.txt        # A 128x256, B 256x256, C 128x256
 printf '128\t0\n8206\t0\n' > /tmp/gemm/tog_cycles.tsv                # tile 0 accumulator init, tile 1 a block
 printf '0\tTPUV6_MXU\trows\t1\t0\n1\tTPUV6_MXU\trows\t1\t8192\n' > /tmp/gemm/tog_units.tsv
-build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml \
+build/bin/Simulator --config configs/tpuv6e.yml \
   --tog_so /tmp/gemm/tog.so --cycle_table /tmp/gemm/tog_cycles.tsv --unit_table /tmp/gemm/tog_units.tsv
 ```
