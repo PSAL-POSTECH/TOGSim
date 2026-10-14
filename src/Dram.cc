@@ -381,12 +381,12 @@ void DramRamulator2::print_cache_stats() {
   }
 }
 
-void SimpleDRAM::apply_yaml_to_simulation_config(const YAML::Node& config, SimulationConfig& cfg) {
+void SimpleDRAM::apply_yaml_to_simulation_config(ConfigReader& config, SimulationConfig& cfg) {
   if (!config["dram_latency"])
     throw std::runtime_error("[Config/DRAM] simple: dram_latency is required");
   cfg.dram_latency = config["dram_latency"].as<uint32_t>();
 
-  auto yaml_get_u32 = [](const YAML::Node& n, const char* key, uint32_t def) -> uint32_t {
+  auto yaml_get_u32 = [](ConfigReader& n, const char* key, uint32_t def) -> uint32_t {
     if (n[key])
       return n[key].as<uint32_t>();
     return def;

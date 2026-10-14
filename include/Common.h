@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <queue>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -27,5 +28,22 @@ typedef uint64_t addr_type;
 typedef uint64_t cycle_type;
 
 bool loadConfig(const std::string& config_path, YAML::Node& config_yaml);
+
+// The config as TOGSim reads it: every key looked up goes through operator[], which notes it, so that the keys of
+// the file nothing looked up can be named.
+class ConfigReader {
+ public:
+  explicit ConfigReader(const YAML::Node& yaml) : _yaml(yaml) {}
+  YAML::Node operator[](const std::string& key) {
+    _read.insert(key);
+    return _yaml[key];
+  }
+  const std::set<std::string>& read() const { return _read; }
+
+ private:
+  const YAML::Node& _yaml;
+  std::set<std::string> _read;
+};
+
 SimulationConfig initialize_config(const YAML::Node& config,
                                      const std::string& config_file_path = {});

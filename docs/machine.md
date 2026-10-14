@@ -39,8 +39,7 @@ default, and all 14 configs.
 | Which interconnect between cores and DRAM? | `icnt_type`: `simple` with `icnt_latency_cycles`, or `booksim2` with `booksim_config_path`; `icnt_injection_ports_per_core` (default 1) | The ports per core are how many DRAM requests a core can send per cycle. |
 | How chatty is the log? | `core_stats_print_period_cycles`, `dram_stats_print_period_cycles` | 0 turns the periodic blocks off. They do not change the timing. |
 
-Keys TOGSim does not read are ignored without a message, so check the spelling of a key that seems
-to have no effect.
+A key TOGSim does not read is named in a `[warning]` line.
 
 **The array size is not a key.** TOGSim reads no array dimension but `vpu_num_lanes`, the rows one
 array takes, and the frontend takes it as `SA`. What a compute costs comes from the

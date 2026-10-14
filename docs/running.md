@@ -177,9 +177,6 @@ Behaviour of the simulator that a user runs into. Each was reproduced with this 
 - **The `[Scheduler p] Kernel k has completed ... finished at cycle N` line** reads 1 for the hello run of 1659 cycles on
   `examples/minimal.yml`. It is not when the kernel finished; read the total.
 - **The spad between kernels is not modelled** ([held buffers](tog-abi.md#data-that-is-already-on-the-chip)).
-- **Unknown config keys are ignored**, including misspelled ones:
-  `configs/tpuv2.yml` spells a key
-  `dram_stats_print_period_cycless`.
 - **`--help` describes `--models_list` as `Path for the trace file (.trace)`**, and a failed open
   says `Failed to open trace file`. The file is the command stream.
 - **The log calls a work-item a tile** (`TILE_SCHEDULED`, `tile=N`), and the type of a body is

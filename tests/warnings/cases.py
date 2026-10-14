@@ -1,11 +1,12 @@
 """What TOGSim keeps running and says once, at warn level: a compute whose tile id the unit table has no rows for,
-a DMA whose arg_id tog_tensors.txt does not list."""
+a DMA whose arg_id tog_tensors.txt does not list, a config key TOGSim does not read."""
 from togtest import MIB, Case, write_table
 
 TOG = "names_ids_tog.cpp"
 CYCLES = [300] * 5
 NO_ROWS = "the unit table has no rows for tile ids"
 STRAY_ARG = "its DMAs name arg_id"
+UNREAD_KEY = "is not read by TOGSim"
 
 
 def rows(*tile_ids):
@@ -115,6 +116,21 @@ def session_every_arg_id_listed_is_quiet(t):
     session(t, None).expect_no_warning(STRAY_ARG)
 
 
+def misspelled_key_warned_once(t):
+    """tpuv6e with core_freq_mhzz beside core_freq_mhz: the run goes on, and the line names the file and the key."""
+    config = t.machine(systolic_array_split="none", core_freq_mhzz=1751)
+    run = t.simulate(t.tog(TOG, (), tensors=(MIB, MIB)), config, CYCLES, None)
+    run.expect_warned_once(f"[TOGSim] config {config}: key core_freq_mhzz {UNREAD_KEY}")
+    if len(run.warned(UNREAD_KEY)) != 1:
+        run.fail(f"expected only core_freq_mhzz named, got {run.warned(UNREAD_KEY)}")
+
+
+def keys_other_tools_read_are_quiet(t):
+    """tpuv6e as shipped carries isa, vcix and address_map for the compiler and vpu_vector_length_bits for the
+    frontend: none of them is named."""
+    replay(t, None).expect_no_warning(UNREAD_KEY)
+
+
 CASES = [
     Case("unit_rows.one_tile_without_them_warned_once", tile_without_unit_rows_warned_once),
     Case("unit_rows.tiles_without_them_listed_in_one_line", tiles_without_unit_rows_listed_in_one_line),
@@ -129,4 +145,6 @@ CASES = [
     Case("arg_id.every_one_listed_is_quiet", every_arg_id_listed_is_quiet),
     Case("arg_id.session.at_tensor_count_warned_once", session_arg_id_at_tensor_count_warned_once),
     Case("arg_id.session.every_one_listed_is_quiet", session_every_arg_id_listed_is_quiet),
+    Case("config_key.misspelled_warned_once", misspelled_key_warned_once),
+    Case("config_key.read_by_other_tools_is_quiet", keys_other_tools_read_are_quiet),
 ]

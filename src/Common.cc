@@ -22,7 +22,7 @@ bool loadConfig(const std::string& config_path, YAML::Node& config_yaml) {
 }
 
 template <typename T>
-T get_config_value(const YAML::Node& config, std::string key) {
+T get_config_value(ConfigReader& config, std::string key) {
   if (config[key]) {
     return config[key].as<T>();
   } else {
@@ -32,7 +32,7 @@ T get_config_value(const YAML::Node& config, std::string key) {
 
 // The spad of one core in KB: vpu_spad_size_kb_per_lane x vpu_num_lanes when the config gives both, and a
 // core_spad_size_kb beside them must equal that product; without them core_spad_size_kb alone; else 0, no limit.
-static uint32_t core_spad_kb(const YAML::Node& config) {
+static uint32_t core_spad_kb(ConfigReader& config) {
   const bool per_lane = config["vpu_spad_size_kb_per_lane"] && config["vpu_num_lanes"];
   const auto stated = config["core_spad_size_kb"] ? std::optional<uint32_t>(config["core_spad_size_kb"].as<uint32_t>())
                                                   : std::nullopt;
@@ -50,12 +50,17 @@ static uint32_t core_spad_kb(const YAML::Node& config) {
   return (uint32_t)kb;
 }
 
-SimulationConfig initialize_config(const YAML::Node& config,
+// Keys of a machine config that other tools read and TOGSim does not: the compiler's isa, vcix and address_map, and
+// the frontend's vpu_vector_length_bits. Any other key nothing in initialize_config looks up is named in a warning.
+static const std::set<std::string> kReadElsewhere = {"isa", "vcix", "address_map", "vpu_vector_length_bits"};
+
+SimulationConfig initialize_config(const YAML::Node& yaml,
                                      const std::string& config_file_path) {
+  ConfigReader config(yaml);
   SimulationConfig parsed_config;
   parsed_config.config_file_path = config_file_path;
   YAML::Emitter emitter;
-  emitter << config;
+  emitter << yaml;
   spdlog::info("PyTorchSim config:\n{}", emitter.c_str());
 
   /* Core configs */
@@ -182,6 +187,8 @@ SimulationConfig initialize_config(const YAML::Node& config,
   if (config["icnt_injection_ports_per_core"])
     parsed_config.icnt_injection_ports_per_core = config["icnt_injection_ports_per_core"].as<uint32_t>();
 
+  if (config["tog_tensor_tile"])
+    parsed_config.tog_tensor_tile = config["tog_tensor_tile"].as<std::vector<uint64_t>>();
   if (config["num_partition"])
     parsed_config.num_partition = config["num_partition"].as<uint32_t>();
   if (config["partition"]) {
@@ -201,6 +208,11 @@ SimulationConfig initialize_config(const YAML::Node& config,
       parsed_config.partiton_map[i] = 0;
       spdlog::info("[Config/Core] core_id: {}, partition_id: 0 (no partition section)", i);
     }
+  }
+  for (const auto& entry : yaml) {
+    const std::string key = entry.first.as<std::string>();
+    if (!config.read().count(key) && !kReadElsewhere.count(key))
+      spdlog::warn("[TOGSim] config {}: key {} is not read by TOGSim", config_file_path, key);
   }
   return parsed_config;
 }

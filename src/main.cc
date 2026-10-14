@@ -14,10 +14,11 @@ namespace fs = std::filesystem;
 // `tog_tensor_tile: [rows, cols]` lays every tensor argument of the TOG out in tiles of that many 4-byte
 // elements; a tile keeps its bytes, so rows scale by 4/elem (bf16 (16,128), as TPU packs it).
 // Shapes come from tog_tensor_shapes.txt beside the .so: rows cols elem_bytes per argument.
-std::vector<std::shared_ptr<TensorTiling>> tog_tensor_tilings(const YAML::Node& cfg, const fs::path& dir) {
+std::vector<std::shared_ptr<TensorTiling>> tog_tensor_tilings(const std::optional<std::vector<uint64_t>>& stated,
+                                                              const fs::path& dir) {
   std::vector<std::shared_ptr<TensorTiling>> out;
-  if (!cfg["tog_tensor_tile"]) return out;
-  const auto tile = cfg["tog_tensor_tile"].as<std::vector<uint64_t>>();
+  if (!stated) return out;
+  const std::vector<uint64_t>& tile = *stated;
   if (tile.size() != 2 || !tile[0] || !tile[1]) {
     spdlog::error("[TOGSim] tog_tensor_tile wants [rows, cols], both nonzero");
     exit(EXIT_FAILURE);
@@ -86,13 +87,12 @@ std::unique_ptr<TileGraph> build_tog_tilegraph(Simulator* simulator,
                                                const std::string& tog_so_path,
                                                const std::string& cycle_table_path,
                                                int partition_id, int64_t unit_tile_base = 0) {
-  const auto& cfg = simulator->get_hardware_config_yaml();
-  int num_cores = cfg["num_cores"] ? cfg["num_cores"].as<int>() : 1;
+  const int num_cores = simulator->get_config().num_cores;
   std::vector<int32_t> partition_cores;
   for (int c = 0; c < num_cores; c++)
     if (simulator->get_partition_id(c) == partition_id) partition_cores.push_back(c);
   if (partition_cores.empty()) partition_cores.push_back(0);
-  const auto tilings = tog_tensor_tilings(cfg, fs::path(tog_so_path).parent_path());
+  const auto tilings = tog_tensor_tilings(simulator->get_config().tog_tensor_tile, fs::path(tog_so_path).parent_path());
   std::vector<uint64_t> bases = tog_tensor_bases(fs::path(tog_so_path).parent_path(), tilings);
   std::vector<int64_t> cyc, ovl;
   load_cycle_table(cycle_table_path, cyc, ovl);
