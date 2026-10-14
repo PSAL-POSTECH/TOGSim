@@ -19,7 +19,7 @@
 | unit, unit of work, admitted | A hardware unit named in the unit table; what it counts (rows, cycles); how many of those it took in. |
 | lanes | `vpu_num_lanes`: the rows one systolic array takes before a compute tile is split over several arrays. |
 | systolic array split | Spreading a compute tile's array work over the arrays of a core, which shortens the compute. On by default. |
-| machine config | The YAML file given to `--config`. tpuv6e is `configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml`. |
+| machine config | The YAML file given to `--config`. tpuv6e is `configs/tpuv6e.yml`. |
 | partition | A set of cores with its own queue of kernels. A kernel runs on the cores of one partition. |
 | session, command stream | A run of several kernels, launched by the lines of the file given to `--models_list`. |
 | trace | The per-instruction log of a replay, printed at `--log_level trace`. |

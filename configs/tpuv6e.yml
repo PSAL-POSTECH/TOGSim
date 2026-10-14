@@ -11,7 +11,6 @@ systolic_array_unit: TPUV6_MXU
 vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 1024
 vpu_vector_length_bits: 256
-tpu_mxu_queue_entries: 512
 
 dram_type: ramulator2
 dram_channels: 32
@@ -24,12 +23,3 @@ icnt_type: simple
 icnt_latency_cycles: 10
 icnt_freq_mhz: 1751
 icnt_injection_ports_per_core: 32
-
-pytorchsim_functional_mode: 1
-pytorchsim_timing_mode: 0
-
-codegen_mapping_strategy: autotune
-codegen_external_mapping_file: ''
-codegen_autotune_max_retry: 10
-codegen_autotune_template_topk: 4
-codegen_compiler_optimization: all

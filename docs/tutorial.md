@@ -3,7 +3,7 @@
 Each step below is a directory under `examples/` with a TOG source, the files it needs and
 `expected.txt`, the output of `examples/run.sh <name>`. Build the simulator first
 ([Quick start](../README.md#quick-start)). Every run uses
-`configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml`, called **tpuv6e** in these pages.
+`configs/tpuv6e.yml`, called **tpuv6e** in these pages.
 
 The tests replay every example against its `expected.txt`, and check that each log line and source
 line quoted in a fenced block of these pages is still a line of those files. The numbers in the
@@ -151,7 +151,7 @@ The script echoes each command after `+`. Its first run is the replay of the Qui
 ```text
 == hello
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/hello/hello_tog.cpp -o examples/hello/tog.so
-+ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv --log_level trace
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false ...
 [trace] [141][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
@@ -190,7 +190,7 @@ printf '16384\n16384\n' > my_kernel/tog_tensors.txt
 printf '600\t0\n' > my_kernel/tog_cycles.tsv
 printf '0\tTPUV6_MXU\trows\t1\t128\n0\tVpu\tcycles\t1\t100\n' > my_kernel/tog_units.tsv
 g++ -std=c++17 -shared -fPIC -O1 -Iinclude my_kernel/my_tog.cpp -o my_kernel/tog.so
-build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml \
+build/bin/Simulator --config configs/tpuv6e.yml \
   --tog_so my_kernel/tog.so --cycle_table my_kernel/tog_cycles.tsv \
   --unit_table my_kernel/tog_units.tsv | tail -n 1
 ```
@@ -437,13 +437,13 @@ examples/run.sh session
 ```
 
 ```text
-+ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --models_list examples/session/commands.txt --log_level trace
++ build/bin/Simulator --config configs/tpuv6e.yml --models_list examples/session/commands.txt --log_level trace
 [info] [Scheduler 0] Enqueued kernel_id: 0, tog_path: examples/session/k0/tog.so, operation: kernel, request_time_cycles: 0
 [trace] [142][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [info] [Scheduler 0] Enqueued kernel_id: 1, tog_path: examples/session/k1/tog.so, operation: kernel, request_time_cycles: 0
 [trace] [948][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
 [info] Total execution cycles: 1668
-# examples/session/two_partitions.gen.yml: configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml with num_cores: 2, num_partition: 2, partition: {core_0: 0, core_1: 1}
+# examples/session/two_partitions.gen.yml: configs/tpuv6e.yml with num_cores: 2, num_partition: 2, partition: {core_0: 0, core_1: 1}
 + build/bin/Simulator --config examples/session/two_partitions.gen.yml --models_list examples/session/commands_two_partitions.txt --log_level trace
 [info] [Scheduler 0] Enqueued kernel_id: 0, tog_path: examples/session/k0/tog.so, operation: kernel, request_time_cycles: 0
 [info] [Scheduler 1] Enqueued kernel_id: 1, tog_path: examples/session/k1/tog.so, operation: kernel, request_time_cycles: 0
@@ -475,7 +475,7 @@ simulated. For example:
 
 ```text
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DWRONG_COUNT examples/mistakes/refused_tog.cpp -o examples/mistakes/WRONG_COUNT.so
-+ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/WRONG_COUNT.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/WRONG_COUNT.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
 [error] [TOGSim] wait expects another element count: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects 2048
 exit 1
 ```
@@ -493,7 +493,7 @@ takes 840 cycles.
 | a unit table whose rows are all for `tile_id` 1, while the TOG computes `tile_id` 0 | 840 | The compute adds nothing to any unit, and the array split leaves it whole: `TPUV6_MXU utilization(%): 0.00`. | `the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units` |
 
 ```text
-+ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/TENSOR_PAST_LIST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TENSOR_PAST_LIST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
 [warning] [TOGSim] TOG examples/mistakes/TENSOR_PAST_LIST.so: its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0
 ```
 
@@ -509,7 +509,7 @@ its buffer, so the store drains [data already on the chip](tog-abi.md#data-that-
 It is issued at cycle 3, an `[info]` line names the buffer, and a 16 KB spad refuses the TOG.
 
 ```text
-+ build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
 [info] [TOGSim] TOG examples/mistakes/CONSUMER_FIRST.so: core 0 holds 16384 bytes for the kernel: buffers 2, which its work-items read without having written them
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false ...
 [trace] [3][Core 0][INST_ISSUED    ][INST_ID=1] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false ...

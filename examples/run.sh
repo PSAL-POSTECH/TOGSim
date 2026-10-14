@@ -5,7 +5,7 @@
 set -u
 cd -P "$(dirname "$0")/.."
 SIM=build/bin/Simulator
-V6E=configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml
+V6E=configs/tpuv6e.yml
 EXAMPLES="hello async_barrier tiles gemm session mistakes"
 ulimit -c 0
 

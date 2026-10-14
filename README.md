@@ -55,7 +55,7 @@ replay it:
 
 ```bash
 g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/hello/hello_tog.cpp -o examples/hello/tog.so
-build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml \
+build/bin/Simulator --config configs/tpuv6e.yml \
   --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv \
   --unit_table examples/hello/tog_units.tsv | tail -n 1
 ```
@@ -169,7 +169,7 @@ utilization of each unit per core and the DMA and DRAM bandwidth. `--log_level t
 each instruction was issued and finished. A refused run exits non-zero with a line that names the
 cause.
 
-The machine is the YAML file given to `--config`. `configs/` ships 19 of them, and
+The machine is the YAML file given to `--config`. `configs/` ships 14 of them, and
 `examples/minimal.yml` is one that depends on no other file.
 
 ## Documentation

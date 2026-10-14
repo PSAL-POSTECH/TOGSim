@@ -20,13 +20,10 @@ icnt_latency_cycles: 1
 systolic_array_split: none
 ```
 
-`configs/` ships 19 machines named `systolic_ws_<n>x<n>_c<cores>_<interconnect>_<machine>`:
-`<n>` is the systolic array (and `vpu_num_lanes`, except on the `_tpuv6e` ones, of 128
-lanes), `<cores>` is `num_cores`, `<interconnect>` is `simple_noc` or `booksim`, and
-`<machine>` selects the clock, the arrays per core and the DRAM file. So
-`systolic_ws_256x256_c1_simple_noc_tpuv6e.yml`, called tpuv6e in these pages, has two arrays of 128 lanes, one core
-and the simple interconnect. [docs/config-keys.md](config-keys.md) lists every key with its
-default, and all 19 configs.
+`configs/` ships 14 machines, named after the TPU they model, with `_c2` for two cores, `_booksim`
+for the BookSim2 interconnect and `_8x8`, `_32x32` for the small arrays. `tpuv6e.yml` has two
+arrays of 128 lanes, one core and the simple interconnect. [docs/config-keys.md](config-keys.md) lists every key with its
+default, and all 14 configs.
 
 ## The knobs
 
@@ -45,8 +42,8 @@ default, and all 19 configs.
 Keys TOGSim does not read are ignored without a message, so check the spelling of a key that seems
 to have no effect.
 
-**The array size is not a key.** The `256x256` in a file name is read by the frontend, not by
-TOGSim, and on tpuv6e it is not `vpu_num_lanes` (128); TOGSim reads no other array dimension. What a compute costs comes from the
+**The array size is not a key.** TOGSim reads no array dimension but `vpu_num_lanes`, the rows one
+array takes, and the frontend takes it as `SA`. What a compute costs comes from the
 cycle table, and the array reaches the simulator only through `num_systolic_array_per_core`,
 `vpu_num_lanes` and the unit table. To model another array, change those keys and supply the two
 tables for it.
@@ -60,7 +57,7 @@ while you change a key:
 ```bash
 g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/tiles/tiles_tog.cpp -o examples/tiles/tog.so
 sed -e "s#: \.\./configs/#: $PWD/configs/#" -e 's/^num_cores: .*/num_cores: 2/' \
-  configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml > build/two_cores.yml
+  configs/tpuv6e.yml > build/two_cores.yml
 build/bin/Simulator --config build/two_cores.yml --tog_so examples/tiles/tog.so \
   --cycle_table examples/tiles/tog_cycles.tsv --unit_table examples/tiles/tog_units.tsv | tail -n 1
 ```
@@ -77,7 +74,7 @@ every shipped config, is appended instead: `echo 'systolic_array_split: none' >>
 ```bash
 for n in 1 2 4; do
   sed -e "s#: \.\./configs/#: $PWD/configs/#" -e "s/^num_cores: .*/num_cores: $n/" \
-    configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml > build/cores_$n.yml
+    configs/tpuv6e.yml > build/cores_$n.yml
   build/bin/Simulator --config build/cores_$n.yml --tog_so examples/tiles/tog.so \
     --cycle_table examples/tiles/tog_cycles.tsv --unit_table examples/tiles/tog_units.tsv \
     | awk -v n=$n '/Total execution cycles/ { print "num_cores", n, $NF }'

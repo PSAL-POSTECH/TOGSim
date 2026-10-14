@@ -5,9 +5,8 @@ what changing one does; this page is the full list.
 
 - A required key that is missing, or a value TOGSim does not implement, aborts the run with exit
   status 134 and a `what():  <reason>` line on stderr.
-- A key that is not in this list is ignored without a message. The shipped configs carry several
-  for other tools that read the same file (`vpu_vector_length_bits`,
-  `tpu_*`, `pytorchsim_*`, `codegen_*`); their meaning is not defined here.
+- A key that is not in this list is ignored without a message. The shipped configs carry one for
+  the frontend, `vpu_vector_length_bits`.
 - The config is echoed at the top of the log, so a run shows which values it used.
 
 ## Cores
@@ -77,47 +76,38 @@ what changing one does; this page is the full list.
 
 ## The shipped configs
 
-`configs/` holds 19 machines named `systolic_ws_<n>x<n>_c<cores>_<interconnect>_<machine>`:
-`<n>` is the systolic array, which the frontend reads from the name (and `vpu_num_lanes`, except on
-the `_tpuv6e` ones), `<cores>` is `num_cores`, `<interconnect>` is `simple_noc`
-(`icnt_type: simple`) or `booksim` (`icnt_type: booksim2`), and `<machine>` selects the clock, the
-arrays per core and the Ramulator2 file. The documents call
-`systolic_ws_256x256_c1_simple_noc_tpuv6e.yml` "tpuv6e" for short. All 19 use
+`configs/` holds 14 machines named `<machine>[_<n>x<n>][_c<cores>][_booksim][_<variant>]`:
+`<machine>` selects the clock, the arrays per core and the Ramulator2 file; `_<n>x<n>` marks the
+8- and 32-lane configs, `_c<cores>` a `num_cores` above 1, and `_booksim` `icnt_type: booksim2`
+(else `simple`). All 14 use
 `dram_type: ramulator2`, and none sets `systolic_array_split: none`, so every one needs a unit table.
 
-| Config (without the `systolic_ws_` prefix and `.yml`) | Cores | Core MHz | Arrays per core | Lanes | Spad KB | DRAM channels | Ramulator2 file | L2 | Interconnect |
+| Config (without `.yml`) | Cores | Core MHz | Arrays per core | Lanes | Spad KB | DRAM channels | Ramulator2 file | L2 | Interconnect |
 |---|---|---|---|---|---|---|---|---|---|
-| `128x128_c1_booksim_tpuv2` | 1 | 700 | 1 | 128 | 16384 | 16 | `HBM2_TPUv2.yaml` | none | BookSim2 `fly_c16_m16.icnt` |
-| `128x128_c1_booksim_tpuv3` | 1 | 940 | 2 | 128 | 16384 | 16 | `HBM2_TPUv3.yaml` | none | BookSim2 `fly_c16_m16.icnt` |
-| `128x128_c1_simple_noc_tpuv2` | 1 | 700 | 1 | 128 | 16384 | 32 | `HBM2_TPUv2.yaml` | none | simple, 10 cycles |
-| `128x128_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 128 | 16384 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
-| `128x128_c1_simple_noc_tpuv3_functional_only` | 1 | 940 | 2 | 128 | 16384 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
-| `128x128_c1_simple_noc_tpuv3_timing_only` | 1 | 940 | 2 | 128 | 16384 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
-| `128x128_c1_simple_noc_tpuv3_half` | 1 | 940 | 2 | 128 | 16384 | 8 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
-| `128x128_c1_simple_noc_tpuv4` | 1 | 1050 | 4 | 128 | 16384 | 16 | `HBM2_TPUv4.yaml` | data cache | simple, 10 cycles |
-| `128x128_c2_booksim_tpuv3` | 2 | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | BookSim2 `fly_c32_m32.icnt` |
-| `128x128_c2_simple_noc_tpuv2` | 2 | 700 | 1 | 128 | 16384 | 32 | `HBM2_TPUv2.yaml` | none | simple, 10 cycles |
-| `128x128_c2_simple_noc_tpuv3` | 2 | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
-| `128x128_c2_simple_noc_tpuv3_ils` | 2 | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
-| `128x128_c2_simple_noc_tpuv3_partition` | 2, in 2 partitions | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
-| `128x128_c2_simple_noc_tpuv4` | 2 | 1050 | 4 | 128 | 16384 | 32 | `HBM2_TPUv4.yaml` | data cache | simple, 10 cycles |
-| `256x256_c1_simple_noc_tpuv6e` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
-| `256x256_c1_simple_noc_tpuv6e_functional_only` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
-| `256x256_c1_simple_noc_tpuv6e_timing_only` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
-| `32x32_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 32 | 1024 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
-| `8x8_c1_simple_noc_tpuv3` | 1 | 940 | 2 | 8 | 256 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
+| `tpuv2_booksim` | 1 | 700 | 1 | 128 | 16384 | 16 | `HBM2_TPUv2.yaml` | none | BookSim2 `fly_c16_m16.icnt` |
+| `tpuv3_booksim` | 1 | 940 | 2 | 128 | 16384 | 16 | `HBM2_TPUv3.yaml` | none | BookSim2 `fly_c16_m16.icnt` |
+| `tpuv2` | 1 | 700 | 1 | 128 | 16384 | 32 | `HBM2_TPUv2.yaml` | none | simple, 10 cycles |
+| `tpuv3` | 1 | 940 | 2 | 128 | 16384 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
+| `tpuv3_half` | 1 | 940 | 2 | 128 | 16384 | 8 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
+| `tpuv4` | 1 | 1050 | 4 | 128 | 16384 | 16 | `HBM2_TPUv4.yaml` | data cache | simple, 10 cycles |
+| `tpuv3_c2_booksim` | 2 | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | BookSim2 `fly_c32_m32.icnt` |
+| `tpuv2_c2` | 2 | 700 | 1 | 128 | 16384 | 32 | `HBM2_TPUv2.yaml` | none | simple, 10 cycles |
+| `tpuv3_c2` | 2 | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
+| `tpuv3_c2_partition` | 2, in 2 partitions | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
+| `tpuv4_c2` | 2 | 1050 | 4 | 128 | 16384 | 32 | `HBM2_TPUv4.yaml` | data cache | simple, 10 cycles |
+| `tpuv6e` | 1 | 1751 | 2 | 128 | 131072 | 32 | `HBM3_TPUv6e.yaml` | data cache | simple, 10 cycles |
+| `tpuv3_32x32` | 1 | 940 | 2 | 32 | 1024 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
+| `tpuv3_8x8` | 1 | 940 | 2 | 8 | 256 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 
-- `256x256_c1_simple_noc_tpuv6e` is the machine the tests and the examples use: one TPU v6e
+- `tpuv6e` is the machine the tests and the examples use: one TPU v6e
   TensorCore as libtpu drives it, two 256x256 arrays, 128 lanes of 1024 KB (VMEM 128 MB) and 256-bit
   vectors (8 sublanes x 32 bit), and `systolic_array_split: round_robin` over the array unit
   `TPUV6_MXU` (`systolic_array_unit`), so its unit tables name `TPUV6_MXU` where the others name
-  `SYSTOLIC`. It and its two variants print statistics every 200 cycles; the others every 10000.
-- `128x128_c1_simple_noc_tpuv2` spells its DRAM period `dram_stats_print_period_cycless`. TOGSim
+  `SYSTOLIC`. It prints statistics every 200 cycles; the others every 10000.
+- `tpuv2` spells its DRAM period `dram_stats_print_period_cycless`. TOGSim
   ignores that key, so this config sets no DRAM period.
-- The `_functional_only`, `_timing_only` and `_ils` variants differ from their base only in
-  `pytorchsim_*` keys, which TOGSim does not read: they simulate exactly as their base does.
-- `_half` is `128x128_c1_simple_noc_tpuv3` with half the DRAM channels.
-- `_partition` is `128x128_c2_simple_noc_tpuv3` with `num_partition: 2` and one core in each.
+- `tpuv3_half` is `tpuv3` with half the DRAM channels.
+- `tpuv3_c2_partition` is `tpuv3_c2` with `num_partition: 2` and one core in each.
 - `examples/minimal.yml` is not one of the 19: it is a `dram_type: simple` machine that needs no
   other file and no unit table.
 

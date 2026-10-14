@@ -109,7 +109,7 @@ last run of `examples/run.sh gemm` shows them.
 instruction, grep for its id:
 
 ```bash
-build/bin/Simulator --config configs/systolic_ws_256x256_c1_simple_noc_tpuv6e.yml \
+build/bin/Simulator --config configs/tpuv6e.yml \
   --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv \
   --unit_table examples/hello/tog_units.tsv --log_level trace | grep -F 'INST_ID=0]'
 ```
@@ -178,7 +178,7 @@ Behaviour of the simulator that a user runs into. Each was reproduced with this 
   `examples/minimal.yml`. It is not when the kernel finished; read the total.
 - **The spad between kernels is not modelled** ([held buffers](tog-abi.md#data-that-is-already-on-the-chip)).
 - **Unknown config keys are ignored**, including misspelled ones:
-  `configs/systolic_ws_128x128_c1_simple_noc_tpuv2.yml` spells a key
+  `configs/tpuv2.yml` spells a key
   `dram_stats_print_period_cycless`.
 - **`--help` describes `--models_list` as `Path for the trace file (.trace)`**, and a failed open
   says `Failed to open trace file`. The file is the command stream.

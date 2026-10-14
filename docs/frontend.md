@@ -36,9 +36,9 @@ It needs `python3` >= 3.9, `g++`, a build of the simulator, and `onnx` and `pyya
 python3 -m pip install --upgrade pip    # Ubuntu 22.04's pip 22.0.2 cannot install a pyproject-only package
 python3 -m pip install -e "./frontend[test]"
 python3 -m togsim_frontend.onnx_frontend model.onnx \
-  --config configs/systolic_ws_8x8_c1_simple_noc_tpuv3.yml --out result   # per node cycles, result/report.json
+  --config configs/tpuv3_8x8.yml --out result   # per node cycles, result/report.json
 python3 -m togsim_frontend.acs gemm \
-  --config configs/systolic_ws_8x8_c1_simple_noc_tpuv3.yml -o /tmp/gemm   # the two tables of one kernel
+  --config configs/tpuv3_8x8.yml -o /tmp/gemm   # the two tables of one kernel
 (cd frontend && python3 -m pytest tests)                                 # its tests
 ```
 
@@ -56,7 +56,7 @@ an `error:` line on stderr, or a traceback for `1`:
 | `1` | An exception none of the statuses below names: Python's own status, with its traceback. A defect in the frontend, or a failure it does not classify (an output directory that cannot be written, a model ONNX shape inference rejects, a node without an input its operator reads). |
 | `2` | The command line could not be parsed: argparse's own status, with its usage line. For ACS also a kernel name it has no node table for. Nothing else exits `2`. |
 | `3` | At least one node did not run. The nodes that could were replayed and totalled and the report is written, but the total does not cover the whole model: each such node is listed by name with the reason, on stdout and under `refused` in the report, and the last line says so. |
-| `4` | The config or the model cannot be read: missing, unreadable or malformed, a config without `vpu_num_lanes` or `vpu_vector_length_bits`, one whose name does not carry `SA` when `--sa` is not given, or a machine with less than one array row (`--sa` included), one lane or one 32-bit element per lane, or a spad TOGSim refuses ([Machines](#machines)). Nothing was run and no output directory is created. |
+| `4` | The config or the model cannot be read: missing, unreadable or malformed, a config without `vpu_num_lanes` or `vpu_vector_length_bits`, or a machine with less than one array row (`--sa` included), one lane or one 32-bit element per lane, or a spad TOGSim refuses ([Machines](#machines)). Nothing was run and no output directory is created. |
 | `5` | The config is a machine the frontend does not map a model on ([Machines](#machines)). Nothing was read or run; the reasons are on stderr. |
 | `6` | A tool the run depends on failed: the compiler (`$CXX`, else `g++`) is absent or did not build a kernel, or the Simulator is absent, exited non-zero (a config or a TOG it refuses, a crash) or printed no `Total execution cycles`. The run stops at that node, named on stderr with the tool's last output: no total is given and no report is written. The runs of the nodes before it, and the failing run's `togsim.log`, stay under `<out>`. |
 
@@ -78,11 +78,10 @@ spad as TOGSim does: `vpu_spad_size_kb_per_lane` x `vpu_num_lanes` when the conf
 (a `core_spad_size_kb` beside them that is not their product is exit `4`, as TOGSim refuses it),
 else `core_spad_size_kb` alone, else no limit.
 
-Of `configs/`, `systolic_ws_8x8_c1_simple_noc_tpuv3.yml` is accepted. The 32x32, 128x128 and
-256x256 (tpuv6e) configs are refused: one matmul instruction is 1024, 16384 and 32768 columns
-there, wider than the tile. ACS on its own (`python3 -m togsim_frontend.acs`) is not bound by
-this: it writes the tables for the config and the tile it is given. `SA` is not a config key; it
-is read from the config's file name (`..._8x8_...`) or given with `--sa`.
+Of `configs/`, `tpuv3_8x8.yml` is accepted. The 32-lane and 128-lane configs are refused: one matmul instruction is 1024 and 16384 columns there, wider than the
+tile. ACS on its own (`python3 -m togsim_frontend.acs`) is not bound by
+this: it writes the tables for the config and the tile it is given. `SA` is `vpu_num_lanes`, the
+rows one array takes in TOGSim, unless `--sa` gives it.
 
 ## Nodes that do not run
 

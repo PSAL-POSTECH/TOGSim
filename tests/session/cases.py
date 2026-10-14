@@ -1,7 +1,7 @@
 """--models_list: a command stream launches kernels, each from a directory holding tog.so and its tables."""
 from togtest import MIB, REPO, TIMEOUT_S, Case, spad_alone, write_table
 
-PARTITIONED = REPO / "configs" / "systolic_ws_128x128_c2_simple_noc_tpuv3_partition.yml"
+PARTITIONED = REPO / "configs" / "tpuv3_c2_partition.yml"
 KERNELS = {0: dict(cycles=600, rows=256), 1: dict(cycles=900, rows=512)}
 
 

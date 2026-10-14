@@ -13,7 +13,7 @@ from togsim_frontend.onnx_frontend import emit
 from togsim_frontend.onnx_frontend import run as frontend
 from togsim_frontend.onnx_frontend import shapes
 from togsim_frontend.onnx_frontend import tiling
-from togsim_frontend.onnx_frontend.config import array_dim_from_name, core_spad_kb, read_hardware
+from togsim_frontend.onnx_frontend.config import core_spad_kb, read_hardware
 from togsim_frontend.onnx_frontend.onnx_ops import OPS, resolve
 from togsim_frontend.onnx_frontend.tiling import Hardware, check_systolic, systolic_tile, unsupported
 
@@ -206,18 +206,18 @@ def test_a_machine_is_refused_for_each_fact_the_tiles_do_not_fit():
 
 def test_of_the_configs_here_only_the_8x8_one_is_a_supported_machine():
     configs = sorted((paths.root() / "configs").glob("*.yml"))
-    assert len(configs) == 19
+    assert len(configs) == 14
     assert [c.name for c in configs if not unsupported(read_hardware(str(c)))] == \
-        ["systolic_ws_8x8_c1_simple_noc_tpuv3.yml"]
+        ["tpuv3_8x8.yml"]
 
 
 def test_an_unsupported_machine_is_an_error_before_anything_is_read_or_run(tmp_path, capsys):
-    config = paths.root() / "configs" / "systolic_ws_256x256_c1_simple_noc_tpuv6e.yml"
+    config = paths.root() / "configs" / "tpuv6e.yml"
     status = frontend.main([str(tmp_path / "model.onnx"), "--config", str(config), "--out", str(tmp_path / "out")])
     said = capsys.readouterr().err
     assert status == frontend.EXIT_UNSUPPORTED_MACHINE
-    assert str(config) in said and "SA=256, vpu_num_lanes=128" in said
-    assert "32768 (SA * vpu_num_lanes = 256 * 128)" in said
+    assert str(config) in said and "SA=128, vpu_num_lanes=128" in said
+    assert "16384 (SA * vpu_num_lanes = 128 * 128)" in said
     assert not (tmp_path / "out").exists()
 
 
@@ -229,14 +229,11 @@ def stated_spad_bytes(tmp_path, stem, macros):
 
 #: The spad TOGSim gives a core of each config here, in KB. TOGSim states it nowhere a program reads it but its log,
 #: so it is written out: vpu_spad_size_kb_per_lane x vpu_num_lanes, as each config gives both.
-SPAD_KB = {**{f"systolic_ws_128x128_{name}.yml": 128 * 128 for name in (
-               "c1_booksim_tpuv2", "c1_booksim_tpuv3", "c1_simple_noc_tpuv2", "c1_simple_noc_tpuv3",
-               "c1_simple_noc_tpuv3_functional_only", "c1_simple_noc_tpuv3_half", "c1_simple_noc_tpuv3_timing_only",
-               "c1_simple_noc_tpuv4", "c2_booksim_tpuv3", "c2_simple_noc_tpuv2", "c2_simple_noc_tpuv3",
-               "c2_simple_noc_tpuv3_ils", "c2_simple_noc_tpuv3_partition", "c2_simple_noc_tpuv4")},
-           **{f"systolic_ws_256x256_c1_simple_noc_tpuv6e{name}.yml": 1024 * 128 for name in (
-               "", "_functional_only", "_timing_only")},
-           "systolic_ws_32x32_c1_simple_noc_tpuv3.yml": 32 * 32, "systolic_ws_8x8_c1_simple_noc_tpuv3.yml": 32 * 8}
+SPAD_KB = {**{f"{name}.yml": 128 * 128 for name in (
+               "tpuv2_booksim", "tpuv3_booksim", "tpuv2", "tpuv3", "tpuv3_half", "tpuv4", "tpuv3_c2_booksim",
+               "tpuv2_c2", "tpuv3_c2", "tpuv3_c2_partition", "tpuv4_c2")},
+           "tpuv6e.yml": 1024 * 128,
+           "tpuv3_32x32.yml": 32 * 32, "tpuv3_8x8.yml": 32 * 8}
 
 
 def test_the_frontend_reads_the_spad_of_each_config_here_as_togsim_does():
@@ -275,7 +272,7 @@ def test_a_conv_or_gemm_holds_every_buffer_its_kernel_states_and_the_largest_con
 
 def test_a_node_whose_tile_the_spad_does_not_hold_is_refused_and_one_of_fewer_channels_is_not(tmp_path):
     """On the 8x8 config's 256 KB, a Conv of 256 output channels cuts the 384 KB tile; of 128, a tile of 224 KB."""
-    hw = read_hardware(str(paths.root() / "configs" / "systolic_ws_8x8_c1_simple_noc_tpuv3.yml"))
+    hw = read_hardware(str(paths.root() / "configs" / "tpuv3_8x8.yml"))
     assert hw.spad_bytes == 256 * 1024
     for channels, refused in ((256, True), (128, False)):
         node = helper.make_node("Conv", ["x", "w"], ["y"], name="conv", pads=[1, 1, 1, 1])
@@ -304,10 +301,10 @@ def test_the_second_pass_of_layernorm_and_global_avgpool_keeps_the_128_row_tile_
             stated_spad_bytes(tmp_path / "default", stem, tile)
 
 
-def test_array_dim_comes_from_the_config_name():
-    assert array_dim_from_name("systolic_ws_8x8_c1_simple_noc.yml") == 8
-    assert array_dim_from_name("systolic_ws_128x128_c2_booksim_tpuv3.yml") == 128
-    assert array_dim_from_name("no_array_here.yml") is None
+def test_the_array_dimension_is_vpu_num_lanes_unless_sa_is_given(tmp_path):
+    config = tmp_path / "machine.yml"
+    config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\n")
+    assert read_hardware(str(config)).sa == 8 and read_hardware(str(config), 16).sa == 16
 
 
 @pytest.mark.parametrize("op,kernels", sorted(OPS.items()))

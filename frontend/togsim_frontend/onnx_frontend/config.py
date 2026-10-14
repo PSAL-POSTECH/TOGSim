@@ -1,24 +1,12 @@
 from __future__ import annotations
 
-import os
-import re
-
 import yaml
 
 from .tiling import Hardware
 
-#: systolic_ws_<SA>x<SA>_... -- the only place SA is written down.
-_SA_IN_NAME = re.compile(r"_(\d+)x(\d+)_")
 #: The keys a spad is stated by, and the most KB TOGSim holds one in (a uint32_t).
 SPAD_KEYS = ("vpu_spad_size_kb_per_lane", "core_spad_size_kb")
 SPAD_KB_MAX = (1 << 32) - 1
-
-
-def array_dim_from_name(config_path: str) -> int | None:
-    m = _SA_IN_NAME.search(os.path.basename(config_path))
-    if not m or m.group(1) != m.group(2):
-        return None
-    return int(m.group(1))
 
 
 def core_spad_kb(cfg: dict) -> int:
@@ -43,20 +31,13 @@ def core_spad_kb(cfg: dict) -> int:
 
 def read_hardware(config_path: str, sa: int | None = None,
                   elem_bits: int = 32) -> Hardware:
-    """The machine of the config at `config_path`, with `sa` or else the array dimension its name carries, and the
-    spad TOGSim gives a core of it (core_spad_kb). A ValueError says what is missing, not an integer, or below what a
-    machine has: one array row, one lane, one element per lane, no spad; or a spad TOGSim refuses."""
+    """The machine of the config at `config_path`, with `sa` or else vpu_num_lanes, the rows one array takes in
+    TOGSim, and the spad TOGSim gives a core of it (core_spad_kb). A ValueError says what is missing, not an integer,
+    or below what a machine has: one lane, one array row, one element per lane, no spad; or a spad TOGSim refuses."""
     with open(config_path) as fh:
         cfg = yaml.safe_load(fh) or {}
     if not isinstance(cfg, dict):
         raise ValueError(f"{config_path}: not a mapping of config keys")
-
-    resolved = sa if sa is not None else array_dim_from_name(config_path)
-    if resolved is None:
-        raise ValueError(
-            f"cannot tell the systolic array dimension from "
-            f"{os.path.basename(config_path)!r}: it is not a TOGSim config key and "
-            f"the name does not carry it. Pass --sa.")
 
     try:
         vlane = int(cfg["vpu_num_lanes"])
@@ -67,8 +48,10 @@ def read_hardware(config_path: str, sa: int | None = None,
     except TypeError:
         raise ValueError(f"{config_path}: vpu_num_lanes, vpu_vector_length_bits, vpu_spad_size_kb_per_lane and "
                          f"core_spad_size_kb are not all integers") from None
-    for what, value, least in (("the systolic array dimension (--sa, else the config's name)", resolved, 1),
-                               ("vpu_num_lanes", vlane, 1), ("vpu_vector_length_bits", vlen, elem_bits),
+    resolved = sa if sa is not None else vlane
+    for what, value, least in (("vpu_num_lanes", vlane, 1),
+                               ("the systolic array dimension (--sa, else vpu_num_lanes)", resolved, 1),
+                               ("vpu_vector_length_bits", vlen, elem_bits),
                                *((key, value, 0) for key, value in spad.items())):
         if value < least:
             raise ValueError(f"{config_path}: {what} is {value}, below {least}")
