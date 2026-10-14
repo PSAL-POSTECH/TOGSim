@@ -15,7 +15,7 @@ def kernel(t, kernel_id, table=True, tog=True, array="TPUV6E_MXU", items=2, defi
     out). Returns the directory."""
     home = t.tog("kernel_tog.cpp", (f"ITEMS={items}", *defines), tensors=(MIB, MIB), into=f"k{kernel_id}").parent
     write_table(home / "tog_cycles.tsv", [(KERNELS[kernel_id]["cycles"], 0)])
-    if table:
+    if table is not False:
         write_table(home / "tog_units.tsv", units(kernel_id, array) if table is True else table)
     if not tog:
         (home / "tog.so").unlink()
@@ -138,11 +138,42 @@ def kernel_without_tog_refused(t):
     session(t, t.machine(), [launch(kernel(t, 0, tog=False), 0), SYNC]).expect_refused("no tog.so next to", exit=1)
 
 
-def second_kernel_with_another_unit_refused(t):
-    """A unit the first kernel's table does not name is an error: the kernels share one machine's units."""
+def copy(t, kernel_id):
+    """<work dir>/k<id>/: a kernel that copies and computes nothing, with an empty tog_units.tsv."""
+    return kernel(t, kernel_id, table=[], defines=("NO_COMPUTE",))
+
+
+def copy_kernel_first_runs(t):
+    """A kernel with no computes, whose unit table is empty, launched before kernel 1: its table names no unit, so
+    kernel 1's names the array unit, and kernel 1's two computes run 644 cycles, as when kernel 1 is launched first."""
+    for order in ((copy(t, 0), kernel(t, 1)), (kernel(t, 1), copy(t, 0))):
+        run = session(t, t.machine(), [launch(home, k) for k, home in enumerate(order)] + [SYNC]).expect_ok()
+        if sorted(c.cycles for c in run.computes()) != [644, 644]:
+            run.fail(f"expected kernel 1's two computes of 644 cycles, got {sorted(c.cycles for c in run.computes())}")
+
+
+def second_kernel_adds_a_unit(t):
+    """Kernel 1's table names XLU, which kernel 0's does not: the unit joins the table and is reported."""
     other = units(1) + [(0, "XLU", "elements", 1, 0)]
+    run = session(t, t.machine(), [launch(kernel(t, 0), 0), SYNC, launch(kernel(t, 1, table=other), 1), SYNC])
+    run.expect_ok()
+    ran = sorted(c.cycles for c in run.computes())
+    if ran != [472, 472, 644, 644] or "Core [0] : XLU utilization(%)" not in run.log:
+        run.fail(f"expected computes of 472, 472, 644, 644 cycles and an XLU utilization line, got {ran}")
+
+
+def array_unit_misspelled_after_an_empty_table_refused(t):
+    """The first table with rows names the array unit by another name: refused as a first table would be."""
+    misspelled = units(1, array="TPUV6_MXU")
+    session(t, t.machine(), [launch(copy(t, 0), 0), launch(kernel(t, 1, table=misspelled), 1), SYNC]).expect_refused(
+        "systolic_array_split: the unit table has no array unit TPUV6E_MXU", exit=1)
+
+
+def restated_unit_disagrees_refused(t):
+    """Kernel 1's table states the array unit with another capacity than kernel 0's."""
+    other = [(0, "TPUV6E_MXU", "rows", 2, 512), (0, "Vpu", "cycles", 1, 100)]
     session(t, t.machine(), [launch(kernel(t, 0), 0), SYNC, launch(kernel(t, 1, table=other), 1), SYNC]).expect_refused(
-        "unit XLU is not one the first kernel's table has", exit=1)
+        "unit TPUV6E_MXU disagrees with line", exit=1)
 
 
 CASES = [
@@ -155,5 +186,8 @@ CASES = [
     Case("refused.unit_table_flag", unit_table_flag_refused),
     Case("refused.kernel_without_unit_table", kernel_without_unit_table_refused),
     Case("refused.kernel_without_tog", kernel_without_tog_refused),
-    Case("refused.second_kernel_with_another_unit", second_kernel_with_another_unit_refused),
+    Case("copy_kernel_first_runs", copy_kernel_first_runs),
+    Case("second_kernel_adds_a_unit", second_kernel_adds_a_unit),
+    Case("refused.array_unit_misspelled_after_an_empty_table", array_unit_misspelled_after_an_empty_table_refused),
+    Case("refused.restated_unit_disagrees", restated_unit_disagrees_refused),
 ]

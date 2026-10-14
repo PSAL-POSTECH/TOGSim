@@ -35,8 +35,9 @@ and lines that start with `#` are skipped.
 `LAUNCH_KERNEL` loads `tog.so`, `tog_cycles.tsv` and `tog_units.tsv` from the kernel's directory;
 the first two are required, and the third unless the config sets `systolic_array_split: none`.
 `DEVICE_SYNC` simulates until all launched work is done. At the end of the file the simulation runs
-to completion as well. The kernels' unit tables are joined into one, so every kernel must use the
-units the first kernel's table names; `--unit_table` is refused in this mode. A line with another
+to completion as well. The kernels' unit tables are joined into one: a later table may add units,
+and a unit two tables name must agree. An empty table adds nothing, so a kernel without computes may
+come first; `--unit_table` is refused in this mode. A line with another
 field count or an unknown command is reported and skipped.
 
 **Exit status.**

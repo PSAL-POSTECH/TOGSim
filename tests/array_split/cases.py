@@ -42,10 +42,18 @@ def computes_split_over_two_arrays(t):
         run.fail(f"expected the eight computes to run 344 cycles each (600 - 512 + 512/2), got {seen}")
 
 
+def empty_unit_table_runs(t):
+    """An empty unit table names no unit, so nothing is split: every compute runs its 600 cycles."""
+    run = replay(t, units=[]).expect_ok()
+    if [c.cycles for c in run.computes()] != [600] * 8:
+        run.fail(f"expected the eight computes to run 600 cycles each, got {[c.cycles for c in run.computes()]}")
+
+
 def refused(saying, exit, **given):
     """The run is refused with `saying` and that exit status: 1, or 134 when the config is rejected (an abort)."""
     return lambda t: replay(t, **given).expect_refused(saying, exit)
 
 
-CASES = [Case("computes_split_over_two_arrays", computes_split_over_two_arrays)] + [
+CASES = [Case("computes_split_over_two_arrays", computes_split_over_two_arrays),
+         Case("empty_unit_table_runs", empty_unit_table_runs)] + [
     Case(name, refused(**how)) for name, how in REFUSED.items()]

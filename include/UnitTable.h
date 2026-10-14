@@ -18,9 +18,9 @@ class UnitTable {
 
   // Parse and validate `path`; on any error, log the offending line and exit(1).
   static std::unique_ptr<UnitTable> load(const std::string& path);
-  // The rows of another TOG's table `path`, its tile_ids shifted behind the ones held: returns
-  // that shift. A unit the table does not have yet is an error (one machine, one set of units).
-  size_t append(const std::string& path) { return read(path, false); }
+  // The rows of another TOG's table `path`, its tile_ids shifted behind the ones held: returns that shift. A unit
+  // the table does not have yet joins it; one it has must state the same unit of work and capacity.
+  size_t append(const std::string& path) { return read(path); }
 
   size_t num_units() const { return _units.size(); }
   const std::string& unit_name(size_t u) const { return _units[u].name; }
@@ -78,7 +78,7 @@ class UnitTable {
   bool print_spread(const std::string& who, size_t u, double admitted, uint64_t cycles) const;
 
  private:
-  size_t read(const std::string& path, bool new_units);
+  size_t read(const std::string& path);
   std::vector<Unit> _units;   // in first-seen order
   int64_t _array_unit = -1;
   uint64_t _lanes = 0, _arrays = 1;   // of the array split
