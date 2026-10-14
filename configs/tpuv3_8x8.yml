@@ -8,7 +8,6 @@ systolic_array_unit: TPUV3_MXU
 
 vpu_num_lanes: 8
 vpu_spad_size_kb_per_lane: 32
-vpu_vector_length_bits: 256
 
 isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv3]
 vcix: {}

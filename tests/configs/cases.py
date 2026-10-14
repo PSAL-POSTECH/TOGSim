@@ -34,11 +34,15 @@ def every_config_is_listed(t):
 
 def breaks_convention(config):
     """What the config `config` (a parsed YAML mapping) lacks of the convention: an isa list with exactly one vcix_*
-    entry, vcix and a non-empty address_map as mappings, and systolic_array_unit named after the vcix_* entry as
-    TPUV6_MXU is after vcix_tpuv6. Empty when it follows it."""
+    and one zvl<N>b entry, vcix and a non-empty address_map as mappings, and systolic_array_unit named after the
+    vcix_* entry as TPUV6_MXU is after vcix_tpuv6. Empty when it follows it."""
     isa = config.get("isa")
     vcix = [entry for entry in isa if str(entry).startswith("vcix_")] if isinstance(isa, list) else []
     lacks = [] if len(vcix) == 1 else [f"an isa list with exactly one vcix_* entry (isa: {isa})"]
+    entries = [str(entry) for entry in isa] if isinstance(isa, list) else []
+    zvl = [entry for entry in entries if entry[:3] == "zvl" and entry[-1:] == "b" and entry[3:-1].isdigit()]
+    if isinstance(isa, list) and len(zvl) != 1:
+        lacks.append(f"exactly one zvl<N>b entry in isa, the vector length (isa: {isa})")
     lacks += [key for key in ("vcix", "address_map", "systolic_array_unit") if key not in config]
     lacks += [f"{key} as a mapping ({key}: {config[key]!r})" for key in ("vcix", "address_map")
               if key in config and not isinstance(config[key], dict)]
@@ -67,6 +71,7 @@ def convention_names_what_is_missing(t):
         if len(lacks) != 1 or key not in lacks[0]:
             raise Failure(f"expected tpuv6e without {key} to be named as lacking it alone, got {lacks}")
     for what, broken in (("an isa with two vcix_* entries", {"isa": v6e["isa"] + ["vcix_tpuv4"]}),
+                         ("an isa without zvl<N>b", {"isa": [e for e in v6e["isa"] if not e.startswith("zvl")]}),
                          ("vcix: null", {"vcix": None}), ("an empty address_map", {"address_map": {}}),
                          ("systolic_array_unit: null", {"systolic_array_unit": None}),
                          ("TPUV3_MXU beside vcix_tpuv6", {"systolic_array_unit": "TPUV3_MXU"})):

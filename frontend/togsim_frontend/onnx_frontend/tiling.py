@@ -22,7 +22,7 @@ HOLDS_EVERY_BUFFER = frozenset({"gemm", "conv"})
 class Hardware:
     sa: int                 # systolic array dimension: vpu_num_lanes unless --sa
     vlane: int              # vpu_num_lanes
-    vlen_bits: int          # vpu_vector_length_bits
+    vlen_bits: int          # zvl<N>b of the config's isa
     array_unit: str | None
     elem_bits: int = 32
     spad_bytes: int = 0     # a core's spad in bytes, as TOGSim reads the config (config.core_spad_kb); 0: no limit

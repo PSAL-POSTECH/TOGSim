@@ -6,7 +6,8 @@ what changing one does; this page is the full list.
 - A required key that is missing, or a value TOGSim does not implement, aborts the run with exit
   status 134 and a `what():  <reason>` line on stderr.
 - A key that is not in this list is named in a `[warning]` line and otherwise ignored, unless another tool
-  reads it: `isa`, `vcix`, `address_map` (the compiler) and `vpu_vector_length_bits` (the frontend).
+  reads it: `isa`, `vcix`, `address_map` (the compiler; the frontend takes the vector length from the
+  `zvl<N>b` entry of `isa`).
 - The config is echoed at the top of the log, so a run shows which values it used.
 
 ## Cores

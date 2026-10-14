@@ -14,7 +14,7 @@ from togsim_frontend.onnx_frontend import emit
 from togsim_frontend.onnx_frontend import run as frontend
 from togsim_frontend.onnx_frontend import shapes
 from togsim_frontend.onnx_frontend import tiling
-from togsim_frontend.onnx_frontend.config import core_spad_kb, read_hardware
+from togsim_frontend.onnx_frontend.config import core_spad_kb, read_hardware, vector_length
 from togsim_frontend.onnx_frontend.onnx_ops import OPS, resolve
 from togsim_frontend.onnx_frontend.tiling import Hardware, check_systolic, systolic_tile, unsupported
 
@@ -304,17 +304,17 @@ def test_the_second_pass_of_layernorm_and_global_avgpool_keeps_the_128_row_tile_
 
 def test_the_array_dimension_is_vpu_num_lanes_unless_sa_is_given(tmp_path):
     config = tmp_path / "machine.yml"
-    config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\nsystolic_array_unit: TPUV3_MXU\n")
+    config.write_text("vpu_num_lanes: 8\nisa: [v, zvl256b]\nsystolic_array_unit: TPUV3_MXU\n")
     assert read_hardware(str(config)).sa == 8 and read_hardware(str(config), 16).sa == 16
 
 
 def test_the_array_unit_is_the_configs_and_the_split_needs_one(tmp_path):
     """The unit table names systolic_array_unit; without the split there is none, and no array rows."""
     config = tmp_path / "machine.yml"
-    config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\n")
+    config.write_text("vpu_num_lanes: 8\nisa: [v, zvl256b]\n")
     with pytest.raises(ValueError, match=r"round_robin \(the default\) needs systolic_array_unit"):
         read_hardware(str(config))
-    config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\nsystolic_array_split: none\n")
+    config.write_text("vpu_num_lanes: 8\nisa: [v, zvl256b]\nsystolic_array_split: none\n")
     unsplit = read_hardware(str(config))
     assert unsplit.array_unit is None
     assert {row[1] for row in acs_cycles.build_units(lookup("gemm"), {"rows": 8}, unsplit)} == {"Vpu"}
@@ -334,6 +334,16 @@ def test_an_array_unit_or_split_togsim_refuses_is_refused(over, said, tmp_path):
     config.write_text(yaml.safe_dump({**yaml.safe_load(v6e.read_text()), **over}))
     with pytest.raises(ValueError, match=said):
         read_hardware(str(config))
+
+
+def test_the_vector_length_is_the_zvl_entry_of_isa():
+    """VLEN is N of the one zvl<N>b entry; a config with isa and no such entry, or two, or no isa, is refused."""
+    assert vector_length({"isa": ["m", "v", "zvl512b", "vcix_tpuv6"]}) == 512
+    assert {read_hardware(str(c)).vlen_bits for c in (paths.root() / "configs").glob("*.yml")} == {256}
+    for cfg, said in (({"isa": ["m", "v"]}, "has no zvl<N>b entries"), ({}, "missing required key 'isa'"),
+                      ({"isa": ["zvl128b", "zvl256b"]}, "has 2 zvl<N>b entries")):
+        with pytest.raises(ValueError, match=said):
+            vector_length(cfg)
 
 
 @pytest.mark.parametrize("op,kernels", sorted(OPS.items()))

@@ -126,9 +126,16 @@ def misspelled_key_warned_once(t):
 
 
 def keys_other_tools_read_are_quiet(t):
-    """tpuv6e as shipped carries isa, vcix and address_map for the compiler and vpu_vector_length_bits for the
-    frontend: none of them is named."""
+    """tpuv6e as shipped carries isa (the compiler's, and the frontend's vector length), vcix and address_map: none
+    of them is named."""
     replay(t, None).expect_no_warning(UNREAD_KEY)
+
+
+def vector_length_key_warned_once(t):
+    """vpu_vector_length_bits is no key of anyone's: the vector length is the zvl<N>b entry of isa."""
+    config = t.machine(systolic_array_split="none", vpu_vector_length_bits=256)
+    run = t.simulate(t.tog(TOG, (), tensors=(MIB, MIB)), config, CYCLES, None)
+    run.expect_warned_once(f"[TOGSim] config {config}: key vpu_vector_length_bits {UNREAD_KEY}")
 
 
 CASES = [
@@ -147,4 +154,5 @@ CASES = [
     Case("arg_id.session.every_one_listed_is_quiet", session_every_arg_id_listed_is_quiet),
     Case("config_key.misspelled_warned_once", misspelled_key_warned_once),
     Case("config_key.read_by_other_tools_is_quiet", keys_other_tools_read_are_quiet),
+    Case("config_key.vector_length_bits_warned_once", vector_length_key_warned_once),
 ]

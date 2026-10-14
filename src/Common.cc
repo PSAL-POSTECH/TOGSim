@@ -50,9 +50,9 @@ static uint32_t core_spad_kb(ConfigReader& config) {
   return (uint32_t)kb;
 }
 
-// Keys of a machine config that other tools read and TOGSim does not: the compiler's isa, vcix and address_map, and
-// the frontend's vpu_vector_length_bits. Any other key nothing in initialize_config looks up is named in a warning.
-static const std::set<std::string> kReadElsewhere = {"isa", "vcix", "address_map", "vpu_vector_length_bits"};
+// Keys of a machine config that other tools read and TOGSim does not: isa (the compiler's, and the frontend's vector
+// length), vcix and address_map. Any other key nothing in initialize_config looks up is named in a warning.
+static const std::set<std::string> kReadElsewhere = {"isa", "vcix", "address_map"};
 
 SimulationConfig initialize_config(const YAML::Node& yaml,
                                      const std::string& config_file_path) {
