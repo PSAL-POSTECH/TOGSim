@@ -23,7 +23,7 @@ class Hardware:
     sa: int                 # systolic array dimension: vpu_num_lanes unless --sa
     vlane: int              # vpu_num_lanes
     vlen_bits: int          # vpu_vector_length_bits
-    array_unit: str
+    array_unit: str | None
     elem_bits: int = 32
     spad_bytes: int = 0     # a core's spad in bytes, as TOGSim reads the config (config.core_spad_kb); 0: no limit
 

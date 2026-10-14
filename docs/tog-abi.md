@@ -272,7 +272,7 @@ tile_id	unit	unit_of_work	capacity_per_cycle	admitted
 | Field | Meaning |
 |---|---|
 | `tile_id` | The compute tile the row describes. |
-| `unit` | The name of a hardware unit. Names are yours, except that the systolic array must be called what the config's `systolic_array_unit` says (`TPUV6_MXU` on tpuv6e), `SYSTOLIC` when it says nothing. |
+| `unit` | The name of a hardware unit. Names are yours, except that the systolic array must be called what the config's `systolic_array_unit` says (`TPUV6_MXU` on tpuv6e). |
 | `unit_of_work` | What the unit counts: `rows`, `cycles`, ... A name; it appears in messages. The same on every row of a unit. |
 | `capacity_per_cycle` | How many of those the unit can take in per cycle. An integer above 0, the same on every row of a unit. |
 | `admitted` | How many the unit took in during **one** run of the compute tile. |

@@ -12,6 +12,13 @@ REFUSED = {
     "refused.array_unit_named_without_split": dict(
         saying="systolic_array_unit: MSA is ignored without systolic_array_split: round_robin", exit=134,
         systolic_array_split="none", systolic_array_unit="MSA"),
+    "refused.split_without_array_unit": dict(
+        saying="systolic_array_split: round_robin (the default) needs systolic_array_unit", exit=134,
+        systolic_array_unit=None),
+    "refused.array_unit_empty": dict(
+        saying='systolic_array_unit: "" is not a name', exit=134, systolic_array_unit='""'),
+    "refused.array_unit_null": dict(
+        saying="systolic_array_unit: ~ is not a name", exit=134, systolic_array_unit="~"),
     "refused.split_without_unit_table": dict(
         saying="give --unit_table, or set systolic_array_split: none", exit=1, units=None),
     "refused.spread_exceeds_one_array": dict(

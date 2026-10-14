@@ -3,6 +3,7 @@ import os
 import subprocess
 
 import pytest
+import yaml
 from onnx import helper
 
 from togsim_frontend import paths
@@ -303,8 +304,36 @@ def test_the_second_pass_of_layernorm_and_global_avgpool_keeps_the_128_row_tile_
 
 def test_the_array_dimension_is_vpu_num_lanes_unless_sa_is_given(tmp_path):
     config = tmp_path / "machine.yml"
-    config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\n")
+    config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\nsystolic_array_unit: TPUV3_MXU\n")
     assert read_hardware(str(config)).sa == 8 and read_hardware(str(config), 16).sa == 16
+
+
+def test_the_array_unit_is_the_configs_and_the_split_needs_one(tmp_path):
+    """The unit table names systolic_array_unit; without the split there is none, and no array rows."""
+    config = tmp_path / "machine.yml"
+    config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\n")
+    with pytest.raises(ValueError, match=r"round_robin \(the default\) needs systolic_array_unit"):
+        read_hardware(str(config))
+    config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\nsystolic_array_split: none\n")
+    unsplit = read_hardware(str(config))
+    assert unsplit.array_unit is None
+    assert {row[1] for row in acs_cycles.build_units(lookup("gemm"), {"rows": 8}, unsplit)} == {"Vpu"}
+    assert read_hardware(str(paths.root() / "configs" / "tpuv4.yml")).array_unit == "TPUV4_MXU"
+
+
+@pytest.mark.parametrize("over,said", [
+    ({"systolic_array_unit": ""}, "systolic_array_unit: '' is not a name"),
+    ({"systolic_array_unit": None}, "systolic_array_unit: None is not a name"),
+    ({"systolic_array_unit": 7}, "systolic_array_unit: 7 is not a name"),
+    ({"systolic_array_split": "none"}, "systolic_array_unit: TPUV6_MXU is ignored without systolic_array_split"),
+    ({"systolic_array_split": "sideways"}, r"systolic_array_split: sideways \(none \| round_robin\)"),
+])
+def test_an_array_unit_or_split_togsim_refuses_is_refused(over, said, tmp_path):
+    """tpuv6e with an array unit that is not a name, a unit beside the split off, or a split TOGSim does not know."""
+    config, v6e = tmp_path / "machine.yml", paths.root() / "configs" / "tpuv6e.yml"
+    config.write_text(yaml.safe_dump({**yaml.safe_load(v6e.read_text()), **over}))
+    with pytest.raises(ValueError, match=said):
+        read_hardware(str(config))
 
 
 @pytest.mark.parametrize("op,kernels", sorted(OPS.items()))

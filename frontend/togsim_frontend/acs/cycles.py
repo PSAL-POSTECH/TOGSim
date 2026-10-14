@@ -86,10 +86,12 @@ def build_table(kernel_desc, tiles: dict, hw: Hardware) -> list[tuple[int, int]]
 
 
 def build_units(kernel_desc, tiles: dict, hw: Hardware) -> list[tuple]:
-    """The unit table rows, (tile_id, unit, unit_of_work, capacity_per_cycle, admitted), two per tile id costed."""
+    """The unit table rows, (tile_id, unit, unit_of_work, capacity_per_cycle, admitted), per tile id costed: one of the
+    array unit, unless the machine names none (systolic_array_split: none), and one of the Vpu."""
     rows = []
     for tile_id, cost in costs(kernel_desc, tiles, hw).items():
-        rows.append((tile_id, hw.array_unit, "rows", 1, cost.systolic_rows))
+        if hw.array_unit is not None:
+            rows.append((tile_id, hw.array_unit, "rows", 1, cost.systolic_rows))
         rows.append((tile_id, *VECTOR_UNIT, cost.vector_cycles))
     return rows
 

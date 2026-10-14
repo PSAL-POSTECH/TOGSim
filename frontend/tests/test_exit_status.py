@@ -169,6 +169,7 @@ def test_a_node_whose_tile_ids_the_tables_do_not_cover_exits_3(tmp_path):
      "vpu_spad_size_kb_per_lane is -1, below 0"),
     ("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\nvpu_spad_size_kb_per_lane: 32\ncore_spad_size_kb: 384\n",
      "core_spad_size_kb: 384 is not vpu_spad_size_kb_per_lane x vpu_num_lanes = 32 x 8 = 256"),
+    ("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\n", "needs systolic_array_unit"),
 ])
 @pytest.mark.parametrize("module", [FRONTEND, ACS])
 def test_a_config_that_cannot_be_read_exits_4(module, text, said, tmp_path):
@@ -227,9 +228,9 @@ def test_a_simulator_that_is_absent_fails_or_reports_no_total_exits_6_with_no_re
 
 @simulator
 def test_a_config_the_simulator_itself_refuses_exits_6(tmp_path):
-    """The two keys the frontend reads make a machine it accepts; the Simulator needs the rest of the config."""
+    """The three keys the frontend reads make a machine it accepts; the Simulator needs the rest of the config."""
     config = tmp_path / "machine.yml"
-    config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\n")
+    config.write_text("vpu_num_lanes: 8\nvpu_vector_length_bits: 256\nsystolic_array_unit: TPUV3_MXU\n")
     done = frontend(tmp_path, model(tmp_path, "Relu"), config=config)
     assert done.returncode == status.EXIT_TOOL_FAILED, done.stderr
     assert "TOGSim reported no cycle count (exit " in done.stderr

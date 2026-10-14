@@ -98,10 +98,17 @@ SimulationConfig initialize_config(const YAML::Node& yaml,
     parsed_config.systolic_array_split = split == "round_robin";
   }
   if (config["systolic_array_unit"]) {
-    parsed_config.systolic_array_unit = config["systolic_array_unit"].as<std::string>();
+    const YAML::Node unit = config["systolic_array_unit"];
+    if (!unit.IsScalar() || unit.Scalar().empty())
+      throw std::runtime_error(fmt::format("systolic_array_unit: {} is not a name, the unit table's name of the "
+                                           "array unit", YAML::Dump(unit)));
+    parsed_config.systolic_array_unit = unit.Scalar();
     if (!parsed_config.systolic_array_split)
       throw std::runtime_error(fmt::format("systolic_array_unit: {} is ignored without systolic_array_split: "
                                            "round_robin", parsed_config.systolic_array_unit));
+  } else if (parsed_config.systolic_array_split) {
+    throw std::runtime_error("systolic_array_split: round_robin (the default) needs systolic_array_unit, the unit "
+                             "table's name of the array unit; systolic_array_split: none runs without it");
   }
   if (config["vpu_num_lanes"])
     parsed_config.vpu_num_lanes = config["vpu_num_lanes"].as<uint32_t>();

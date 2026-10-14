@@ -31,9 +31,9 @@ def core_spad_kb(cfg: dict) -> int:
 
 def read_hardware(config_path: str, sa: int | None = None,
                   elem_bits: int = 32) -> Hardware:
-    """The machine of the config at `config_path`: `sa` or else vpu_num_lanes (the rows one array takes), the spad
-    TOGSim gives a core (core_spad_kb), the array unit (systolic_array_unit). A ValueError says what is missing, not
-    an integer, below one lane, array row or element per lane, a negative spad or one TOGSim refuses."""
+    """The machine of the config at `config_path`: `sa` or else vpu_num_lanes, the spad TOGSim gives a core
+    (core_spad_kb), the array unit (systolic_array_unit; None under systolic_array_split: none). A ValueError says what
+    is missing, not an integer, below one lane, array row or element per lane, a negative spad or one TOGSim refuses."""
     with open(config_path) as fh:
         cfg = yaml.safe_load(fh) or {}
     if not isinstance(cfg, dict):
@@ -59,7 +59,19 @@ def read_hardware(config_path: str, sa: int | None = None,
         spad_kb = core_spad_kb(cfg)
     except ValueError as exc:
         raise ValueError(f"{config_path}: {exc}") from None
+    split = cfg.get("systolic_array_split", "round_robin")
+    if split not in ("none", "round_robin"):
+        raise ValueError(f"{config_path}: systolic_array_split: {split} (none | round_robin)")
+    unit = cfg.get("systolic_array_unit")
+    if "systolic_array_unit" in cfg and not (isinstance(unit, str) and unit):
+        raise ValueError(f"{config_path}: systolic_array_unit: {unit!r} is not a name, the unit table's name of the "
+                         f"array unit")
+    if unit is None and split == "round_robin":
+        raise ValueError(f"{config_path}: systolic_array_split: round_robin (the default) needs systolic_array_unit, "
+                         f"the unit table's name of the array unit")
+    if unit is not None and split == "none":
+        raise ValueError(f"{config_path}: systolic_array_unit: {unit} is ignored without systolic_array_split: "
+                         f"round_robin")
 
-    return Hardware(sa=resolved, vlane=vlane, vlen_bits=vlen,
-                    array_unit=str(cfg.get("systolic_array_unit", "SYSTOLIC")),
+    return Hardware(sa=resolved, vlane=vlane, vlen_bits=vlen, array_unit=unit,
                     elem_bits=elem_bits, spad_bytes=spad_kb * 1024)

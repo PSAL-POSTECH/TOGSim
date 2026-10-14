@@ -20,7 +20,7 @@ what changing one does; this page is the full list.
 | `num_systolic_array_per_core` | no | 1 | The arrays a tile's rows can be spread over by the array split. |
 | `vpu_num_lanes` | unless `systolic_array_split: none` | | The rows one array takes: a tile with more rows than this is split. |
 | `systolic_array_split` | no | `round_robin` | `round_robin` spreads a tile's array rows over the arrays and needs a unit table. `none` turns that off. |
-| `systolic_array_unit` | no | `SYSTOLIC` | The name of the array unit in the unit table. Setting it with `systolic_array_split: none` aborts. |
+| `systolic_array_unit` | unless `systolic_array_split: none` | | The name of the array unit in the unit table. Missing with the split, or set with `systolic_array_split: none`, it aborts. |
 | `vpu_spad_size_kb_per_lane` | no | | The scratchpad of one lane, in KB. With `vpu_num_lanes` it makes the scratchpad of one core: `vpu_spad_size_kb_per_lane` x `vpu_num_lanes`. 0 means unlimited. It must hold what a work-item needs [at once](tog-abi.md#buffers-and-the-scratchpad); a TOG with a work-item that needs more is refused. |
 | `core_spad_size_kb` | no | 0 | The scratchpad of one core, in KB, for a config without `vpu_spad_size_kb_per_lane` and `vpu_num_lanes`; 0 means unlimited. Beside those two it may only restate their product: another value aborts. |
 | `sa_weight_buffer_depth` | no | 2 | Deprecated: read only for a TOG that passes `compute_type` 1, 2 or 3. |

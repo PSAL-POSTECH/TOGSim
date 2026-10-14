@@ -18,8 +18,8 @@ SHIPPED = [
 
 def units(name):
     """The unit table of the TOG on configs/<name>.yml: 256 rows of the array unit the config names
-    (systolic_array_unit, SYSTOLIC by default), and 100 cycles of the Vpu."""
-    array = yaml.safe_load((CONFIGS / f"{name}.yml").read_text()).get("systolic_array_unit", "SYSTOLIC")
+    (systolic_array_unit), and 100 cycles of the Vpu."""
+    array = yaml.safe_load((CONFIGS / f"{name}.yml").read_text())["systolic_array_unit"]
     return [(0, array, "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)]
 
 
