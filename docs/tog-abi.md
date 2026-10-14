@@ -104,8 +104,8 @@ elements touch. A request is 32 bytes on every shipped config (the log's `[Confi
 states it), so the 64 x 64 x 4-byte data tile above is 512 requests. A core's DMA engine sends one
 DMA at a time, loads ahead of stores, at `icnt_injection_ports_per_core` requests per cycle. A
 synchronous load is finished when its last response arrives. An asynchronous load counts as
-finished when its last request is sent. A store is finished when its last request is sent, and
-the run still waits for DRAM to answer.
+finished when its last request is sent. A store is finished when DRAM has acknowledged its last
+write and that acknowledgement has crossed the interconnect back to the core.
 
 ## `togsim_compute`
 

@@ -194,6 +194,10 @@ void Core::dma_cycle() {
     if (instruction->is_dma_read() && !instruction->is_async_dma())
       finish_instruction(instruction);
 
+    /* A store is finished when DRAM has acknowledged its last write and the ack has crossed back */
+    if (instruction->is_dma_write())
+      finish_instruction(instruction);
+
     /* Set tag table of async dma load */
     if (instruction->is_dma_read() && instruction->is_async_dma()) {
       auto& key = instruction->get_tag_id();
@@ -221,8 +225,13 @@ void Core::dma_cycle() {
     if (_dma.get_current_inst() != nullptr) {
       std::shared_ptr<Instruction> finished_inst = std::move(_dma.get_current_inst());
       if (finished_inst->is_dma_write()) {
-        /* Only DMA write operation is finished! */
-        finish_instruction(finished_inst);
+        /* All write requests sent: the store finishes on its last ack (above), not here */
+        if (core_trace_log::trace_enabled()) core_trace_log::trace_instruction_line(_core_cycle,
+                                               _id,
+                                               TraceLogTag::pad15(TraceLogTag::kAsyncDmaAllRequestsIssued),
+                                               finished_inst->get_global_inst_id(),
+                                               core_trace_log::format_instruction_detail_line(
+                                                   *finished_inst));
       } else if (finished_inst->is_dma_read() && finished_inst->is_async_dma()) {
         /* Register tag table for async dma load; see TraceLogTag::kAsyncDmaAllRequestsIssued */
         finish_instruction(finished_inst, InstFinishTraceTag::DmaIssueComplete);
