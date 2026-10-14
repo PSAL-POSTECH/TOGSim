@@ -1,16 +1,15 @@
 """Every machine config under configs/ loads as it is shipped and replays a small TOG to its Total line."""
+import yaml
+
 from togtest import MIB, REPO, Case, Failure
 
 CONFIGS = REPO / "configs"
 SHIPPED = [
-    "tpuv2_booksim",
     "tpuv3_booksim",
-    "tpuv2",
     "tpuv3",
     "tpuv3_half",
     "tpuv4",
     "tpuv3_c2_booksim",
-    "tpuv2_c2",
     "tpuv3_c2",
     "tpuv3_c2_partition",
     "tpuv4_c2",
@@ -18,14 +17,13 @@ SHIPPED = [
     "tpuv3_32x32",
     "tpuv3_8x8",
 ]
-RUNS_WITHOUT_UNIT_TABLE = []
-#: The array unit a config names with systolic_array_unit, where it is not the default SYSTOLIC.
-ARRAY_UNIT = {name: "TPUV6_MXU" for name in SHIPPED if name.startswith("tpuv6e")}
 
 
 def units(name):
-    """The unit table of the TOG on configs/<name>.yml: 256 rows of its array unit, and 100 cycles of the Vpu."""
-    return [(0, ARRAY_UNIT.get(name, "SYSTOLIC"), "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)]
+    """The unit table of the TOG on configs/<name>.yml: 256 rows of the array unit the config names
+    (systolic_array_unit, SYSTOLIC by default), and 100 cycles of the Vpu."""
+    array = yaml.safe_load((CONFIGS / f"{name}.yml").read_text()).get("systolic_array_unit", "SYSTOLIC")
+    return [(0, array, "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)]
 
 
 def every_config_is_listed(t):
@@ -38,9 +36,8 @@ def every_config_is_listed(t):
 
 
 def loads_and_runs(name):
-    """configs/<name>.yml, read where it is, replays the TOG with a unit table to exit 0, a Total line, both
-    computes finished and no key TOGSim does not read. Without a unit table it is refused, unless it is one of RUNS_WITHOUT_UNIT_TABLE (a config
-    that sets systolic_array_split: none), which must then run to the end as well."""
+    """configs/<name>.yml replays the TOG with a unit table to exit 0, a Total line, both computes finished and no
+    key TOGSim does not read; without a unit table it is refused."""
     def case(t):
         tog, config = t.tog("load_compute_store_tog.cpp", tensors=(MIB, MIB)), CONFIGS / f"{name}.yml"
         run = t.simulate(tog, config, cycles=[600], units=units(name)).expect_ok()
@@ -48,11 +45,8 @@ def loads_and_runs(name):
         run.expect_no_warning("is not read by TOGSim")
         if len(run.computes()) != 2:
             run.fail(f"expected the computes of both work-items to finish, got {run.computes()}")
-        bare = t.simulate(tog, config, cycles=[600])
-        if name in RUNS_WITHOUT_UNIT_TABLE:
-            bare.expect_ok().total_cycles()
-        else:
-            bare.expect_refused("give --unit_table, or set systolic_array_split: none", exit=1)
+        t.simulate(tog, config, cycles=[600]).expect_refused("give --unit_table, or set systolic_array_split: none",
+                                                             exit=1)
     return case
 
 

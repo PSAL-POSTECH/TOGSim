@@ -84,22 +84,19 @@ what changing one does; this page is the full list.
 
 ## The shipped configs
 
-`configs/` holds 14 machines named `<machine>[_<n>x<n>][_c<cores>][_booksim][_<variant>]`:
+`configs/` holds 11 machines named `<machine>[_<n>x<n>][_c<cores>][_booksim][_<variant>]`:
 `<machine>` selects the clock, the arrays per core and the Ramulator2 file; `_<n>x<n>` marks the
 8- and 32-lane configs, `_c<cores>` a `num_cores` above 1, and `_booksim` `icnt_type: booksim2`
-(else `simple`). All 14 use
+(else `simple`). All 11 use
 `dram_type: ramulator2`, and none sets `systolic_array_split: none`, so every one needs a unit table.
 
 | Config (without `.yml`) | Cores | Core MHz | Arrays per core | Lanes | Spad KB | DRAM channels | Ramulator2 file | L2 | Interconnect |
 |---|---|---|---|---|---|---|---|---|---|
-| `tpuv2_booksim` | 1 | 700 | 1 | 128 | 16384 | 16 | `HBM2_TPUv2.yaml` | none | BookSim2 `fly_c16_m16.icnt` |
 | `tpuv3_booksim` | 1 | 940 | 2 | 128 | 16384 | 16 | `HBM2_TPUv3.yaml` | none | BookSim2 `fly_c16_m16.icnt` |
-| `tpuv2` | 1 | 700 | 1 | 128 | 16384 | 32 | `HBM2_TPUv2.yaml` | none | simple, 10 cycles |
 | `tpuv3` | 1 | 940 | 2 | 128 | 16384 | 16 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 | `tpuv3_half` | 1 | 940 | 2 | 128 | 16384 | 8 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 | `tpuv4` | 1 | 1050 | 4 | 128 | 16384 | 16 | `HBM2_TPUv4.yaml` | data cache | simple, 10 cycles |
 | `tpuv3_c2_booksim` | 2 | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | BookSim2 `fly_c32_m32.icnt` |
-| `tpuv2_c2` | 2 | 700 | 1 | 128 | 16384 | 32 | `HBM2_TPUv2.yaml` | none | simple, 10 cycles |
 | `tpuv3_c2` | 2 | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 | `tpuv3_c2_partition` | 2, in 2 partitions | 940 | 2 | 128 | 16384 | 32 | `HBM2_TPUv3.yaml` | none | simple, 10 cycles |
 | `tpuv4_c2` | 2 | 1050 | 4 | 128 | 16384 | 32 | `HBM2_TPUv4.yaml` | data cache | simple, 10 cycles |
@@ -112,10 +109,9 @@ what changing one does; this page is the full list.
   vectors (8 sublanes x 32 bit), and `systolic_array_split: round_robin` over the array unit
   `TPUV6_MXU` (`systolic_array_unit`), so its unit tables name `TPUV6_MXU` where the others name
   `SYSTOLIC`. It prints statistics every 200 cycles; the others every 10000.
-- `tpuv2` sets no DRAM period.
 - `tpuv3_half` is `tpuv3` with half the DRAM channels.
 - `tpuv3_c2_partition` is `tpuv3_c2` with `num_partition: 2` and one core in each.
-- `examples/minimal.yml` is not one of the 19: it is a `dram_type: simple` machine that needs no
+- `examples/minimal.yml` is not one of the 11: it is a `dram_type: simple` machine that needs no
   other file and no unit table.
 
 Every shipped config writes its Ramulator2 and BookSim2 paths as `../configs/...`, which resolves

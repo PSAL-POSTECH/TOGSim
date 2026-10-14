@@ -103,10 +103,6 @@ def gen_hbm2_tpuv3():
     dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_1880Mbps")
     return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
 
-def gen_hbm2_tpuv2():
-    dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_1400Mbps")
-    return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
-
 def gen_hbm3_tpuv6e():
     dram = ramulator.dram.HBM3(org_preset="HBM3_8Gb", timing_preset="HBM3_6400Mbps", column=256)
     return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel",
@@ -133,7 +129,6 @@ CONFIGS = {
     "HBM2.yaml":        gen_hbm2,
     "HBM2_TPUv4.yaml":  gen_hbm2_tpuv4,
     "HBM2_TPUv3.yaml":  gen_hbm2_tpuv3,
-    "HBM2_TPUv2.yaml":  gen_hbm2_tpuv2,
     "HBM3_TPUv6e.yaml": gen_hbm3_tpuv6e,
     "DDR4.yaml":        gen_ddr4,
     "LPDDR5.yaml":      gen_lpddr5,
