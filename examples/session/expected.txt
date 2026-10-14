@@ -5,8 +5,8 @@
 [info] [Scheduler 0] Enqueued kernel_id: 0, tog_path: examples/session/k0/tog.so, operation: kernel, request_time_cycles: 0
 [trace] [142][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [info] [Scheduler 0] Enqueued kernel_id: 1, tog_path: examples/session/k1/tog.so, operation: kernel, request_time_cycles: 0
-[trace] [948][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
-[info] Total execution cycles: 1668
+[trace] [982][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
+[info] Total execution cycles: 1703
 # examples/session/two_partitions.gen.yml: configs/tpuv6e.yml with num_cores: 2, num_partition: 2, partition: {core_0: 0, core_1: 1}
 + build/bin/Simulator --config examples/session/two_partitions.gen.yml --models_list examples/session/commands_two_partitions.txt --log_level trace
 [info] [Scheduler 0] Enqueued kernel_id: 0, tog_path: examples/session/k0/tog.so, operation: kernel, request_time_cycles: 0

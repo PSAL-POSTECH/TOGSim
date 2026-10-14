@@ -151,9 +151,9 @@ matter; `examples/<name>/expected.txt` is that output.
 |---|---|---|
 | `hello` | One load, one compute, one store. | 840 |
 | `async_barrier` | Two asynchronous loads and the barrier that waits for them. | 858 |
-| `tiles` | Eight work-items on one, two and four cores. | 5021, 2635, 1487 |
+| `tiles` | Eight work-items on one, two and four cores. | 5138, 3039, 1490 |
 | `gemm` | Two kinds of compute, the unit table and the array split. | 1099 |
-| `session` | Two kernels from a command stream, on one partition and on two. | 1668, 866 |
+| `session` | Two kernels from a command stream, on one partition and on two. | 1703, 866 |
 | `mistakes` | What TOGSim refuses, what it warns about, and what it does not notice. | |
 
 ## Running

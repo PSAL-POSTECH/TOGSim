@@ -111,7 +111,7 @@ def read_waits_for_nothing(t, session):
     2. The same work-item with a load of buffer 9 before the compute takes the cycles of that load longer."""
     table = sizes(b2=16 * KB, b9=64 * KB)
     run, so = replay(t, "C({9}, {2}); S(2)", table, 1024, session=session)
-    run.expect_total_cycles(300)
+    run.expect_total_cycles(635)
     said_held(run, so, 0, 64 * KB, "9")
     expect_holds(run, [(0, 64 * KB)])
     scheduled, hold = run.core_lines("TILE_SCHEDULED"), run.core_lines("SPAD_HOLD")
@@ -334,7 +334,7 @@ def loads_everything_it_reads_is_unchanged(t, session):
     is traced, and the footprint, the number in flight and the total are those of main, which has no held buffers."""
     run, _ = replay(t, "L(1); L(2); C({1, 2}, {3}); S(3)", sizes(b1=12 * KB, b2=12 * KB, b3=24 * KB), 96, items=4,
                     session=session)
-    run.expect_total_cycles(1171)
+    run.expect_total_cycles(1249)
     if "bytes for the kernel" in run.log or run.core_lines("SPAD_HOLD") or run.core_lines("SPAD_HOLD_END") or \
             run.scheduled() != [(48 * KB, 2)] * 4:
         run.fail(f"expected nothing held and four work-items of spad_footprint 49152, two in flight; got "

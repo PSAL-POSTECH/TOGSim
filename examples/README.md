@@ -16,9 +16,9 @@ test run.
 |---|---|---|
 | `hello/` | The smallest TOG: one load, one compute, one store, and the three files a run needs. Its last run prints a whole log. | 840 |
 | `async_barrier/` | Two asynchronous loads and the barrier that waits for them. `-DSYNC` builds the synchronous form, `-DTWO_STEPS` a variant where the two forms differ. | 858 |
-| `tiles/` | A kernel that dispatches a grid of work-items from `tog_shape.txt`: on one, two and four cores, in a small scratchpad, and with half the DRAM channels. | 5021 |
+| `tiles/` | A kernel that dispatches a grid of work-items from `tog_shape.txt`: on one, two and four cores, in a small scratchpad, and with half the DRAM channels. | 5138 |
 | `gemm/` | A GEMM-like work-item: two kinds of compute, an accumulator, and how the unit table's rows and the array split change a compute's cycles. | 1099 |
-| `session/` | Two kernels launched from a command stream (`--models_list`), on one partition and on two. | 1668 |
+| `session/` | Two kernels launched from a command stream (`--models_list`), on one partition and on two. | 1703 |
 | `mistakes/` | What TOGSim refuses, with the message of each of 22 refusals; two mistakes it only warns about; one it does not notice; a consumer called before its producer. | 840 |
 | `minimal.yml` | A machine config that needs no other file and no unit table. | |
 

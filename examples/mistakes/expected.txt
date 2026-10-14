@@ -96,8 +96,8 @@ exit 134
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
 [trace] [142][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [743][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000000000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
-[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 787, DRAM BW: 70.000 GB/s (1024 responses)
-[info] Total execution cycles: 819
+[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 798, DRAM BW: 69.000 GB/s (1024 responses)
+[info] Total execution cycles: 830
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DNULL_STRIDES examples/mistakes/silent_tog.cpp -o examples/mistakes/NULL_STRIDES.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/NULL_STRIDES.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
