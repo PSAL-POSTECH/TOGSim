@@ -10,6 +10,9 @@ systolic_array_split: none
 vpu_num_lanes: N
 vpu_spad_size_kb_per_lane: N
 vpu_vector_length_bits: N
+isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv6]
+vcix: {tpu_mxu_queue_entries: N}
+address_map: {spad_vaddr: <hex>, spad_paddr: <hex>, dram_base: <hex>, dram_size: N}
 dram_type: ramulator2
 dram_channels: N
 dram_stats_print_period_cycles: N
