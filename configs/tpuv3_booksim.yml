@@ -11,10 +11,9 @@ vpu_spad_size_kb_per_lane: 128
 
 isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv3]
 vcix: {}
-address_map: {spad_vaddr: 0xd0000000, spad_paddr: 0x2000000000, dram_base: 0x80000000, dram_size: 107374182400}
+address_map: {spad_vaddr: 0xd0000000, spad_paddr: 0x2000000000, dram_base: 0x80000000, dram_size: 17179869184}
 
 dram_type: ramulator2
-dram_freq_mhz: 940
 dram_channels: 16
 dram_stats_print_period_cycles: 10000
 ramulator_config_path: ../configs/ramulator2_configs/HBM2_TPUv3.yaml
