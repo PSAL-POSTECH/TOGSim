@@ -26,11 +26,11 @@ bool parse_u64(const std::string& s, uint64_t& out) {
 
 std::unique_ptr<UnitTable> UnitTable::load(const std::string& path) {
   auto table = std::make_unique<UnitTable>();
-  table->read(path, true);
+  table->read(path);
   return table;
 }
 
-size_t UnitTable::read(const std::string& path, bool new_units) {
+size_t UnitTable::read(const std::string& path) {
   std::ifstream in(path);
   if (!in.is_open()) {
     spdlog::error("[TOGSim] --unit_table {}: cannot open", path);
@@ -64,7 +64,6 @@ size_t UnitTable::read(const std::string& path, bool new_units) {
     if (!parse_u64(f[4], admitted)) reject(path, lineno, fmt::format("admitted '{}' is not a non-negative integer", f[4]));
     auto it = index.find(f[1]);
     if (it == index.end()) {
-      if (!new_units) reject(path, lineno, fmt::format("unit {} is not one the first kernel's table has", f[1]));
       it = index.emplace(f[1], std::make_pair(table->_units.size(), lineno)).first;
       table->_units.push_back({f[1], f[2], capacity});
     } else {

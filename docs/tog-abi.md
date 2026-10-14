@@ -349,7 +349,7 @@ needs a unit table that has rows of its array unit**. To run without one, set
 | `[TOGSim] systolic_array_split (on by default) reads each tile's TPUV6E_MXU rows; give --unit_table, or set systolic_array_split: none` | 1 | No `--unit_table` on a machine with the array split. | Give the table, or turn the split off. |
 | `[TOGSim] --unit_table <file> line 1: expected 5 tab-separated fields (...), got 1` | 1 | The line is separated by spaces, or is a comment. | Use tabs and nothing else. |
 | `[TOGSim] --unit_table <file> line 1: tile_id 'tile_id' is not a non-negative integer` | 1 | The table has a header line. | Remove it. |
-| `[TOGSim] systolic_array_split: the unit table has no array unit TPUV6E_MXU` | 1 | The table has no row for the array unit. | Add a row of it, or turn the split off. |
+| `[TOGSim] systolic_array_split: the unit table has no array unit TPUV6E_MXU` | 1 | The first unit table that has rows has none for the array unit. | Add a row of it, or turn the split off. |
 | `[TOGSim] <dir>/tog_tensors.txt is absent: the TOG's tensor arguments have no addresses` | 1 | No `tog_tensors.txt` beside `tog.so`. | Create it. |
 | `togsim: dlopen failed: valid.so: cannot open shared object file: No such file or directory` | 1 | `--tog_so` has no `/` in it, so the loader searches the library path, not the current directory. | Write `./valid.so`. |
 | `[TOGSim] TOG <so>: work-item 0 (key 0) needs 32768 bytes in the spad at once, and a core's spad holds 16384 (core_spad_size_kb: 16)` | 1 | A work-item holds more bytes in the spad [at once](#buffers-and-the-scratchpad) than `core_spad_size_kb`. | Raise it to at least those bytes, or free a buffer before the next is filled. |
@@ -380,7 +380,6 @@ TOGSim has more refusals than a first TOG runs into. These are not in the exampl
 | `exceeds capacity`, then `[TOGSim] --unit_table: a unit ...` | During the run a unit took in more than its capacity allows in the cycles it had, in one statistics interval or in the whole run: a check on the sum of the computes that ran, which the tiles that fit their cycles do not reach. |
 | `--unit_table is keyed by one TOG's tile_ids` | `--unit_table` was given with `--models_list`. |
 | `no tog.so next to <tog_path>`, `no tog_units.tsv next to <tog_path>`, `cycle table <dir>/tog_cycles.tsv cannot be opened` | A `LAUNCH_KERNEL` whose directory lacks the file. |
-| `unit <name> is not one the first kernel's table has` | In a session, a later kernel's unit table names a new unit. |
 | `tog_tensor_tile ...`, `tensor argument <n> is ..., which no tile holds`, `tog_tensors.txt lists <n> tensors, tog_tensor_shapes.txt <m>` | The config sets `tog_tensor_tile` and the layout files do not fit it. |
 
 ## Checklist for a TOG generator

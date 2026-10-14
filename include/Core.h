@@ -56,11 +56,11 @@ class Core {
   // --unit_table: sum each completed compute's per-unit admissions on this core.
   void set_unit_table(const UnitTable* t) {
     _unit_table = t;
-    _stat_unit_admitted.assign(t->num_units(), 0);
-    _stat_tot_unit_admitted.assign(t->num_units(), 0);
-    _stat_unit_spread.assign(t->num_units(), 0.0);
-    _stat_tot_unit_spread.assign(t->num_units(), 0.0);
-    _stat_tot_unit_credit.assign(t->num_units(), 0.0);
+    _stat_unit_admitted.resize(t->num_units(), 0);
+    _stat_tot_unit_admitted.resize(t->num_units(), 0);
+    _stat_unit_spread.resize(t->num_units(), 0.0);
+    _stat_tot_unit_spread.resize(t->num_units(), 0.0);
+    _stat_tot_unit_credit.resize(t->num_units(), 0.0);
   }
   const std::vector<uint64_t>& get_tot_unit_admitted() const { return _stat_tot_unit_admitted; }
   const std::vector<double>& get_tot_unit_credit() const { return _stat_tot_unit_credit; }
