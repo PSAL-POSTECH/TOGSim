@@ -169,7 +169,7 @@ utilization of each unit per core and the DMA and DRAM bandwidth. `--log_level t
 each instruction was issued and finished. A refused run exits non-zero with a line that names the
 cause.
 
-The machine is the YAML file given to `--config`. `configs/` ships 14 of them, and
+The machine is the YAML file given to `--config`. `configs/` ships 11 of them, and
 `examples/minimal.yml` is one that depends on no other file.
 
 ## Documentation
