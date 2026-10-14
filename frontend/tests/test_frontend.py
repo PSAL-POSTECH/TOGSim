@@ -207,7 +207,7 @@ def test_a_machine_is_refused_for_each_fact_the_tiles_do_not_fit():
 
 def test_of_the_configs_here_only_the_8x8_one_is_a_supported_machine():
     configs = sorted((paths.root() / "configs").glob("*.yml"))
-    assert len(configs) == 11
+    assert len(configs) == 7
     assert [c.name for c in configs if not unsupported(read_hardware(str(c)))] == \
         ["tpuv3_8x8.yml"]
 
@@ -231,8 +231,7 @@ def stated_spad_bytes(tmp_path, stem, macros):
 #: The spad TOGSim gives a core of each config here, in KB. TOGSim states it nowhere a program reads it but its log,
 #: so it is written out: vpu_spad_size_kb_per_lane x vpu_num_lanes, as each config gives both.
 SPAD_KB = {**{f"{name}.yml": 128 * 128 for name in (
-               "tpuv3_booksim", "tpuv3", "tpuv3_half", "tpuv4", "tpuv3_c2_booksim", "tpuv3_c2", "tpuv3_c2_partition",
-               "tpuv4_c2")},
+               "tpuv3_booksim", "tpuv3", "tpuv3_half", "tpuv4")},
            "tpuv6e.yml": 1024 * 128,
            "tpuv3_32x32.yml": 32 * 32, "tpuv3_8x8.yml": 32 * 8}
 

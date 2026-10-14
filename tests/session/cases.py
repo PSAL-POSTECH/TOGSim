@@ -1,7 +1,6 @@
 """--models_list: a command stream launches kernels, each from a directory holding tog.so and its tables."""
-from togtest import MIB, REPO, TIMEOUT_S, Case, spad_alone, write_table
+from togtest import MIB, TIMEOUT_S, Case, spad_alone, write_table
 
-PARTITIONED = REPO / "configs" / "tpuv3_c2_partition.yml"
 KERNELS = {0: dict(cycles=600, rows=256), 1: dict(cycles=900, rows=512)}
 
 
@@ -60,11 +59,12 @@ def two_kernels_one_after_the_other(t):
 
 
 def two_partitions_side_by_side(t):
-    """On the two-partition config (core 0 / core 1, 2 arrays, 128 lanes) kernel 0 goes to partition 0 and kernel 1
-    to partition 1 with no DEVICE_SYNC between: core 0 runs only kernel 0's computes (472 = 600 - 256 + 256/2),
-    core 1 only kernel 1's (644), and the two cores' compute windows overlap."""
+    """On tpuv3 with two cores, 32 DRAM channels and a partition per core (2 arrays, 128 lanes), kernel 0 goes to
+    partition 0 and kernel 1 to partition 1 with no DEVICE_SYNC between: core 0 runs only kernel 0's computes
+    (472 = 600 - 256 + 256/2), core 1 only kernel 1's (644), and the two cores' compute windows overlap."""
     homes = [kernel(t, 0, array="TPUV3_MXU"), kernel(t, 1, array="TPUV3_MXU")]
-    run = session(t, PARTITIONED, [launch(homes[0], 0, partition=0), launch(homes[1], 1, partition=1)]).expect_ok()
+    machine = t.machine("tpuv3.yml", num_cores=2, dram_channels=32, num_partition=2, partition="{core_0: 0, core_1: 1}")
+    run = session(t, machine, [launch(homes[0], 0, partition=0), launch(homes[1], 1, partition=1)]).expect_ok()
     ran = run.computes()
     by_core = {core: sorted(c.cycles for c in ran if c.core == core) for core in sorted({c.core for c in ran})}
     together = any(a.core != b.core and a.start < b.finish and b.start < a.finish for a in ran for b in ran)

@@ -20,10 +20,10 @@ icnt_latency_cycles: 1
 systolic_array_split: none
 ```
 
-`configs/` ships 11 machines, named after the TPU they model, with `_c2` for two cores, `_booksim`
+`configs/` ships 7 machines, named after the TPU they model, with `_booksim`
 for the BookSim2 interconnect and `_8x8`, `_32x32` for the small arrays. `tpuv6e.yml` has two
 arrays of 128 lanes, one core and the simple interconnect. [docs/config-keys.md](config-keys.md) lists every key with its
-default, and all 11 configs.
+default, and all 7 configs.
 
 ## The knobs
 
