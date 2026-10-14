@@ -116,12 +116,13 @@ Other lines, and the numbers in any line, are not part of the contract.
 ## Warnings
 
 A `[warning]` line names something that still runs and is probably a mistake. Each is printed once
-per TOG, while the TOG is loaded, and the run exits 0. They are not part of the contract.
+per TOG, while the TOG is loaded, or per config key, and the run exits 0. They are not part of the contract.
 
 | Line | Meaning |
 |---|---|
 | `[TOGSim] TOG <so>: the unit table has no rows for tile ids <ids>, which its computes name: those computes add nothing to the units` | Those computes count for no unit's utilization and are not split over the arrays. `<ids>` folds consecutive ids (`1, 3 to 5`). A run without a unit table says nothing. |
 | `[TOGSim] TOG <so>: its DMAs name arg_id <ids>, and tog_tensors.txt lists <n> tensor(s): those DMAs are addressed from base 0` | Those DMAs go to address 0 plus their offset, on top of tensor 0. |
+| `[TOGSim] config <path>: key <key> is not read by TOGSim` | A key of the config that TOGSim does not read and no [other tool](config-keys.md) owns: a misspelling, most often. |
 | `[TOGSim] indirect dma without its index dump (...); modeled as a dense tile` | An indirect DMA whose index file is absent or of another size. |
 | `[TOGSim] <so> uses the typed grouping (compute_type 1, 2 or 3), which is deprecated: ...` | See [compatibility.md](compatibility.md#deprecated-compute_type-1-2-and-3). |
 

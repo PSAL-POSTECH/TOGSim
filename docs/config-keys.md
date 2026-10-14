@@ -5,8 +5,8 @@ what changing one does; this page is the full list.
 
 - A required key that is missing, or a value TOGSim does not implement, aborts the run with exit
   status 134 and a `what():  <reason>` line on stderr.
-- A key that is not in this list is ignored without a message. The shipped configs carry one for
-  the frontend, `vpu_vector_length_bits`.
+- A key that is not in this list is named in a `[warning]` line and otherwise ignored, unless another tool
+  reads it: `isa`, `vcix`, `address_map` (the compiler) and `vpu_vector_length_bits` (the frontend).
 - The config is echoed at the top of the log, so a run shows which values it used.
 
 ## Cores
@@ -74,6 +74,14 @@ what changing one does; this page is the full list.
 |---|---|---|---|
 | `tog_tensor_tile` | no | | `[rows, cols]`: lay every tensor argument out in DRAM in tiles of that many 4-byte elements, for timing only. Needs `tog_tensor_shapes.txt` beside `tog.so`. |
 
+## Read by the compiler, not by TOGSim
+
+| Key | Required | Default | Meaning |
+|---|---|---|---|
+| `isa` | no | | The ISA the compiler targets, ending in the vcix extension `vcix_<model>`. Read by the compiler, not by TOGSim. |
+| `vcix` | no | | The vcix model's own keys, passed to it as they are. Read by the compiler, not by TOGSim. |
+| `address_map` | no | | Where the spad and DRAM sit in the address space. Read by the compiler, not by TOGSim. |
+
 ## The shipped configs
 
 `configs/` holds 14 machines named `<machine>[_<n>x<n>][_c<cores>][_booksim][_<variant>]`:
@@ -104,8 +112,7 @@ what changing one does; this page is the full list.
   vectors (8 sublanes x 32 bit), and `systolic_array_split: round_robin` over the array unit
   `TPUV6_MXU` (`systolic_array_unit`), so its unit tables name `TPUV6_MXU` where the others name
   `SYSTOLIC`. It prints statistics every 200 cycles; the others every 10000.
-- `tpuv2` spells its DRAM period `dram_stats_print_period_cycless`. TOGSim
-  ignores that key, so this config sets no DRAM period.
+- `tpuv2` sets no DRAM period.
 - `tpuv3_half` is `tpuv3` with half the DRAM channels.
 - `tpuv3_c2_partition` is `tpuv3_c2` with `num_partition: 2` and one core in each.
 - `examples/minimal.yml` is not one of the 19: it is a `dram_type: simple` machine that needs no

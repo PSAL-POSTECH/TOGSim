@@ -75,7 +75,7 @@ class DramRamulator2 : public Dram {
 
 class SimpleDRAM: public Dram {
  public:
-  static void apply_yaml_to_simulation_config(const YAML::Node& config, SimulationConfig& cfg);
+  static void apply_yaml_to_simulation_config(ConfigReader& config, SimulationConfig& cfg);
 
   SimpleDRAM(SimulationConfig config, cycle_type *core_cycle);
 

@@ -38,13 +38,14 @@ def every_config_is_listed(t):
 
 
 def loads_and_runs(name):
-    """configs/<name>.yml, read where it is, replays the TOG with a unit table to exit 0, a Total line and both
-    computes finished. Without a unit table it is refused, unless it is one of RUNS_WITHOUT_UNIT_TABLE (a config
+    """configs/<name>.yml, read where it is, replays the TOG with a unit table to exit 0, a Total line, both
+    computes finished and no key TOGSim does not read. Without a unit table it is refused, unless it is one of RUNS_WITHOUT_UNIT_TABLE (a config
     that sets systolic_array_split: none), which must then run to the end as well."""
     def case(t):
         tog, config = t.tog("load_compute_store_tog.cpp", tensors=(MIB, MIB)), CONFIGS / f"{name}.yml"
         run = t.simulate(tog, config, cycles=[600], units=units(name)).expect_ok()
         run.total_cycles()
+        run.expect_no_warning("is not read by TOGSim")
         if len(run.computes()) != 2:
             run.fail(f"expected the computes of both work-items to finish, got {run.computes()}")
         bare = t.simulate(tog, config, cycles=[600])
