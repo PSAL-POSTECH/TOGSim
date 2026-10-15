@@ -22,7 +22,7 @@ enum class InstFinishTraceTag {
 
 // A timed effect due at a cycle: free a weight slot, wake a MEMORY_BAR, or free the core's compute.
 struct DueAction {
-  enum Kind { FreeWeightSlot, WakeBar, ComputeFree } kind;
+  enum Kind { FreeWeightSlot, WakeBar, ComputeFree, LoadReady, StoreDrained } kind;
   std::shared_ptr<typed::WeightToken> token;
   std::shared_ptr<Instruction> bar;
 };
@@ -169,4 +169,5 @@ class Core {
   std::unordered_map<int64_t, int> _sram_readers;
   std::vector<std::shared_ptr<SpadHold>> _spad_holds;
   std::multimap<cycle_type, DueAction> _due_events;
+  uint64_t _dma_ready_pending = 0;   // DMAs whose data is done and whose ready latency is still running
 };

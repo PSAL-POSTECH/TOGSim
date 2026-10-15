@@ -7,7 +7,14 @@ core_stats_print_period_cycles: 200
 num_systolic_array_per_core: 2
 systolic_array_split: round_robin
 systolic_array_unit: TPUV6E_MXU
-dma_load_latency_cycles: 700
+# A load's fixed cost, from tpu-perf-archive data/v6e/dma/pallas.csv (one v6e, 4 KiB f32 loads). Loads started
+# together and waited once grow 17.8 ns (31.1 cycles) a load from 1 to 16 (par 572..839 ns), so most of the cost is a
+# wait loads in flight pay together, not a hold of the engine. Each key is that measurement less what this
+# simulator already charges on the same TOG with both keys 0:
+#   hold  27 = 31.1 cycles a par load  -  4.3 cycles a par load here
+#   ready 842 = 998 cycles one load (570 ns) - 129 cycles one load here - the 27 hold
+dma_load_latency_cycles: 27
+dma_load_ready_cycles: 842
 
 vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 1024

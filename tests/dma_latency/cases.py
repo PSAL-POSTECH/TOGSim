@@ -1,6 +1,7 @@
 """dma_load_latency_cycles and dma_store_latency_cycles: the cycles the DMA engine holds a DMA before its first
-request, so the DMAs pay them one after another. Each case runs a TOG with a key and without it, on the simple DRAM,
-and states the difference in core cycles."""
+request, so the DMAs pay them one after another. dma_load_ready_cycles and dma_store_ready_cycles: the cycles a DMA
+waits after its last data, not holding the engine, so DMAs in flight together wait at once. Each case runs a TOG with
+a key and without it, on the simple DRAM, and states the difference in core cycles."""
 import re
 from pathlib import Path
 
@@ -87,10 +88,59 @@ def latency_longer_than_the_wedge_guard(t):
     grows_by(work_item(t, LOAD_READ, **keys(load=150000)), work_item(t, LOAD_READ, **SIMPLE_DRAM), 150000)
 
 
+def ready(load=None, store=None):
+    return dict(dma_load_ready_cycles=load, dma_store_ready_cycles=store, **SIMPLE_DRAM)
+
+
+def ready_zero_is_absent(t):
+    """Both ready keys at 0 give the trace lines and total of no key."""
+    for replay in (lambda **k: work_item(t, LOAD_COMPUTE_STORE, **k), lambda **k: barrier(t, **k)):
+        base, zero = replay(**SIMPLE_DRAM), replay(**ready(0, 0))
+        seen = lambda run: [(e.cycle, e.tag, e.inst) for e in run.events()]
+        if seen(zero) != seen(base) or zero.total_cycles() != base.total_cycles():
+            zero.fail(f"expected the keys at 0 to change nothing: total {base.total_cycles()} -> {zero.total_cycles()}")
+
+
+def one_load_ready(t):
+    """A load and its reader: the load and the run finish exactly L later."""
+    base, run = work_item(t, LOAD_READ, **SIMPLE_DRAM), work_item(t, LOAD_READ, **ready(load=L))
+    grows_by(run, base, L)
+    if run.when("INST_FINISHED", 0) != base.when("INST_FINISHED", 0) + L:
+        run.fail(f"expected the load to finish @{base.when('INST_FINISHED', 0) + L}, "
+                 f"got @{run.when('INST_FINISHED', 0)}")
+
+
+def async_loads_wait_together(t):
+    """Two async loads on one barrier: both send their requests as before, and the run grows by L, not 2L. Breaks if
+    a load's ready latency holds the engine."""
+    base, run = barrier(t, **SIMPLE_DRAM), barrier(t, **ready(load=L))
+    grows_by(run, base, L)
+    for inst in (0, 1):
+        if run.when("ASYNC_DMA_ISSUE", inst) != base.when("ASYNC_DMA_ISSUE", inst):
+            run.fail(f"expected load {inst}'s ASYNC_DMA_ISSUE to stay @{base.when('ASYNC_DMA_ISSUE', inst)}, "
+                     f"got @{run.when('ASYNC_DMA_ISSUE', inst)}")
+
+
+def store_ready_waits_at_the_end(t):
+    """A load, a compute and a store: only the store ready key set, the store finishes as before and the run
+    L after it."""
+    base = work_item(t, LOAD_COMPUTE_STORE, **SIMPLE_DRAM)
+    run = work_item(t, LOAD_COMPUTE_STORE, **ready(store=L))
+    if run.when("INST_FINISHED", 2) != base.when("INST_FINISHED", 2):
+        run.fail(f"expected the store to finish @{base.when('INST_FINISHED', 2)}, got @{run.when('INST_FINISHED', 2)}")
+    if run.total_cycles() < run.when("INST_FINISHED", 2) + L:
+        run.fail(f"expected the run to end at least L after the store: store @{run.when('INST_FINISHED', 2)}, "
+                 f"total {run.total_cycles()}")
+
+
 CASES = [
     Case("zero_is_absent", zero_is_absent),
     Case("one_load", one_load),
     Case("async_loads_take_turns", async_loads_take_turns),
     Case("store_takes_its_turn", store_takes_its_turn),
     Case("latency_longer_than_the_wedge_guard", latency_longer_than_the_wedge_guard),
+    Case("ready_zero_is_absent", ready_zero_is_absent),
+    Case("one_load_ready", one_load_ready),
+    Case("async_loads_wait_together", async_loads_wait_together),
+    Case("store_ready_waits_at_the_end", store_ready_waits_at_the_end),
 ]

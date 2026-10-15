@@ -147,14 +147,14 @@ bytes); `examples/run.sh hello` prints these three lines above the final statist
 
 ```text
 [info] [DRAM] Per-channel average bandwidth
-[info] [DRAM] channel 0 | 2.13 GB/s avg., 4.17% of utilization | 16 reads, 16 writes
+[info] [DRAM] channel 0 | 1.92 GB/s avg., 3.75% of utilization | 16 reads, 16 writes
 ...
-[info] [DRAM] channels 0..31 combined | 68.24 GB/s aggregate, 4.17% of utilization (avg. per channel) | 512 reads, 512 writes
+[info] [DRAM] channels 0..31 combined | 61.45 GB/s aggregate, 3.75% of utilization (avg. per channel) | 512 reads, 512 writes
 ```
 
-**Why a log is long.** The log of that run is 2,064 lines. 1,857 of them are the
-`=== DRAM statistics ===` dump (58 lines for each of the 32 channels and the heading), and 49 are
-the periodic statistics of a run of 1539 cycles on a config that prints every 200. On a long run
+**Why a log is long.** The log of that run is 2,072 lines. 1,857 of them are the
+`=== DRAM statistics ===` dump (58 lines for each of the 32 channels and the heading), and 56 are
+the periodic statistics of a run of 1709 cycles on a config that prints every 200. On a long run
 the periodic blocks dominate, and `core_stats_print_period_cycles: 0` and
 `dram_stats_print_period_cycles: 0` remove them; nothing removes the dump, so read a log through
 `grep` or `tail`.
@@ -176,7 +176,7 @@ Some lines are spelled differently in the two places they appear: the final
 | `INST_FINISHED` | An instruction is done. | |
 | `ASYNC_DMA_ISSUE` | An asynchronous load has sent all its requests. | |
 | `DRAM_RESP_FIRST` | The first DRAM response of a DMA arrives. | |
-| `DRAM_RESP_DONE` | All data of an asynchronous load has arrived. | |
+| `DRAM_RESP_DONE` | An asynchronous load completes: all its data has arrived, and `dma_load_ready_cycles` have passed since. | |
 | `DMA_LATENCY` | The DMA engine takes a DMA and holds it `cycles` before its first request (`dma_load_latency_cycles` or `dma_store_latency_cycles`, when it is not 0). | `cycles`. |
 | `DRAM_NUMA` | A DMA is issued. | `numa_id`, `is_write`. |
 | `L2CACHE_STAT` | A DMA is issued on a machine with the L2 data cache. | `cacheable`. |
