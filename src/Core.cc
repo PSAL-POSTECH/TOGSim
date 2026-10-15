@@ -41,6 +41,13 @@ void Core::apply_due(const DueAction& a) {
       finish_instruction(bar);
       break;
     }
+    case DueAction::LoadReady:     // a load's ready latency ran out: it completes as its last data had just come
+      _dma_ready_pending--;
+      _dma_finished_queue.push_back(a.bar);
+      break;
+    case DueAction::StoreDrained:  // a store's ready latency ran out; only the core's end waited for it
+      _dma_ready_pending--;
+      break;
   }
 }
 
@@ -230,7 +237,14 @@ void Core::dma_cycle() {
     if (_dma.get_current_inst() != nullptr) {
       std::shared_ptr<Instruction> finished_inst = std::move(_dma.get_current_inst());
       if (finished_inst->is_dma_write()) {
-        /* Only DMA write operation is finished! */
+        /* Only DMA write operation is finished! A store is asynchronous: its work-item goes on (and its
+           dispatch slot frees) once the requests are out, and its ready latency only keeps the core running,
+           so it shows at the kernel's end, not between work-items. */
+        if (_config.dma_store_ready_cycles) {
+          _dma_ready_pending++;
+          _due_events.emplace(_core_cycle + _config.dma_store_ready_cycles,
+                              DueAction{DueAction::StoreDrained, nullptr, nullptr});
+        }
         finish_instruction(finished_inst);
       } else if (finished_inst->is_dma_read() && finished_inst->is_async_dma()) {
         /* Register tag table for async dma load; see TraceLogTag::kAsyncDmaAllRequestsIssued */
@@ -487,6 +501,7 @@ bool Core::has_inflight() {
   if (!_vu_compute_pipeline.empty()) return true;
   if (_typed.busy()) return true;
   if (!_dma_waiting_queue.empty() || !_dma_finished_queue.empty()) return true;
+  if (_dma_ready_pending) return true;
   if (!_dma.empty()) return true;
   if (!_ld_inst_queue.empty() || !_st_inst_queue.empty()) return true;
   return false;
@@ -498,6 +513,7 @@ bool Core::running() {
   running = running || !_vu_compute_pipeline.empty();
   running = running || _typed.busy();
   running = running || !_dma_waiting_queue.empty() || !_dma_finished_queue.empty();
+  running = running || _dma_ready_pending;
   running = running || !_dma.empty();
   running = running || !_ld_inst_queue.empty();
   running = running || !_st_inst_queue.empty();
@@ -528,8 +544,15 @@ void Core::push_memory_response(mem_fetch* response) {
     auto it = _dma_waiting_queue.find(owner_inst);
     if (it != _dma_waiting_queue.end()) {
       std::shared_ptr<Instruction> moved_inst = std::move(it->second);
-      _dma_finished_queue.push_back(std::move(moved_inst));
       _dma_waiting_queue.erase(it);
+      if (moved_inst->is_dma_read() && _config.dma_load_ready_cycles) {
+        // A load completes its ready latency after its last data: waited, not occupied, so the latencies of
+        // loads in flight together overlap and a chain of loads pays one each (tpu-perf-archive data/v6e/dma).
+        _dma_ready_pending++;
+        _due_events.emplace(_core_cycle + _config.dma_load_ready_cycles,
+                            DueAction{DueAction::LoadReady, nullptr, std::move(moved_inst)});
+      } else
+        _dma_finished_queue.push_back(std::move(moved_inst));
     } else {
       assert(true || "Can't happend...!");
     }

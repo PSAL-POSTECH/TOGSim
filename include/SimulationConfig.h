@@ -46,6 +46,11 @@ struct SimulationConfig {
   uint32_t dma_load_latency = 0;
   // Core cycles the DMA engine holds a store before its first request; 0 = none.
   uint32_t dma_store_latency = 0;
+  // Core cycles from a load's last data to its completion, waited, not held: the loads in flight wait theirs
+  // together; 0 = none.
+  uint32_t dma_load_ready_cycles = 0;
+  // Core cycles a store keeps the core running after its requests are out; only the kernel's end waits; 0 = none.
+  uint32_t dma_store_ready_cycles = 0;
 
   /* DRAM config */
   DramType dram_type;

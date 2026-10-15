@@ -197,6 +197,10 @@ SimulationConfig initialize_config(const YAML::Node& yaml,
     parsed_config.icnt_stats_print_period_cycles = config["icnt_stats_print_period_cycles"].as<uint32_t>();
   if (config["icnt_injection_ports_per_core"])
     parsed_config.icnt_injection_ports_per_core = config["icnt_injection_ports_per_core"].as<uint32_t>();
+  if (config["dma_load_ready_cycles"])
+    parsed_config.dma_load_ready_cycles = config["dma_load_ready_cycles"].as<uint32_t>();
+  if (config["dma_store_ready_cycles"])
+    parsed_config.dma_store_ready_cycles = config["dma_store_ready_cycles"].as<uint32_t>();
 
   if (config["tog_tensor_tile"])
     parsed_config.tog_tensor_tile = config["tog_tensor_tile"].as<std::vector<uint64_t>>();
