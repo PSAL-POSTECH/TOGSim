@@ -103,11 +103,14 @@ row `r`, column `c` of a matrix with `W` columns has `offset = r * W + c`, `dims
 elements touch. A request is 32 bytes on every shipped config (the log's `[Config/DRAM]` line
 states it), so the 64 x 64 x 4-byte data tile above is 512 requests. A core's DMA engine sends one
 DMA at a time, loads ahead of stores, at `icnt_injection_ports_per_core` requests per cycle. A
-synchronous load is finished when its last response arrives. An asynchronous load counts as
-finished when its last request is sent. A store is finished when its last request is sent, and
-the run still waits for DRAM to answer.
+synchronous load is finished `dma_load_ready_cycles` after its last response arrives. An
+asynchronous load counts as finished when its last request is sent, and its barrier waits for its
+last response and the same `dma_load_ready_cycles`. A store is finished when its last request is
+sent, and the run still waits for DRAM to answer.
 The engine holds each DMA `dma_load_latency_cycles` (a load) or `dma_store_latency_cycles` (a
 store) before its first request, so the DMAs pay it one after another, asynchronous ones too.
+`dma_load_ready_cycles` does not hold the engine: it goes on to the next DMA, so loads in flight
+together wait theirs at the same time.
 
 ## `togsim_compute`
 
@@ -289,8 +292,8 @@ The table does two things.
 
 **Utilization.** A unit's busy cycles are `admitted / capacity_per_cycle`, summed over the
 computes that ran. The final statistics print one line per unit:
-`Core [0] : Vpu utilization(%): 6.98, active_cycles: 250, idle_cycles: 3333` is 2 x 50 + 150 busy
-cycles of 3583. A unit that comes out above 100% ends the run with an error.
+`Core [0] : Vpu utilization(%): 12.54, active_cycles: 250, idle_cycles: 1744` is 2 x 50 + 150 busy
+cycles of 1994. A unit that comes out above 100% ends the run with an error.
 
 **The array split.** With `systolic_array_split: round_robin`, which is the default, a compute
 tile whose array rows exceed `vpu_num_lanes` is spread over several arrays and gets shorter. For a

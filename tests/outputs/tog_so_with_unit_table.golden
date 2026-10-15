@@ -9,6 +9,7 @@ num_systolic_array_per_core: N
 systolic_array_split: round_robin
 systolic_array_unit: TPUV6E_MXU
 dma_load_latency_cycles: N
+dma_load_ready_cycles: N
 vpu_num_lanes: N
 vpu_spad_size_kb_per_lane: N
 isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv6e]
@@ -25,6 +26,7 @@ icnt_latency_cycles: N
 icnt_freq_mhz: N
 icnt_injection_ports_per_core: N
 dma_store_latency_cycles: N
+dma_store_ready_cycles: N
 [info] [Config/Core] core_id: N, partition_id: N (no partition section)
 [info] [Config/Core] Core N: core_freq_mhz: N, systolic_arrays_per_core: N
 [info] [Config/DRAM] Ramulator2 config path: <path>

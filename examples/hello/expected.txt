@@ -3,36 +3,36 @@
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
-[trace] [841][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
-[trace] [842][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [1442][Core 0][INST_FINISHED  ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [1443][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
-[trace] [1459][Core 0][INST_FINISHED  ][INST_ID=2] MOVOUT (addr_name=tag1 tile=0)
-[info] Total execution cycles: 1539
+[trace] [1011][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
+[trace] [1012][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1612][Core 0][INST_FINISHED  ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1613][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
+[trace] [1629][Core 0][INST_FINISHED  ][INST_ID=2] MOVOUT (addr_name=tag1 tile=0)
+[info] Total execution cycles: 1709
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv --log_level trace
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
-[trace] [2][Core 0][DMA_LATENCY    ][INST_ID=0] MOVIN (cycles=700 addr_name=tag0 tile=0)
-[trace] [702][Core 0][L2CACHE_STAT   ][INST_ID=0] dram=0x0000000000000000 cacheable=false
-[trace] [702][Core 0][DRAM_NUMA      ][INST_ID=0] core_id=0 subgraph_id=0 numa_id=0 addr_name=tag0 is_write=false
-[trace] [787][Core 0][DRAM_RESP_FIRST][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
-[trace] [841][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
+[trace] [2][Core 0][DMA_LATENCY    ][INST_ID=0] MOVIN (cycles=27 addr_name=tag0 tile=0)
+[trace] [29][Core 0][L2CACHE_STAT   ][INST_ID=0] dram=0x0000000000000000 cacheable=false
+[trace] [29][Core 0][DRAM_NUMA      ][INST_ID=0] core_id=0 subgraph_id=0 numa_id=0 addr_name=tag0 is_write=false
+[trace] [114][Core 0][DRAM_RESP_FIRST][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
+[trace] [1011][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv
 [info] [DRAM] Per-channel average bandwidth
-[info] [DRAM] channel 0 | 2.13 GB/s avg., 4.17% of utilization | 16 reads, 16 writes
-[info] [DRAM] channels 0..31 combined | 68.24 GB/s aggregate, 4.17% of utilization (avg. per channel) | 512 reads, 512 writes
+[info] [DRAM] channel 0 | 1.92 GB/s avg., 3.75% of utilization | 16 reads, 16 writes
+[info] [DRAM] channels 0..31 combined | 61.45 GB/s aggregate, 3.75% of utilization (avg. per channel) | 512 reads, 512 writes
 [info] ===== Instructions count =====
 [info] Core [0] : MOVIN    inst_count: 1
 [info] Core [0] : MOVOUT   inst_count: 1
 [info] Core [0] : COMP     inst_count: 1 (GEMM: 0, Vector: 1, XLU: 0)
 [info] Core [0] : MEMORY_BAR inst_count: 0
 [info] ========= Core stat =========
-[info] Core [0] : TPUV6E_MXU utilization(%): 8.32, active_cycles: 128, idle_cycles: 1411
-[info] Core [0] : Vpu utilization(%): 6.50, active_cycles: 100, idle_cycles: 1439
-[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 1507, DRAM BW: 37.000 GB/s (1024 responses)
+[info] Core [0] : TPUV6E_MXU utilization(%): 7.49, active_cycles: 128, idle_cycles: 1581
+[info] Core [0] : Vpu utilization(%): 5.85, active_cycles: 100, idle_cycles: 1609
+[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 1677, DRAM BW: 33.000 GB/s (1024 responses)
 [info] Core [0] : NUMA local memory: 1024 requests, remote memory: 0 requests
-[info] Core [0] : Total_cycles: 1539
+[info] Core [0] : Total_cycles: 1709
 [info] Core [0] : computes held at least once by the core's compute in flight: 0
-[info] Total execution cycles: 1539
+[info] Total execution cycles: 1709
 + build/bin/Simulator --config examples/minimal.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv
 [info] [TOGSim] Command line: build/bin/Simulator --config examples/minimal.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv
 [info] [LoadConfig] Loaded configuration file "examples/minimal.yml"
