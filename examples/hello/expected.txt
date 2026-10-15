@@ -28,7 +28,7 @@
 [info] ========= Core stat =========
 [info] Core [0] : TPUV6E_MXU utilization(%): 8.32, active_cycles: 128, idle_cycles: 1411
 [info] Core [0] : Vpu utilization(%): 6.50, active_cycles: 100, idle_cycles: 1439
-[info] Core [0] : DMA active_cycles: 732, DMA idle_cycles: 807, DRAM BW: 37.000 GB/s (1024 responses)
+[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 1507, DRAM BW: 37.000 GB/s (1024 responses)
 [info] Core [0] : NUMA local memory: 1024 requests, remote memory: 0 requests
 [info] Core [0] : Total_cycles: 1539
 [info] Core [0] : computes held at least once by the core's compute in flight: 0

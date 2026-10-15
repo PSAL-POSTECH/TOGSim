@@ -264,6 +264,7 @@ void Core::dma_cycle() {
     }
   }
   /* Generate memfetch */
+  const bool holding = _dma.holding();
   auto access_vec = _dma.get_memory_access(_core_cycle, _config.icnt_injection_ports_per_core);
   for (auto access : *access_vec) {
     access->set_start_cycle(_core_cycle);
@@ -271,7 +272,10 @@ void Core::dma_cycle() {
   }
 
   /* Increase dma stat cycle */
-  _stat_dma_cycle++;
+  if (holding)
+    _stat_dma_idle_cycle++;
+  else
+    _stat_dma_cycle++;
 }
 
 void Core::cycle() {

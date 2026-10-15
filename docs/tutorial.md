@@ -515,7 +515,7 @@ It is issued at cycle 3, an `[info]` line names the buffer, and a 16 KB spad ref
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false ...
 [trace] [3][Core 0][INST_ISSUED    ][INST_ID=1] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false ...
 [trace] [847][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : DMA active_cycles: 732, DMA idle_cycles: 716, DRAM BW: 39.000 GB/s (1024 responses)
+[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 1416, DRAM BW: 39.000 GB/s (1024 responses)
 [info] Total execution cycles: 1448
 + build/bin/Simulator --config examples/mistakes/spad_16kb.gen.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
 [error] [TOGSim] TOG examples/mistakes/CONSUMER_FIRST.so: work-item 0 (key 0) needs 16384 bytes in the spad at once beside the 16384 bytes core 0 holds for the kernel (buffers 2, read without having been written), and a core's spad holds 16384 (core_spad_size_kb: 16)
