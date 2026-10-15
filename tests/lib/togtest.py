@@ -237,11 +237,11 @@ class Ctx:
         return tog_dir / "tog.so"
 
     def machine(self, base=TPUV6E, **keys):
-        """<work dir>/machine.yml: configs/<base> with each of `keys` set (in place where the base has it, appended
-        otherwise; None: left out) and the Ramulator2 / BookSim2 paths made absolute, as the file leaves configs/.
-        systolic_array_split="none" also leaves out systolic_array_unit, which TOGSim refuses without the split."""
+        """<work dir>/machine.yml: configs/<base> with each of `keys` set (in place, else appended; None: left out),
+        the DRAM / BookSim2 paths made absolute, and no DMA hold unless `keys` states one. systolic_array_split="none"
+        also leaves out systolic_array_unit, which TOGSim refuses without the split."""
         src = REPO / "configs" / base
-        lines, left = [], dict(keys)
+        lines, left = [], dict(dma_load_latency_cycles=0, dma_store_latency_cycles=0) | keys
         if left.get("systolic_array_split") == "none":
             left.setdefault("systolic_array_unit", None)
         for line in src.read_text().splitlines():

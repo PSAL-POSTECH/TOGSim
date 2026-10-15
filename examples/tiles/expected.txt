@@ -7,39 +7,39 @@
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/tiles/tog.so --cycle_table examples/tiles/tog_cycles.tsv --unit_table examples/tiles/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [144][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [744][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
-[trace] [762][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [1344][Core 0][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
-[trace] [1362][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [1944][Core 0][INST_ISSUED    ][INST_ID=13] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=4)
-[trace] [1962][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [2544][Core 0][INST_ISSUED    ][INST_ID=16] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=5)
-[trace] [2562][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [3144][Core 0][INST_ISSUED    ][INST_ID=19] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=6)
-[trace] [3162][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [3744][Core 0][INST_ISSUED    ][INST_ID=22] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=7)
-[trace] [3762][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [4344][Core 0][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
-[info] Total execution cycles: 5138
+[trace] [842][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1460][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [1563][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
+[trace] [2194][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [2306][Core 0][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
+[trace] [2928][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [3039][Core 0][INST_ISSUED    ][INST_ID=13] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=4)
+[trace] [3662][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [3812][Core 0][INST_ISSUED    ][INST_ID=16] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=5)
+[trace] [4430][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [4743][Core 0][INST_ISSUED    ][INST_ID=19] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=6)
+[trace] [5343][Core 0][INST_ISSUED    ][INST_ID=22] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=7)
+[trace] [5361][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [6193][Core 0][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
+[info] Total execution cycles: 6890
 + build/bin/Simulator --config examples/tiles/two_cores.gen.yml --tog_so examples/tiles/tog.so --cycle_table examples/tiles/tog_cycles.tsv --unit_table examples/tiles/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [2][Core 1][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [2][Core 1][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [142][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [156][Core 1][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
-[trace] [742][Core 0][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
-[trace] [756][Core 1][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
-[trace] [760][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [774][Core 1][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [1342][Core 0][INST_ISSUED    ][INST_ID=13] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=4)
-[trace] [1356][Core 1][INST_ISSUED    ][INST_ID=16] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=5)
-[trace] [1360][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [1374][Core 1][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [1942][Core 0][INST_ISSUED    ][INST_ID=19] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=6)
-[trace] [1956][Core 1][INST_ISSUED    ][INST_ID=22] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=7)
-[info] Total execution cycles: 3039
+[trace] [840][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [849][Core 1][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
+[trace] [1458][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [1467][Core 1][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [1565][Core 1][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
+[trace] [1735][Core 0][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
+[trace] [2201][Core 1][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [2315][Core 1][INST_ISSUED    ][INST_ID=16] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=5)
+[trace] [2335][Core 0][INST_ISSUED    ][INST_ID=13] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=4)
+[trace] [2353][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [3046][Core 1][INST_ISSUED    ][INST_ID=22] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=7)
+[trace] [3199][Core 0][INST_ISSUED    ][INST_ID=19] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=6)
+[info] Total execution cycles: 3888
 + build/bin/Simulator --config examples/tiles/four_cores.gen.yml --tog_so examples/tiles/tog.so --cycle_table examples/tiles/tog_cycles.tsv --unit_table examples/tiles/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
@@ -49,48 +49,48 @@
 [trace] [3][Core 2][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [4][Core 3][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [4][Core 3][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [176][Core 2][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
-[trace] [185][Core 3][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
-[trace] [188][Core 1][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
-[trace] [198][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [776][Core 2][INST_ISSUED    ][INST_ID=19] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=6)
-[trace] [785][Core 3][INST_ISSUED    ][INST_ID=22] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=7)
-[trace] [788][Core 1][INST_ISSUED    ][INST_ID=16] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=5)
-[trace] [798][Core 0][INST_ISSUED    ][INST_ID=13] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=4)
-[info] Total execution cycles: 1490
+[trace] [877][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [877][Core 3][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
+[trace] [881][Core 1][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
+[trace] [884][Core 2][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
+[trace] [1589][Core 2][INST_ISSUED    ][INST_ID=19] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=6)
+[trace] [1596][Core 1][INST_ISSUED    ][INST_ID=16] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=5)
+[trace] [1710][Core 3][INST_ISSUED    ][INST_ID=22] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=7)
+[trace] [1989][Core 0][INST_ISSUED    ][INST_ID=13] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=4)
+[info] Total execution cycles: 2794
 + build/bin/Simulator --config examples/tiles/small_spad.gen.yml --tog_so examples/tiles/tog.so --cycle_table examples/tiles/tog_cycles.tsv --unit_table examples/tiles/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
-[trace] [142][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [760][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
-[trace] [906][Core 0][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
-[trace] [1524][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
-[trace] [1695][Core 0][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
-[trace] [2313][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
-[trace] [2477][Core 0][INST_ISSUED    ][INST_ID=13] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=4)
-[trace] [3095][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
-[trace] [3267][Core 0][INST_ISSUED    ][INST_ID=16] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=5)
-[trace] [3885][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
-[trace] [4026][Core 0][INST_ISSUED    ][INST_ID=19] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=6)
-[trace] [4644][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
-[trace] [4815][Core 0][INST_ISSUED    ][INST_ID=22] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=7)
-[trace] [5433][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
-[trace] [5821][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
-[info] Total execution cycles: 6519
+[trace] [842][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1460][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
+[trace] [2301][Core 0][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
+[trace] [2919][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
+[trace] [3752][Core 0][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
+[trace] [4370][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
+[trace] [5367][Core 0][INST_ISSUED    ][INST_ID=13] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=4)
+[trace] [5985][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
+[trace] [7100][Core 0][INST_ISSUED    ][INST_ID=16] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=5)
+[trace] [7718][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
+[trace] [8559][Core 0][INST_ISSUED    ][INST_ID=19] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=6)
+[trace] [9177][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
+[trace] [10008][Core 0][INST_ISSUED    ][INST_ID=22] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=7)
+[trace] [10626][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=1
+[trace] [11467][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
+[info] Total execution cycles: 12164
 + build/bin/Simulator --config examples/tiles/half_dram.gen.yml --tog_so examples/tiles/tog.so --cycle_table examples/tiles/tog_cycles.tsv --unit_table examples/tiles/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [147][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [747][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
-[trace] [765][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [1347][Core 0][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
-[trace] [1365][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [1947][Core 0][INST_ISSUED    ][INST_ID=13] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=4)
-[trace] [1965][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [2547][Core 0][INST_ISSUED    ][INST_ID=16] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=5)
-[trace] [2565][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [3147][Core 0][INST_ISSUED    ][INST_ID=19] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=6)
-[trace] [3165][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [3747][Core 0][INST_ISSUED    ][INST_ID=22] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=7)
-[trace] [3765][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [4347][Core 0][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
-[info] Total execution cycles: 5331
+[trace] [843][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1461][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [1733][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
+[trace] [2333][Core 0][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
+[trace] [2351][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [3085][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [3247][Core 0][INST_ISSUED    ][INST_ID=13] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=4)
+[trace] [3865][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [4317][Core 0][INST_ISSUED    ][INST_ID=16] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=5)
+[trace] [4917][Core 0][INST_ISSUED    ][INST_ID=19] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=6)
+[trace] [4935][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [5669][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [5783][Core 0][INST_ISSUED    ][INST_ID=22] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=7)
+[trace] [6533][Core 0][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
+[info] Total execution cycles: 7211

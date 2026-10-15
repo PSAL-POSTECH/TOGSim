@@ -154,12 +154,12 @@ The script echoes each command after `+`. Its first run is the replay of the Qui
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false ...
-[trace] [141][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
-[trace] [142][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [742][Core 0][INST_FINISHED  ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [743][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false ...
-[trace] [759][Core 0][INST_FINISHED  ][INST_ID=2] MOVOUT (addr_name=tag1 tile=0)
-[info] Total execution cycles: 840
+[trace] [841][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
+[trace] [842][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1442][Core 0][INST_FINISHED  ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1443][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false ...
+[trace] [1459][Core 0][INST_FINISHED  ][INST_ID=2] MOVOUT (addr_name=tag1 tile=0)
+[info] Total execution cycles: 1539
 ```
 
 Each trace line is `[cycle][Core c][TAG][INST_ID=n] OPCODE (fields)`:
@@ -167,13 +167,13 @@ Each trace line is `[cycle][Core c][TAG][INST_ID=n] OPCODE (fields)`:
 | Cycle | Line | What happened |
 |---|---|---|
 | 1 | `TILE_SCHEDULED spad_footprint=32768` | The work-item was handed to core 0. Its footprint is the two buffers, 2 x 16384 bytes. `max_dispatch=2`: this core keeps two work-items in flight. |
-| 2 | `INST_ISSUED` `MOVIN` | The load starts. 16384 bytes are 512 DRAM requests of 32 bytes. |
-| 141 | `INST_FINISHED` `MOVIN` | The last response arrived. |
-| 142 | `INST_ISSUED` `COMP` `compute_cycle=600` | The compute starts, with the 600 cycles of the cycle table. |
-| 742 | `INST_FINISHED` `COMP` | 142 + 600. |
-| 743 | `INST_ISSUED` `MOVOUT` `dram=0x...4000` | The store starts. Tensor 1 sits at 0x4000, after the 16384 bytes of tensor 0. |
-| 759 | `INST_FINISHED` `MOVOUT` | The last write request was sent: 512 requests at 32 per cycle. |
-| 840 | `Total execution cycles` | The simulation ends when DRAM has answered the last write. |
+| 2 | `INST_ISSUED` `MOVIN` | The load starts. The DMA engine holds it 700 cycles (`dma_load_latency_cycles: 700` on tpuv6e), then sends 16384 bytes as 512 DRAM requests of 32 bytes. |
+| 841 | `INST_FINISHED` `MOVIN` | The last response arrived. |
+| 842 | `INST_ISSUED` `COMP` `compute_cycle=600` | The compute starts, with the 600 cycles of the cycle table. |
+| 1442 | `INST_FINISHED` `COMP` | 842 + 600. |
+| 1443 | `INST_ISSUED` `MOVOUT` `dram=0x...4000` | The store starts. Tensor 1 sits at 0x4000, after the 16384 bytes of tensor 0. |
+| 1459 | `INST_FINISHED` `MOVOUT` | The last write request was sent: 512 requests at 32 per cycle. |
+| 1539 | `Total execution cycles` | The simulation ends when DRAM has answered the last write. |
 
 In a trace line `tile=0` is the index of the work-item, not a `tile_id`
 ([all fields](output-lines.md#trace-lines)). The script's later runs print one instruction's
@@ -196,10 +196,10 @@ build/bin/Simulator --config configs/tpuv6e.yml \
 ```
 
 ```text
-[2026-10-12 14:29:13.020] [info] Total execution cycles: 840
+[2026-10-12 14:29:13.020] [info] Total execution cycles: 1539
 ```
 
-Change the 600 in `tog_cycles.tsv` to 1000 and the total becomes 1239.
+Change the 600 in `tog_cycles.tsv` to 1000 and the total becomes 1939.
 
 ## 2. Asynchronous loads and a barrier
 
@@ -232,32 +232,33 @@ The first run of four (the dots are cuts made here):
 ```text
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=true ...
 [trace] [3][Core 0][INST_ISSUED    ][INST_ID=1] MOVIN (addr_name=tag1 dram=0x0000000000004000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=true ...
-[trace] [18][Core 0][ASYNC_DMA_ISSUE][INST_ID=0] MOVIN (ASYNC subgraph_id=0 addr_name=tag0 ...
-[trace] [34][Core 0][ASYNC_DMA_ISSUE][INST_ID=1] MOVIN (ASYNC subgraph_id=0 addr_name=tag1 ...
-[trace] [35][Core 0][INST_ISSUED    ][INST_ID=2] MEMORY_BAR (addr_name=tag0 ...
-[trace] [143][Core 0][DRAM_RESP_DONE ][INST_ID=0] MOVIN (ASYNC subgraph_id=0 addr_name=tag0 ...
-[trace] [159][Core 0][DRAM_RESP_DONE ][INST_ID=1] MOVIN (ASYNC subgraph_id=0 addr_name=tag1 ...
-[trace] [160][Core 0][INST_FINISHED  ][INST_ID=2] MEMORY_BAR (addr_name=tag0 ...
-[trace] [160][Core 0][INST_ISSUED    ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [760][Core 0][INST_FINISHED  ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [718][Core 0][ASYNC_DMA_ISSUE][INST_ID=0] MOVIN (ASYNC subgraph_id=0 addr_name=tag0 ...
+[trace] [841][Core 0][DRAM_RESP_DONE ][INST_ID=0] MOVIN (ASYNC subgraph_id=0 addr_name=tag0 ...
+[trace] [1434][Core 0][ASYNC_DMA_ISSUE][INST_ID=1] MOVIN (ASYNC subgraph_id=0 addr_name=tag1 ...
+[trace] [1435][Core 0][INST_ISSUED    ][INST_ID=2] MEMORY_BAR (addr_name=tag0 ...
+[trace] [1558][Core 0][DRAM_RESP_DONE ][INST_ID=1] MOVIN (ASYNC subgraph_id=0 addr_name=tag1 ...
+[trace] [1559][Core 0][INST_FINISHED  ][INST_ID=2] MEMORY_BAR (addr_name=tag0 ...
+[trace] [1559][Core 0][INST_ISSUED    ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [2159][Core 0][INST_FINISHED  ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 ...
-[info] Total execution cycles: 858
+[info] Total execution cycles: 2257
 ```
 
-The loads have sent their requests at cycles 18 and 34 (`ASYNC_DMA_ISSUE`), so the barrier is
-issued at 35. It finishes at 160, one cycle after the data of the second load is there
-(`DRAM_RESP_DONE` at 159), and the compute starts in the same cycle.
+The DMA engine holds each load 700 cycles before its requests, one load after the other, so the
+loads have sent their requests at cycles 718 and 1434 (`ASYNC_DMA_ISSUE`), and the barrier is
+issued at 1435. It finishes at 1559, one cycle after the data of the second load is there
+(`DRAM_RESP_DONE` at 1558), and the compute starts in the same cycle.
 
 **Which form to write.** The other three runs rebuild the TOG with `-DSYNC` (both loads
 synchronous, no barrier) and with `-DTWO_STEPS` (a first compute that reads only operand A):
 
 | TOG | Asynchronous loads and a barrier | Synchronous loads |
 |---|---|---|
-| one compute reads both operands | 858 | 858 |
-| `-DTWO_STEPS`: a first compute reads only A | 1700, first compute at 160 | 1700, first compute at 144 |
+| one compute reads both operands | 2257 | 2257 |
+| `-DTWO_STEPS`: a first compute reads only A | 2893, first compute at 1559 | 2257, first compute at 842 |
 
 A barrier holds every reader of its loads' buffers until the whole batch has arrived. A
-synchronous load releases its readers when its own data has arrived, which is cycle 143 for A.
+synchronous load releases its readers when its own data has arrived, which is cycle 841 for A.
 In these runs the asynchronous form is never the faster one. Use it to replay a kernel that
 really issues a batch of loads and then waits for all of them; in a hand-written TOG, synchronous
 loads are simpler. A TOG that signals a semaphore and never waits on it, or waits for another
@@ -303,9 +304,9 @@ one key changed. The first three:
 
 | Machine | `Total execution cycles` | What the trace shows |
 |---|---|---|
-| tpuv6e (`num_cores: 1`) | 5138 | Computes are issued at 144, 744, 1344, ...: one at a time, 600 cycles apart. |
-| `num_cores: 2` | 3039 | Work-items 0, 2, 4, 6 are on core 0 and 1, 3, 5, 7 on core 1. The first computes start at 142 and 156. |
-| `num_cores: 4` | 1490 | Two work-items per core. The first computes start at 176 to 198. |
+| tpuv6e (`num_cores: 1`) | 6890 | Computes are issued at 842, 1563, 2306, ...: one at a time, each after its work-item's load. |
+| `num_cores: 2` | 3888 | Work-items 0, 2, 4, 6 are on core 0 and 1, 3, 5, 7 on core 1. The first computes start at 840 and 849. |
+| `num_cores: 4` | 2794 | Two work-items per core. The first computes start at 877 to 884. |
 
 The run with `num_cores: 2`, where `tile=N` is the work-item's index in dispatch order:
 
@@ -314,19 +315,19 @@ The run with `num_cores: 2`, where `tile=N` is the work-item's index in dispatch
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [2][Core 1][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [2][Core 1][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [142][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [156][Core 1][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
-[trace] [742][Core 0][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
-[trace] [756][Core 1][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
+[trace] [840][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [849][Core 1][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
+[trace] [1565][Core 1][INST_ISSUED    ][INST_ID=10] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=3)
+[trace] [1735][Core 0][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
 ...
-[info] Total execution cycles: 3039
+[info] Total execution cycles: 3888
 ```
 
 Two things to take from these runs:
 
-- **More cores are not proportionally faster.** Two cores take 3039 cycles and four take 1490,
-  against 5138 for one. All cores load through the same DRAM and interconnect: on four
-  cores the first computes start at 176 to 198, against 144 on one core.
+- **More cores are not proportionally faster.** Two cores take 3888 cycles and four take 2794,
+  against 6890 for one. All cores load through the same DRAM and interconnect: on four
+  cores the first computes start at 877 to 884, against 842 on one core.
 - **Do not rely on the order of work-items.** On one core the computes run in the order
   `tile=` 0, 1, 2, 4, 5, 6, 7, 3. A TOG can order instructions inside a work-item, with buffers,
   and nothing across work-items.
@@ -382,21 +383,21 @@ The script runs that, then changes one thing at a time:
 
 | Run | Compute tile 0 | Compute tile 1 | `Total execution cycles` |
 |---|---|---|---|
-| 512 rows, 2 arrays, 128 lanes (as shipped) | 600 - 512 + 256 = 344 | 150 | 1099 |
-| `tog_units_128_rows.tsv`: 128 rows | 600 | 150 | 1913 |
-| 512 rows, `num_systolic_array_per_core: 1` | 600 | 150 | 1913 |
-| 128 rows, `vpu_num_lanes: 64` | 600 - 128 + 64 = 536 | 150 | 1483 |
-| `systolic_array_split: none`, no unit table | 600 | 150 | 1913 |
+| 512 rows, 2 arrays, 128 lanes (as shipped) | 600 - 512 + 256 = 344 | 150 | 3583 |
+| `tog_units_128_rows.tsv`: 128 rows | 600 | 150 | 3839 |
+| 512 rows, `num_systolic_array_per_core: 1` | 600 | 150 | 3839 |
+| 128 rows, `vpu_num_lanes: 64` | 600 - 128 + 64 = 536 | 150 | 3775 |
+| `systolic_array_split: none`, no unit table | 600 | 150 | 3839 |
 
 The first run:
 
 ```text
-[trace] [161][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=344 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [506][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=344 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [851][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : TPUV6E_MXU utilization(%): 46.59, active_cycles: 512, idle_cycles: 587
-[info] Core [0] : Vpu utilization(%): 22.75, active_cycles: 250, idle_cycles: 849
-[info] Total execution cycles: 1099
+[trace] [1744][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=344 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [2990][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=344 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [3335][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
+[info] Core [0] : TPUV6E_MXU utilization(%): 14.29, active_cycles: 512, idle_cycles: 3071
+[info] Core [0] : Vpu utilization(%): 6.98, active_cycles: 250, idle_cycles: 3333
+[info] Total execution cycles: 3583
 ```
 
 All three lines say `tile=0`, the third too although it runs `tile_id` 1: `tile=N` in the log is
@@ -439,24 +440,24 @@ examples/run.sh session
 ```text
 + build/bin/Simulator --config configs/tpuv6e.yml --models_list examples/session/commands.txt --log_level trace
 [info] [Scheduler 0] Enqueued kernel_id: 0, tog_path: examples/session/k0/tog.so, operation: kernel, request_time_cycles: 0
-[trace] [142][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [842][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [info] [Scheduler 0] Enqueued kernel_id: 1, tog_path: examples/session/k1/tog.so, operation: kernel, request_time_cycles: 0
-[trace] [982][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
-[info] Total execution cycles: 1703
+[trace] [2373][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
+[info] Total execution cycles: 3220
 # examples/session/two_partitions.gen.yml: configs/tpuv6e.yml with num_cores: 2, num_partition: 2, partition: {core_0: 0, core_1: 1}
 + build/bin/Simulator --config examples/session/two_partitions.gen.yml --models_list examples/session/commands_two_partitions.txt --log_level trace
 [info] [Scheduler 0] Enqueued kernel_id: 0, tog_path: examples/session/k0/tog.so, operation: kernel, request_time_cycles: 0
 [info] [Scheduler 1] Enqueued kernel_id: 1, tog_path: examples/session/k1/tog.so, operation: kernel, request_time_cycles: 0
-[trace] [145][Core 1][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [147][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[info] Total execution cycles: 866
+[trace] [845][Core 1][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [847][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[info] Total execution cycles: 1566
 ```
 
 - **First run, one partition.** Kernel 1 starts after kernel 0 is done, and each kernel's compute
   follows its own tables: 600 cycles and 128 rows for `k0`, which fit one array of tpuv6e, so 600;
   900 cycles and 512 rows for `k1`, so 900 - 512 + 256 = 644.
 - **Second run, two partitions.** A copy of tpuv6e with two cores, one in each partition
-  (`num_partition: 2` and its `partition` map), and the kernels run side by side: 866 cycles, each
+  (`num_partition: 2` and its `partition` map), and the kernels run side by side: 1566 cycles, each
   compute as in the first run.
 
 In a session the total is followed by one more line, `Wall-clock time for simulation`.
@@ -485,12 +486,12 @@ cause and its fix.
 
 **Said, but not refused.** Two mistakes still run to the end with exit 0, and TOGSim names them in
 one `[warning]` line while it loads the TOG. The valid TOG of `examples/mistakes/silent_tog.cpp`
-takes 840 cycles.
+takes 1539 cycles.
 
 | Mistake | Total | What happens | The warning |
 |---|---|---|---|
-| `TENSOR_PAST_LIST`: an `arg_id` `tog_tensors.txt` has no line for | 830 | The tensor is placed at address 0, on top of tensor 0: `dram=0x0000000000000000` on the store's trace line. | `its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0` |
-| a unit table whose rows are all for `tile_id` 1, while the TOG computes `tile_id` 0 | 840 | The compute adds nothing to any unit, and the array split leaves it whole: `TPUV6E_MXU utilization(%): 0.00`. | `the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units` |
+| `TENSOR_PAST_LIST`: an `arg_id` `tog_tensors.txt` has no line for | 1531 | The tensor is placed at address 0, on top of tensor 0: `dram=0x0000000000000000` on the store's trace line. | `its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0` |
+| a unit table whose rows are all for `tile_id` 1, while the TOG computes `tile_id` 0 | 1539 | The compute adds nothing to any unit, and the array split leaves it whole: `TPUV6E_MXU utilization(%): 0.00`. | `the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units` |
 
 ```text
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TENSOR_PAST_LIST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
@@ -502,7 +503,7 @@ total; only the number is wrong.
 
 | Mistake (`-D` flag) | Total | What happens | How to notice |
 |---|---|---|---|
-| `NULL_STRIDES`: `strides` is a null pointer | 785 | The whole DMA becomes one DRAM request. | `stride=[]` on the trace line; 513 responses instead of 1024. |
+| `NULL_STRIDES`: `strides` is a null pointer | 1486 | The whole DMA becomes one DRAM request. | `stride=[]` on the trace line; 513 responses instead of 1024. |
 
 **Valid, with another meaning.** `CONSUMER_FIRST` calls the store before the compute that writes
 its buffer, so the store drains [data already on the chip](tog-abi.md#data-that-is-already-on-the-chip).
@@ -513,9 +514,9 @@ It is issued at cycle 3, an `[info]` line names the buffer, and a 16 KB spad ref
 [info] [TOGSim] TOG examples/mistakes/CONSUMER_FIRST.so: core 0 holds 16384 bytes for the kernel: buffers 2, which its work-items read without having written them
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false ...
 [trace] [3][Core 0][INST_ISSUED    ][INST_ID=1] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false ...
-[trace] [147][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 716, DRAM BW: 76.000 GB/s (1024 responses)
-[info] Total execution cycles: 748
+[trace] [847][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[info] Core [0] : DMA active_cycles: 732, DMA idle_cycles: 716, DRAM BW: 39.000 GB/s (1024 responses)
+[info] Total execution cycles: 1448
 + build/bin/Simulator --config examples/mistakes/spad_16kb.gen.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
 [error] [TOGSim] TOG examples/mistakes/CONSUMER_FIRST.so: work-item 0 (key 0) needs 16384 bytes in the spad at once beside the 16384 bytes core 0 holds for the kernel (buffers 2, read without having been written), and a core's spad holds 16384 (core_spad_size_kb: 16)
 exit 1
