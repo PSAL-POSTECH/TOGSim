@@ -71,7 +71,7 @@ line. The final statistics of the hello TOG on tpuv6e (the third run of `example
 [info] ========= Core stat =========
 [info] Core [0] : TPUV6E_MXU utilization(%): 8.32, active_cycles: 128, idle_cycles: 1411
 [info] Core [0] : Vpu utilization(%): 6.50, active_cycles: 100, idle_cycles: 1439
-[info] Core [0] : DMA active_cycles: 732, DMA idle_cycles: 807, DRAM BW: 37.000 GB/s (1024 responses)
+[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 1507, DRAM BW: 37.000 GB/s (1024 responses)
 [info] Core [0] : NUMA local memory: 1024 requests, remote memory: 0 requests
 [info] Core [0] : Total_cycles: 1539
 [info] Core [0] : computes held at least once by the core's compute in flight: 0
@@ -88,8 +88,8 @@ line. The final statistics of the hello TOG on tpuv6e (the third run of `example
 - **`<unit> utilization(%)`**: one line per unit of the unit table. 128 rows at 1 per cycle are 128
   active cycles of 1539, or 8.32%. With more than one core each core prints its block, and a
   `Total : <unit> utilization(%)` line per unit follows.
-- **`DMA active_cycles`** are the cycles the core's DMA engine held a DMA or sent its requests: the
-  load's 700-cycle hold, then 2 DMAs of 512 requests at 32 per cycle. **`DRAM BW`** is the bytes DRAM answered (32 x 1024 here) over the
+- **`DMA active_cycles`** are the cycles the core's DMA engine spent sending requests: 2 DMAs of
+  512 requests at 32 per cycle. The cycles it holds a DMA (`dma_load_latency_cycles`) count as idle. **`DRAM BW`** is the bytes DRAM answered (32 x 1024 here) over the
   run, in GB/s, cut to a whole number.
 - **`NUMA local / remote`** counts requests that went to a DRAM channel of the core's own
   partition or to another's (`dram_num_partitions`).

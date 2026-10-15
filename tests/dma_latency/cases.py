@@ -1,6 +1,7 @@
 """dma_load_latency_cycles and dma_store_latency_cycles: the cycles the DMA engine holds a DMA before its first
 request, so the DMAs pay them one after another. Each case runs a TOG with a key and without it, on the simple DRAM,
 and states the difference in core cycles."""
+import re
 from pathlib import Path
 
 from togtest import MIB, Case
@@ -43,10 +44,19 @@ def zero_is_absent(t):
             zero.fail(f"expected the keys at 0 to change nothing: total {base.total_cycles()} -> {zero.total_cycles()}")
 
 
+def dma_cycles(run):
+    """(active, idle) of the last `DMA active_cycles` line, the run's totals."""
+    return tuple(map(int, re.findall(r"DMA active_cycles: (\d+), DMA idle_cycles: (\d+)", run.log)[-1]))
+
+
 def one_load(t):
-    """A load and its reader: the load and the run finish exactly L later."""
+    """A load and its reader: the load and the run finish exactly L later, and the hold counts as DMA idle, not
+    active."""
     base, run = work_item(t, LOAD_READ, **SIMPLE_DRAM), work_item(t, LOAD_READ, **keys(load=L))
     grows_by(run, base, L)
+    (active, idle), (base_active, base_idle) = dma_cycles(run), dma_cycles(base)
+    if (active, idle) != (base_active, base_idle + L):
+        run.fail(f"expected DMA active {base_active} and idle {base_idle + L}, got {active} and {idle}")
     if run.when("INST_FINISHED", 0) != base.when("INST_FINISHED", 0) + L:
         run.fail(f"expected the load to finish @{base.when('INST_FINISHED', 0) + L}, "
                  f"got @{run.when('INST_FINISHED', 0)}")

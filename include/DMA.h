@@ -24,6 +24,7 @@ class DMA {
   void issue_tile(std::shared_ptr<Instruction> inst, uint32_t latency = 0);
   bool is_finished() { return _finished; }
   bool empty() { return _current_inst==nullptr; }
+  bool holding() { return _latency > 0; }
   void register_tag(int subgraph_id, std::vector<int64_t>& key) {
     if (tag_table.find(subgraph_id) == tag_table.end()) {
       tag_table[subgraph_id] = std::map<std::vector<int64_t>, uint32_t>();
