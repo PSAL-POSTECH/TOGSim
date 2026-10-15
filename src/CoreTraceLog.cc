@@ -90,6 +90,11 @@ std::string format_instruction_detail_line(Instruction& inst) {
   return opname;
 }
 
+std::string format_dma_latency_line(Instruction& inst, uint32_t cycles) {
+  return fmt::format("{} (cycles={} addr_name={} tile={})", opcode_to_string(inst.get_opcode()), cycles,
+                     inst.get_addr_name(), inst.get_tile_group());
+}
+
 void trace_tile_scheduled(cycle_type core_cycle, uint32_t core_id, const std::string& tag15,
                           size_t spad_footprint, int max_dispatch) {
   spdlog::trace("[{}][Core {}][{}] spad_footprint={} max_dispatch={}",

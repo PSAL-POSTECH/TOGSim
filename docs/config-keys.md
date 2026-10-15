@@ -25,6 +25,8 @@ what changing one does; this page is the full list.
 | `vpu_spad_size_kb_per_lane` | no | | The scratchpad of one lane, in KB. With `vpu_num_lanes` it makes the scratchpad of one core: `vpu_spad_size_kb_per_lane` x `vpu_num_lanes`. 0 means unlimited. It must hold what a work-item needs [at once](tog-abi.md#buffers-and-the-scratchpad); a TOG with a work-item that needs more is refused. |
 | `core_spad_size_kb` | no | 0 | The scratchpad of one core, in KB, for a config without `vpu_spad_size_kb_per_lane` and `vpu_num_lanes`; 0 means unlimited. Beside those two it may only restate their product: another value aborts. |
 | `sa_weight_buffer_depth` | no | 2 | Deprecated: read only for a TOG that passes `compute_type` 1, 2 or 3. |
+| `dma_load_latency_cycles` | no | 0 | Core cycles the DMA engine holds a load before its first request. The engine sends one DMA at a time, so the loads pay it one after another, asynchronous ones too. |
+| `dma_store_latency_cycles` | no | 0 | Core cycles the DMA engine holds a store before its first request, as `dma_load_latency_cycles` for a load. |
 
 ## DRAM
 

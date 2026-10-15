@@ -10,7 +10,8 @@ DMA::DMA(uint32_t id, uint32_t dram_req_size, bool l2_datacache_enabled) {
   _finished = true;
 }
 
-void DMA::issue_tile(std::shared_ptr<Instruction> inst) {
+// The engine holds `inst` `latency` cycles before its first request; the next DMA waits behind it.
+void DMA::issue_tile(std::shared_ptr<Instruction> inst, uint32_t latency) {
   _current_inst = std::move(inst);
   std::vector<size_t>& tile_size = _current_inst->get_tile_size();
   if (tile_size.size() <= 0 || tile_size.size() > get_max_dim()) {
@@ -18,9 +19,14 @@ void DMA::issue_tile(std::shared_ptr<Instruction> inst) {
     exit(EXIT_FAILURE);
   }
   _finished = false;
+  _latency = latency;
 }
 
 std::shared_ptr<std::vector<mem_fetch*>> DMA::get_memory_access(cycle_type core_cycle, int nr_req) {
+  if (_latency) {
+    _latency--;
+    return std::make_shared<std::vector<mem_fetch*>>();
+  }
 
   if (!_generated_once) {
     std::shared_ptr<std::set<addr_type>> addr_set =

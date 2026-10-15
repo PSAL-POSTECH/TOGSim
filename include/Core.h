@@ -96,6 +96,7 @@ class Core {
   // spreading its array unit's rows over the arrays (see SimulationConfig::systolic_array_split).
   cycle_type split_compute_cycles(const std::shared_ptr<Instruction>& inst) const;
   void process_due_events();   // drain _due_events due this cycle
+  void start_dma(std::shared_ptr<Instruction> inst, uint32_t latency);
   void apply_due(const DueAction& a);
 
   /* Core id & config file */

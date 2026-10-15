@@ -112,6 +112,10 @@ SimulationConfig initialize_config(const YAML::Node& yaml,
   }
   if (config["vpu_num_lanes"])
     parsed_config.vpu_num_lanes = config["vpu_num_lanes"].as<uint32_t>();
+  if (config["dma_load_latency_cycles"])
+    parsed_config.dma_load_latency = config["dma_load_latency_cycles"].as<uint32_t>();
+  if (config["dma_store_latency_cycles"])
+    parsed_config.dma_store_latency = config["dma_store_latency_cycles"].as<uint32_t>();
   if (parsed_config.systolic_array_split && parsed_config.vpu_num_lanes == 0)
     throw std::runtime_error("systolic_array_split: round_robin (the default) needs vpu_num_lanes; "
                              "systolic_array_split: none runs without it");
