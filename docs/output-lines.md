@@ -177,6 +177,7 @@ Some lines are spelled differently in the two places they appear: the final
 | `ASYNC_DMA_ISSUE` | An asynchronous load has sent all its requests. | |
 | `DRAM_RESP_FIRST` | The first DRAM response of a DMA arrives. | |
 | `DRAM_RESP_DONE` | All data of an asynchronous load has arrived. | |
+| `DMA_LATENCY` | The DMA engine takes a DMA and holds it `cycles` before its first request (`dma_load_latency_cycles` or `dma_store_latency_cycles`, when it is not 0). | `cycles`. |
 | `DRAM_NUMA` | A DMA is issued. | `numa_id`, `is_write`. |
 | `L2CACHE_STAT` | A DMA is issued on a machine with the L2 data cache. | `cacheable`. |
 

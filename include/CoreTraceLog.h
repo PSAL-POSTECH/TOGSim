@@ -27,6 +27,8 @@ std::string format_dma_inst_issued_detail(Instruction& inst);
 std::string format_dma_inst_issued_trace_line(Instruction& inst);
 /** Opcode + (detail...) for COMP / BAR / MOVIN / MOVOUT finished or issued lines. */
 std::string format_instruction_detail_line(Instruction& inst);
+/** Opcode + (cycles=N addr_name=... tile=...) for the DMA_LATENCY line of a DMA that waits N cycles. */
+std::string format_dma_latency_line(Instruction& inst, uint32_t cycles);
 
 void trace_tile_scheduled(cycle_type core_cycle, uint32_t core_id, const std::string& tag15,
                           size_t spad_footprint, int max_dispatch);

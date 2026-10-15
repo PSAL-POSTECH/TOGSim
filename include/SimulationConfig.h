@@ -42,6 +42,10 @@ struct SimulationConfig {
   // split: the split reads that unit's rows, and a table without it is refused. TOGSim names no unit itself.
   std::string systolic_array_unit;
   uint32_t vpu_num_lanes = 0;
+  // Core cycles the DMA engine holds a load before its first request; 0 = none.
+  uint32_t dma_load_latency = 0;
+  // Core cycles the DMA engine holds a store before its first request; 0 = none.
+  uint32_t dma_store_latency = 0;
 
   /* DRAM config */
   DramType dram_type;

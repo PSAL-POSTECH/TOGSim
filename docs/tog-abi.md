@@ -106,6 +106,8 @@ DMA at a time, loads ahead of stores, at `icnt_injection_ports_per_core` request
 synchronous load is finished when its last response arrives. An asynchronous load counts as
 finished when its last request is sent. A store is finished when its last request is sent, and
 the run still waits for DRAM to answer.
+The engine holds each DMA `dma_load_latency_cycles` (a load) or `dma_store_latency_cycles` (a
+store) before its first request, so the DMAs pay it one after another, asynchronous ones too.
 
 ## `togsim_compute`
 

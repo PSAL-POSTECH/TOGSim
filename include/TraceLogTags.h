@@ -26,6 +26,7 @@ inline constexpr const char* kInstructionFinished = "INST_FINISHED";
 inline constexpr const char* kAsyncDmaAllRequestsIssued = "ASYNC_DMA_ISSUE";
 inline constexpr const char* kFirstDramResponse = "DRAM_RESP_FIRST";
 inline constexpr const char* kAllDramResponsesReceived = "DRAM_RESP_DONE";
+inline constexpr const char* kDmaLatency = "DMA_LATENCY";
 
 inline constexpr const char* kL2CacheableStatusForAddress = "L2CACHE_STAT";
 inline constexpr const char* kDmaNumaPlacement = "DRAM_NUMA";

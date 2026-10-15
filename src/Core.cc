@@ -184,6 +184,15 @@ void Core::compute_cycle() {
   });
 }
 
+// Hand `inst` to the DMA engine, which holds it `latency` cycles before its first request.
+void Core::start_dma(std::shared_ptr<Instruction> inst, uint32_t latency) {
+  if (latency && core_trace_log::trace_enabled())
+    core_trace_log::trace_instruction_line(_core_cycle, _id, TraceLogTag::pad15(TraceLogTag::kDmaLatency),
+                                           inst->get_global_inst_id(),
+                                           core_trace_log::format_dma_latency_line(*inst, latency));
+  _dma.issue_tile(std::move(inst), latency);
+}
+
 void Core::dma_cycle() {
   /* Check finished dma operation */
   while(_dma_finished_queue.size()) {
@@ -243,12 +252,10 @@ void Core::dma_cycle() {
 
     /* Issue new DMA operation */
     if (!_ld_inst_queue.empty()) {
-      std::shared_ptr<Instruction> inst = _ld_inst_queue.front();
-      _dma.issue_tile(inst);
+      start_dma(_ld_inst_queue.front(), _config.dma_load_latency);
       _ld_inst_queue.pop();
     } else if (!_st_inst_queue.empty()) {
-      std::shared_ptr<Instruction> inst = _st_inst_queue.front();
-      _dma.issue_tile(inst);
+      start_dma(_st_inst_queue.front(), _config.dma_store_latency);
       _st_inst_queue.pop();
     } else {
       /* DMA is idle */
