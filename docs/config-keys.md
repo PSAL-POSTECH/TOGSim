@@ -27,6 +27,8 @@ what changing one does; this page is the full list.
 | `sa_weight_buffer_depth` | no | 2 | Deprecated: read only for a TOG that passes `compute_type` 1, 2 or 3. |
 | `dma_load_latency_cycles` | no | 0 | Core cycles the DMA engine holds a load before its first request. The engine sends one DMA at a time, so the loads pay it one after another, asynchronous ones too. |
 | `dma_store_latency_cycles` | no | 0 | Core cycles the DMA engine holds a store before its first request, as `dma_load_latency_cycles` for a load. |
+| `dma_load_ready_cycles` | no | 0 | Core cycles from a load's last data to its completion, waited and not held: the engine goes on to the next DMA, so loads in flight together wait theirs at the same time and pay it once, and a load that waits on another pays it again. The v6e's measured DMA cost has this shape (tpu-perf-archive `data/v6e/dma`: about 0.57 us a load in a chain, 18 ns more for each load in parallel). |
+| `dma_store_ready_cycles` | no | 0 | Core cycles a store keeps its core running after its requests are out. The store's work-item and dispatch slot go on at once; only the end of the kernel waits for it. |
 
 ## DRAM
 
