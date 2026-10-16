@@ -105,6 +105,12 @@ void trace_spad_hold(cycle_type core_cycle, uint32_t core_id, const std::string&
   spdlog::trace("[{}][Core {}][{}] bytes={}", core_cycle, core_id, tag15, bytes);
 }
 
+void trace_memory_request(cycle_type core_cycle, int core_id, const char* tag, bool write, uint64_t addr,
+                          uint32_t channel) {
+  spdlog::trace("[{}][Core {}][{}] {} dram=0x{:016x} channel={}", core_cycle, core_id, TraceLogTag::pad15(tag),
+                write ? "MOVOUT" : "MOVIN", addr, channel);
+}
+
 void trace_instruction_line(cycle_type core_cycle,
                             uint32_t core_id,
                             const std::string& tag15,

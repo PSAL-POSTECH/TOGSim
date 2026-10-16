@@ -56,6 +56,7 @@ dma_store_ready_cycles: N
 [trace] [N][Core N][DRAM_RESP_FIRST][INST_ID=N] MOVIN (ASYNC subgraph_id=N addr_name=tagN tag_id=[<hex>,<hex>] tag_idx=[N] tag_stride=[N] tile=N)
 [trace] [N][Core N][DRAM_RESP_FIRST][INST_ID=N] MOVIN (addr_name=tagN tile=N)
 [trace] [N][Core N][DRAM_RESP_FIRST][INST_ID=N] MOVOUT (addr_name=tagN tile=N)
+[trace] [N][Core N][DRAM_WRITE_ACK ] MOVOUT dram=<hex> channel=N
 [trace] [N][Core N][INST_FINISHED  ][INST_ID=N] COMP (compute_type=N compute_cycle=N overlapping_cycle=N sa=-N tile=N)
 [trace] [N][Core N][INST_FINISHED  ][INST_ID=N] MEMORY_BAR (addr_name=tagN tag_id=[<hex>,<hex>] tag_idx=[N] tag_stride=[N] tile=N)
 [trace] [N][Core N][INST_FINISHED  ][INST_ID=N] MOVIN (addr_name=tagN tile=N)
@@ -67,6 +68,8 @@ dma_store_ready_cycles: N
 [trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MOVIN (addr_name=tagN dram=<hex> rank=N size=[N] stride=[N] elem_bits=N async=false indirect=false tag_id=[<hex>,<hex>])
 [trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MOVOUT (addr_name=tagN dram=<hex> rank=N elem_bits=N async=false indirect=false tag=<hex> stride=[N,N] size=[N,N] tag_idx=[N] tile=N)
 [trace] [N][Core N][L2CACHE_STAT   ][INST_ID=N] dram=<hex> cacheable=false
+[trace] [N][Core N][REQ_TO_DRAM    ] MOVIN dram=<hex> channel=N
+[trace] [N][Core N][REQ_TO_DRAM    ] MOVOUT dram=<hex> channel=N
 [trace] [N][Core N][REQ_TO_MEM     ] MOVIN dram=<hex> channel=N
 [trace] [N][Core N][REQ_TO_MEM     ] MOVOUT dram=<hex> channel=N
 [trace] [N][Core N][TILE_SCHEDULED ] spad_footprint=N max_dispatch=N

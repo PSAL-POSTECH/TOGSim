@@ -32,6 +32,8 @@ class Dram {
   new_addr_type partition_dram_address(new_addr_type raw_addr) const;
 
  protected:
+  void enter_dram(uint32_t ch, mem_fetch* req);
+  bool to_cache(uint32_t ch, mem_fetch* req);
   SimulationConfig _config;
   CacheConfig _m_cache_config;
   uint32_t _n_ch;

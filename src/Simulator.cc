@@ -122,9 +122,8 @@ void Simulator::dram_cycle() {
 
 // A request of a core's DMA leaves the interconnect into the memory partition of channel `mem_id`.
 void Simulator::trace_request_to_memory(mem_fetch* req, int mem_id) {
-  spdlog::trace("[{}][Core {}][{}] {} dram=0x{:016x} channel={}", _core_cycles, req->get_core_id(),
-                TraceLogTag::pad15(TraceLogTag::kRequestToMemory), req->is_write() ? "MOVOUT" : "MOVIN",
-                req->get_addr(), mem_id);
+  core_trace_log::trace_memory_request(_core_cycles, req->get_core_id(), TraceLogTag::kRequestToMemory,
+                                       req->is_write(), req->get_addr(), mem_id);
 }
 
 void Simulator::icnt_cycle() {

@@ -1,4 +1,5 @@
 #include "Dram.h"
+#include "CoreTraceLog.h"
 
 #include <cmath>
 #include <filesystem>
@@ -228,6 +229,27 @@ Dram::Dram(SimulationConfig config, cycle_type* core_cycle) {
   }
 }
 
+// A request leaves channel `ch`'s L2 for its DRAM model (REQ_TO_DRAM).
+void Dram::enter_dram(uint32_t ch, mem_fetch* req) {
+  if (core_trace_log::trace_enabled())
+    core_trace_log::trace_memory_request(*_core_cycles, req->get_core_id(), TraceLogTag::kRequestToDram,
+                                         req->is_write(), req->get_addr(), ch);
+  _m_caches[ch]->pop();
+}
+
+// Channel `ch`'s DRAM model hands `req` back to its L2, a write's ack with a DRAM_WRITE_ACK; false when the L2
+// cannot take it yet.
+bool Dram::to_cache(uint32_t ch, mem_fetch* req) {
+  const bool ack = req->get_type() == mf_type::WRITE_ACK;
+  const int core = req->get_core_id();
+  const new_addr_type addr = req->get_addr();
+  if (!_m_caches[ch]->push(req))
+    return false;
+  if (ack && core_trace_log::trace_enabled())
+    core_trace_log::trace_memory_request(*_core_cycles, core, TraceLogTag::kDramWriteAck, true, addr, ch);
+  return true;
+}
+
 DramRamulator2::DramRamulator2(SimulationConfig config, cycle_type* core_cycle) : Dram(config, core_cycle) {
   /* Initialize DRAM Channels */
   _mem.resize(_n_ch);
@@ -255,13 +277,13 @@ void DramRamulator2::cycle() {
 
     // From Cache to DRAM
     if (mem_fetch* req = _m_caches[ch]->top()) {
+      enter_dram(ch, req);
       _mem[ch]->push(req);
-      _m_caches[ch]->pop();
     }
 
     // From DRAM to Cache
     if (mem_fetch* req = _mem[ch]->return_queue_top()) {
-      if(_m_caches[ch]->push(req))
+      if (to_cache(ch, req))
         _mem[ch]->return_queue_pop();
     }
   }
@@ -483,8 +505,8 @@ void SimpleDRAM::cycle() {
           _bw_credit_bytes[static_cast<size_t>(ch)] -= need;
       }
       if (admit) {
+        enter_dram(ch, req);
         _mem[ch]->push(req, _latency);
-        _m_caches[ch]->pop();
       }
     }
 
@@ -492,7 +514,7 @@ void SimpleDRAM::cycle() {
     if (_mem[ch]->arrived()) {
       mem_fetch* req = _mem[ch]->top();
       req->set_reply();
-      if (_m_caches[ch]->push(req))
+      if (to_cache(ch, req))
         _mem[ch]->pop();
     }
   }
