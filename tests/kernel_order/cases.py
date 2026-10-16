@@ -7,6 +7,7 @@ KERNELS, ITEMS, REQUESTS = 3, 3, 512
 COMPLETED = re.compile(r"\[Scheduler 0\] Kernel (\d+) has completed .* finished at cycle (\d+)")
 SYNCED = "Device synchronization completed"
 TO_MEMORY = re.compile(r"\[(\d+)\]\[Core \d+\]\[REQ_TO_MEM *\] (MOVIN|MOVOUT) dram=0x([0-9a-f]+) channel=\d+$", re.M)
+DRAM = re.compile(r"\[(REQ_TO_DRAM|DRAM_WRITE_ACK) *\] (MOVIN|MOVOUT) dram=0x([0-9a-f]+) channel=(\d+)$", re.M)
 
 
 def launch(t, kernels, cores=1, sync_between=False, defines=()):
@@ -29,8 +30,8 @@ def launch(t, kernels, cores=1, sync_between=False, defines=()):
 def chain(cores):
     """Kernels 0, 1, 2 launched with no DEVICE_SYNC between on `cores` cores, kernel k loading tensor k and storing
     tensor k + 1 (each 1 MiB, at k MiB), which kernel k + 1 loads, each work-item what another stored. A load of an
-    address enters the memory partition after the store to it, and kernel k completes no earlier than its last
-    store."""
+    address enters the memory partition after the store to it, and the DRAM model after the store's write is acked;
+    kernel k completes no earlier than its last store."""
     def case(t):
         run = launch(t, KERNELS, cores=cores)
         requests = [(int(m[1]), m[2], int(m[3], 16)) for m in TO_MEMORY.finditer(run.log)]
@@ -40,10 +41,17 @@ def chain(cores):
         completed = {int(m[1]): int(m[2]) for m in COMPLETED.finditer(run.log)}
         last = {k: max(c for a, c in stored.items() if a // MIB == k + 1) for k in range(KERNELS)}
         late = [(k, completed.get(k), last[k]) for k in range(KERNELS) if completed.get(k, -1) < last[k]]
-        if len(stored) != KERNELS * ITEMS * REQUESTS or early or late:
-            run.fail(f"expected {KERNELS * ITEMS * REQUESTS} stored addresses, each loaded after its store, and each "
-                     f"kernel completed after its last store; got {len(stored)}, {len(early)} loads first (address, "
-                     f"load, store; the first {early[:3]}), (kernel, completed, last store) {late}")
+        dram = [(m[1], m[2], (int(m[4]), m[3])) for m in DRAM.finditer(run.log)]
+        acked = {key: i for i, (tag, _, key) in enumerate(dram) if tag == "DRAM_WRITE_ACK"}
+        written = {key for tag, opcode, key in dram if tag == "REQ_TO_DRAM" and opcode == "MOVOUT"}
+        unacked = [key for i, (tag, opcode, key) in enumerate(dram) if tag == "REQ_TO_DRAM" and opcode == "MOVIN"
+                   and key in written and i < acked.get(key, len(dram))]
+        if len(stored) != KERNELS * ITEMS * REQUESTS or early or late or len(acked) != len(stored) or unacked:
+            run.fail(f"expected {KERNELS * ITEMS * REQUESTS} stored addresses, each loaded after its store, each "
+                     f"write acked before a load of its address enters the DRAM model, and each kernel completed "
+                     f"after its last store; got {len(stored)}, {len(early)} loads first (address, load, store; the "
+                     f"first {early[:3]}), {len(acked)} writes acked, {len(unacked)} loads into the DRAM model before "
+                     f"the ack (channel, address; the first {unacked[:3]}), (kernel, completed, last store) {late}")
     return case
 
 

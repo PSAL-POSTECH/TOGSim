@@ -74,7 +74,8 @@ Simulator::Simulator(SimulationConfig config, YAML::Node hardware_config_yaml)
 
   // Initialize Scheduler
   for (int i=0; i<config.num_partition;i++)
-    _partition_scheduler.push_back(std::make_unique<Scheduler>(Scheduler(config, &_core_cycles, &_core_time, i)));
+    _partition_scheduler.push_back(std::make_unique<Scheduler>(config, &_core_cycles, &_core_time, i,
+                                                               [this] { _dram->push_barriers(); }));
 }
 
 void Simulator::run_simulator() {

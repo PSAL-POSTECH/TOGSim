@@ -229,7 +229,35 @@ Dram::Dram(SimulationConfig config, cycle_type* core_cycle) {
   }
 }
 
-// A request leaves channel `ch`'s L2 for its DRAM model (REQ_TO_DRAM).
+// Frees the barriers still queued at the end of the run.
+Dram::~Dram() {
+  for (uint32_t ch = 0; ch < _n_ch; ch++) {
+    for (auto& q = m_from_crossbar_queue[ch]; !q.empty(); q.pop())
+      if (q.front()->is_barrier()) delete q.front();
+    while (mem_fetch* req = _m_caches[ch]->top()) {
+      _m_caches[ch]->pop();
+      if (req->is_barrier()) delete req;
+    }
+  }
+}
+
+void Dram::push_barriers() {
+  for (uint32_t ch = 0; ch < _n_ch; ch++)
+    m_from_crossbar_queue[ch].push(mem_fetch::barrier());
+}
+
+// The request next to enter channel `ch`'s DRAM model, past the barriers before it, which it drops unless `hold`
+// keeps them; nullptr when there is none or a barrier is held.
+mem_fetch* Dram::to_dram(uint32_t ch, bool hold) {
+  mem_fetch* req;
+  while ((req = _m_caches[ch]->top()) && req->is_barrier() && !hold) {
+    _m_caches[ch]->pop();
+    delete req;
+  }
+  return req && !req->is_barrier() ? req : nullptr;
+}
+
+// The request `to_dram` returned leaves channel `ch`'s L2 for its DRAM model (REQ_TO_DRAM).
 void Dram::enter_dram(uint32_t ch, mem_fetch* req) {
   if (core_trace_log::trace_enabled())
     core_trace_log::trace_memory_request(*_core_cycles, req->get_core_id(), TraceLogTag::kRequestToDram,
@@ -259,32 +287,39 @@ DramRamulator2::DramRamulator2(SimulationConfig config, cycle_type* core_cycle) 
   }
   _tx_log2 = log2(_req_size);
   _tx_ch_log2 = log2(_n_ch_per_partition) + _tx_log2;
+  _wr_inflight.assign(_n_ch, 0);
 }
 
 bool DramRamulator2::running() {
   for (int ch = 0; ch < _n_ch; ch++) {
     if (mem_fetch* req = _mem[ch]->return_queue_top())
       return true;
-    if (mem_fetch* req = _m_caches[ch]->top())
+    if (_m_caches[ch]->has_request())
       return true;
   }
   return false;
 }
 
+// A barrier waits at the head of its channel until every write that entered the channel's DRAM model before it is
+// acked. Ramulator2 acks a write as it issues its WR, so no read behind the barrier reaches DRAM before that WR.
 void DramRamulator2::cycle() {
   for (int ch = 0; ch < _n_ch; ch++) {
     _mem[ch]->cycle();
 
     // From Cache to DRAM
-    if (mem_fetch* req = _m_caches[ch]->top()) {
+    if (mem_fetch* req = to_dram(ch, _wr_inflight[ch] > 0)) {
       enter_dram(ch, req);
+      _wr_inflight[ch] += req->is_write();
       _mem[ch]->push(req);
     }
 
     // From DRAM to Cache
     if (mem_fetch* req = _mem[ch]->return_queue_top()) {
-      if (to_cache(ch, req))
+      const bool ack = req->get_type() == mf_type::WRITE_ACK;
+      if (to_cache(ch, req)) {
         _mem[ch]->return_queue_pop();
+        _wr_inflight[ch] -= ack;
+      }
     }
   }
 
@@ -481,7 +516,7 @@ bool SimpleDRAM::running() {
   for (int ch = 0; ch < _n_ch; ch++) {
     if (!_mem[ch]->queue_empty())
       return true;
-    if (mem_fetch* req = _m_caches[ch]->top())
+    if (_m_caches[ch]->has_request())
       return true;
   }
   return false;
@@ -495,7 +530,7 @@ void SimpleDRAM::cycle() {
       _bw_credit_bytes[static_cast<size_t>(ch)] += _bytes_per_dram_cycle;
 
     // From Cache to DRAM
-    if (mem_fetch* req = _m_caches[ch]->top()) {
+    if (mem_fetch* req = to_dram(ch, false)) {
       const double need = static_cast<double>(_req_size);
       bool admit = true;
       if (_bytes_per_dram_cycle > 0.0) {

@@ -1,7 +1,9 @@
 #include "Scheduler.h"
 
-Scheduler::Scheduler(SimulationConfig config, const cycle_type* core_cycle, const uint64_t* core_time, int id)
-    : _id(id), _config(config), _core_cycle(core_cycle), _core_time(core_time) {
+Scheduler::Scheduler(SimulationConfig config, const cycle_type* core_cycle, const uint64_t* core_time, int id,
+                     std::function<void()> kernel_ended)
+    : _id(id), _config(config), _core_cycle(core_cycle), _core_time(core_time),
+      _kernel_ended(std::move(kernel_ended)) {
 }
 
 void Scheduler::enqueue_graph(std::unique_ptr<TileGraph> tile_graph) {
@@ -82,6 +84,7 @@ void Scheduler::refresh_status() {
                  _tile_graph.at(0)->get_name(), *_core_cycle);
     spdlog::info("[Scheduler {}] Kernel {} execution summary - Started at: {} cycles, Total compute time: {} cycles",
                  _id, kernel_id, start_time, compute_time);
+    _kernel_ended();
     _tile_graph.pop_front();
   }
 }

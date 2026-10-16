@@ -75,6 +75,13 @@ class mem_fetch {
   void count_until_delivered(int64_t* counter) { ++*counter; m_undelivered = counter; }
   void delivered() { if (m_undelivered) --*m_undelivered; m_undelivered = nullptr; }
   void* get_custom_data() { return m_custom_data; }
+  // A barrier, not a request: what follows it in a channel enters the DRAM model after the writes before it are acked.
+  static mem_fetch* barrier() {
+    mem_fetch* mf = new mem_fetch(0, GLOBAL_ACC_R, READ_REQUEST, 0);
+    mf->m_barrier = true;
+    return mf;
+  }
+  bool is_barrier() const { return m_barrier; }
   /* Stat */
   void set_start_cycle(uint64_t start_cycle) { m_start_cycle = start_cycle; }
   uint64_t get_start_cycle() { return m_start_cycle; } 
@@ -99,6 +106,7 @@ class mem_fetch {
   int64_t* m_undelivered = nullptr;
   uint64_t m_start_cycle = 0ULL;
   bool m_cacheable = true;
+  bool m_barrier = false;
 };
 
 #endif

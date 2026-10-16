@@ -3,10 +3,13 @@
 #include "Common.h"
 #include "TileGraph.h"
 #include "SimulationConfig.h"
+#include <functional>
 
 class Scheduler {
  public:
-  Scheduler(SimulationConfig config, const cycle_type* core_cycle, const uint64_t* core_time, int id);
+  // `kernel_ended` is called as the front kernel, ended, leaves the queue.
+  Scheduler(SimulationConfig config, const cycle_type* core_cycle, const uint64_t* core_time, int id,
+            std::function<void()> kernel_ended);
   void enqueue_graph(std::unique_ptr<TileGraph> tile_graph);
   void finish_tile(std::shared_ptr<Tile> tile);
 
@@ -23,6 +26,7 @@ class Scheduler {
   const uint64_t* _core_time;
   std::deque<std::unique_ptr<TileGraph>> _tile_graph;
   SimulationConfig _config;
+  std::function<void()> _kernel_ended;
 
   struct CompareTile {
     bool operator()(const std::shared_ptr<Tile>& a, const std::shared_ptr<Tile>& b) const {

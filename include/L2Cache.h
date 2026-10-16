@@ -16,11 +16,16 @@ public:
   // Push memory response from DRAM
   virtual bool push(mem_fetch* req)=0;
   // Pop memory request from Cache
-  void pop() { l_to_mem_queue.pop(); }
+  void pop() { l_barriers -= l_to_mem_queue.front()->is_barrier(); l_to_mem_queue.pop(); }
   mem_fetch* top() { return l_to_mem_queue.empty() ? NULL : l_to_mem_queue.front(); }
+  // A request, not only barriers, waits to enter the DRAM model.
+  bool has_request() const { return l_to_mem_queue.size() > l_barriers; }
   virtual void print_stats() {};
 
 protected:
+  // The barrier at the head of the input goes on towards the DRAM model.
+  void pass_barrier() { l_to_mem_queue.push(l_from_xbar_queue->front()); l_from_xbar_queue->pop(); l_barriers++; }
+  size_t l_barriers = 0;
   cycle_type *l_core_cycle;   // Core cycle
   std::string l_name;         // L2 name
   CacheConfig l_cache_config; // L2 cache config
