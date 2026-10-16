@@ -1,5 +1,5 @@
 """--models_list: a command stream launches kernels, each from a directory holding tog.so and its tables."""
-from togtest import MIB, TIMEOUT_S, Case, spad_alone, write_table
+from togtest import MIB, TIMEOUT_S, Case, write_table
 
 KERNELS = {0: dict(cycles=600, rows=256), 1: dict(cycles=900, rows=512)}
 
@@ -99,30 +99,6 @@ def second_kernel_runs_after_one_that_ends_at_once(t):
         run.fail(f"expected kernel 1's two computes of 644 cycles, got {sorted(c.cycles for c in run.computes())}")
 
 
-def two_loads(t, kernel_id, first, second=0):
-    """<work dir>/k<id>/: the two-loads TOG with loads of `first` and `second` bytes, and KERNELS[id]'s tables."""
-    home = t.tog("two_loads_tog.cpp", (f"FIRST_BYTES={first}", f"SECOND_BYTES={second}"), tensors=(MIB,),
-                 into=f"k{kernel_id}").parent
-    write_table(home / "tog_cycles.tsv", [(KERNELS[kernel_id]["cycles"], 0)])
-    write_table(home / "tog_units.tsv", units(kernel_id))
-    return home
-
-
-def kernels_free_their_own_spad_bytes(t):
-    """Two kernels at once on one core with a 32 KB spad, each numbering its buffer versions from 0. Kernel 0 loads
-    8 KB and then 28 KB, kernel 1 16 KB, which is taken while the 28 KB load waits. Kernel 0's compute frees
-    kernel 0's 8 KB only: the 28 KB load is issued once kernel 1's compute has freed the 16 KB, not before."""
-    homes = [two_loads(t, 0, 8 * 1024, 28 * 1024), two_loads(t, 1, 16 * 1024)]
-    machine = t.machine(**spad_alone(32), systolic_array_split="none")
-    run = session(t, machine, [launch(homes[0], 0), launch(homes[1], 1), SYNC]).expect_ok()
-    issued = [e for e in run.events() if e.tag == "INST_ISSUED"]
-    big = [e.cycle for e in issued if e.opcode == "MOVIN" and e.fields.get("size") == f"[{28 * 1024}]"]
-    freed = [e.cycle for e in issued if e.opcode == "COMP" and e.fields["compute_cycle"] == str(KERNELS[1]["cycles"])]
-    if len(big) != 1 or len(freed) != 1 or big[0] < freed[0]:
-        run.fail(f"expected the 28 KB load issued once kernel 1's compute was, got the load @{big} and the compute "
-                 f"@{freed}")
-
-
 def unit_table_flag_refused(t):
     home = kernel(t, 0)
     session(t, t.machine(), [launch(home, 0), SYNC], "--unit_table", home / "tog_units.tsv").expect_refused(
@@ -182,7 +158,6 @@ CASES = [
     *[Case(f"second_kernel_runs.after_{items}_items.{cores}_cores", second_kernel_runs(items, cores))
       for items in (1, 2, 3, 4, 5) for cores in (1, 2)],
     Case("second_kernel_runs.after_one_that_ends_at_once", second_kernel_runs_after_one_that_ends_at_once),
-    Case("kernels_free_their_own_spad_bytes", kernels_free_their_own_spad_bytes),
     Case("refused.unit_table_flag", unit_table_flag_refused),
     Case("refused.kernel_without_unit_table", kernel_without_unit_table_refused),
     Case("refused.kernel_without_tog", kernel_without_tog_refused),

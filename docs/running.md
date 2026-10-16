@@ -179,8 +179,6 @@ Behaviour of the simulator that a user runs into. Each was reproduced with this 
   single DRAM request ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)).
 - **A non-static body function in a session** makes a later kernel run the first kernel's body. A
   session whose second kernel has two computes in its body ran one compute for it.
-- **The `[Scheduler p] Kernel k has completed ... finished at cycle N` line** reads 1 for the hello run of 1659 cycles on
-  `examples/minimal.yml`. It is not when the kernel finished; read the total.
 - **The spad between kernels is not modelled** ([held buffers](tog-abi.md#data-that-is-already-on-the-chip)).
 - **`--help` describes `--models_list` as `Path for the trace file (.trace)`**, and a failed open
   says `Failed to open trace file`. The file is the command stream.

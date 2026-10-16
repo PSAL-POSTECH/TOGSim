@@ -75,6 +75,7 @@ class Simulator {
     for (auto& core : _cores) core->set_unit_table(_unit_table.get());
   }
   void core_cycle();
+  bool return_finished_tile(int core_id);
   void dram_cycle();
   void icnt_cycle();
   void trace_request_to_memory(mem_fetch* req, int mem_id);

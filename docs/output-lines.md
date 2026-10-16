@@ -49,8 +49,8 @@ systolic_array_split: none
 [2026-10-12 13:22:43.516] [info] [Config/Interconnect] interconnect_freq_mhz: 1000
 [2026-10-12 13:22:43.516] [info] [Config/Interconnect] Simple interconnect selected
 [2026-10-12 13:22:43.516] [info] ======Start Simulation=====
-[2026-10-12 13:22:43.516] [info] [Scheduler 0] Kernel 0 has completed - TOG path: kernel operation: kernel finished at cycle 1
-[2026-10-12 13:22:43.516] [info] [Scheduler 0] Kernel 0 execution summary - Started at: 1 cycles, Total compute time: 0 cycles
+[2026-10-12 13:22:43.516] [info] [Scheduler 0] Kernel 0 has completed - TOG path: kernel operation: kernel finished at cycle 1645
+[2026-10-12 13:22:43.516] [info] [Scheduler 0] Kernel 0 execution summary - Started at: 1 cycles, Total compute time: 1644 cycles
 [2026-10-12 13:22:43.517] [info] [TOGSim] Total cycles: 1659
 [2026-10-12 13:22:43.517] [info] Simulation finished
 [2026-10-12 13:22:43.517] [info] ===== Instructions count =====
@@ -75,7 +75,7 @@ systolic_array_split: none
 | `[LoadConfig] ...`, `PyTorchSim config:` and the `key: value` lines | The machine config as TOGSim parsed it. |
 | `[Config/Core]`, `[Config/DRAM]`, `[Config/L2Cache]`, `[Config/Interconnect]` | One summary per component: each core's partition and arrays, the DRAM clock, channels and request size, the cache, the interconnect. With Ramulator2 the whole Ramulator2 file is echoed after `[Config/DRAM] Ramulator2 configuration :`. |
 | `======Start Simulation=====` | Printed by a `--tog_so` run before the first cycle. |
-| `[Scheduler p] Kernel k has completed ... finished at cycle N` and the `execution summary` line | Printed by the scheduler of partition `p`. `N` is not the cycle the kernel's work was done: here it reads 1 for a run of 1659 cycles. Read the total instead. |
+| `[Scheduler p] Kernel k has completed ... finished at cycle N` and the `execution summary` line | Printed by the scheduler of partition `p`. `N` is the cycle the kernel ended: its last work-item had finished and its last write had left the interconnect into a memory partition. Here 1645; the run ends at 1659, once that write is answered. The next kernel of the partition starts after it. |
 | `[TOGSim] Total cycles: N` | The result, printed by a `--tog_so` run. |
 | `Simulation finished` | The end of the simulation; the final statistics follow. |
 | `===== Instructions count =====` and the `inst_count` lines | Per core: the loads (`MOVIN`), stores (`MOVOUT`), computes (`COMP`) and barriers (`MEMORY_BAR`) it ran. A compute of zero cycles is reported as `skipped inst_count`. `GEMM` and `XLU` count computes of the deprecated typed grouping. |

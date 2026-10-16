@@ -99,15 +99,21 @@ void Simulator::core_cycle() {
     }
   }
   for (int core_id = 0; core_id < _n_cores; core_id++) {
-      std::shared_ptr<Tile> finished_tile = _cores[core_id]->pop_finished_tile();
-      if (finished_tile->get_status() == Tile::Status::FINISH) {
-        get_partition_scheduler(core_id)->finish_tile(std::move(finished_tile));
-      }
+    return_finished_tile(core_id);
     _cores[core_id]->cycle();
   }
   /* L2 cache */
   _dram->cache_cycle();
   _core_cycles++;
+}
+
+// Core `core_id` hands a work-item it finished back to its partition's scheduler, which may end the kernel. False
+// when it has none.
+bool Simulator::return_finished_tile(int core_id) {
+  std::shared_ptr<Tile> finished_tile = _cores[core_id]->pop_finished_tile();
+  if (finished_tile->get_status() != Tile::Status::FINISH) return false;
+  get_partition_scheduler(core_id)->finish_tile(std::move(finished_tile));
+  return true;
 }
 
 void Simulator::dram_cycle() {
@@ -157,6 +163,7 @@ void Simulator::icnt_cycle() {
     if (!_icnt->is_empty(core_offset + mem_id) &&
         !_dram->is_full(mem_id, _icnt->top(core_offset + mem_id))) {
       if (core_trace_log::trace_enabled()) trace_request_to_memory(_icnt->top(core_offset + mem_id), mem_id);
+      _icnt->top(core_offset + mem_id)->delivered();
       _dram->push(mem_id, _icnt->top(core_offset + mem_id));
       _icnt->pop(core_offset + mem_id);
       _nr_to_mem++;
@@ -212,6 +219,8 @@ void Simulator::check_frozen() {
   }
 }
 
+// Runs until nothing is left to do, then hands back what the cores finished in the last cycle, so that the kernel
+// it ends has ended before the caller (a DEVICE_SYNC, the end of the run) goes on.
 void Simulator::cycle() {
   while (running() || _core_cycles < 1) {
     set_cycle_mask();
@@ -229,6 +238,8 @@ void Simulator::cycle() {
 
     check_frozen();   // spad-too-small guard (errors out if wedged)
   }
+  for (int core_id = 0; core_id < _n_cores; core_id++)
+    while (return_finished_tile(core_id)) {}
   for (auto &core: _cores) {
     core->check_tag();
   }

@@ -167,7 +167,6 @@ class Core {
   size_t _sram_capacity = 0;
   std::unordered_map<int64_t, size_t> _sram_allocs;
   std::unordered_map<int64_t, int> _sram_readers;
-  std::vector<std::shared_ptr<SpadHold>> _spad_holds;
   std::multimap<cycle_type, DueAction> _due_events;
   uint64_t _dma_ready_pending = 0;   // DMAs whose data is done and whose ready latency is still running
 };

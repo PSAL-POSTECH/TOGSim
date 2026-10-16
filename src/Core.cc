@@ -88,7 +88,6 @@ void Core::release_sram(const std::shared_ptr<Tile>& tile) {
   const std::shared_ptr<SpadHold>& hold = tile->get_spad_hold();
   if (hold && hold->left && --hold->left == 0 && hold->taken) {
     _sram_used -= hold->bytes;
-    _spad_holds.erase(std::remove(_spad_holds.begin(), _spad_holds.end(), hold), _spad_holds.end());
     _issue_dirty = true;
     core_trace_log::trace_spad_hold(_core_cycle, _id, TraceLogTag::pad15(TraceLogTag::kSpadHoldEnd), hold->bytes);
   }
@@ -120,16 +119,9 @@ int Core::max_dispatch(const std::shared_ptr<Tile>& op) const {
   return 2 * std::max(op->get_spad_footprint(), op->get_spad_at_once()) > room ? 1 : 2;
 }
 
-// A kernel that holds bytes on this core has the core to itself; kernels that hold nothing overlap.
+// A work-item enters while fewer than max_dispatch(op) are in flight. They are all of one kernel: a partition's
+// kernels run one after another (TileGraph::is_finished), so a kernel's hold has ended before the next one enters.
 bool Core::can_issue(const std::shared_ptr<Tile>& op) {
-  if (_sram_capacity) {
-    const SpadHold* hold = op->get_spad_hold().get();
-    for (const auto& other : _spad_holds)
-      if (other.get() != hold) return false;
-    if (hold && hold->bytes)
-      for (const auto& tile : _tiles)
-        if (tile->get_spad_hold().get() != hold) return false;
-  }
   return (int)_tiles.size() < max_dispatch(op);
 }
 
@@ -139,7 +131,6 @@ void Core::issue(std::shared_ptr<Tile> op) {
   if (_sram_capacity && hold && hold->bytes && !hold->taken) {
     hold->taken = true;
     _sram_used += hold->bytes;
-    _spad_holds.push_back(hold);
     core_trace_log::trace_spad_hold(_core_cycle, _id, TraceLogTag::pad15(TraceLogTag::kSpadHold), hold->bytes);
   }
   if (op->get_instructions().size())
@@ -239,7 +230,7 @@ void Core::dma_cycle() {
       if (finished_inst->is_dma_write()) {
         /* Only DMA write operation is finished! A store is asynchronous: its work-item goes on (and its
            dispatch slot frees) once the requests are out, and its ready latency only keeps the core running,
-           so it shows at the kernel's end, not between work-items. */
+           so it shows at the run's end, not between work-items or kernels. */
         if (_config.dma_store_ready_cycles) {
           _dma_ready_pending++;
           _due_events.emplace(_core_cycle + _config.dma_store_ready_cycles,

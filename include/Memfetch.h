@@ -71,6 +71,9 @@ class mem_fetch {
       spdlog::error("Unexpected mf_type in the set_reply");
   }
   void set_custom_data(void* custom_data) { m_custom_data = custom_data; }
+  // `counter` counts this request until it leaves the interconnect into a memory partition (delivered()).
+  void count_until_delivered(int64_t* counter) { ++*counter; m_undelivered = counter; }
+  void delivered() { if (m_undelivered) --*m_undelivered; m_undelivered = nullptr; }
   void* get_custom_data() { return m_custom_data; }
   /* Stat */
   void set_start_cycle(uint64_t start_cycle) { m_start_cycle = start_cycle; }
@@ -93,6 +96,7 @@ class mem_fetch {
   SectorMask m_dirty_mask;
   mem_fetch* m_original_mf;
   void* m_custom_data = NULL;
+  int64_t* m_undelivered = nullptr;
   uint64_t m_start_cycle = 0ULL;
   bool m_cacheable = true;
 };
