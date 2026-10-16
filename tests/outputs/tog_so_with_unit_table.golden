@@ -67,6 +67,8 @@ dma_store_ready_cycles: N
 [trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MOVIN (addr_name=tagN dram=<hex> rank=N size=[N] stride=[N] elem_bits=N async=false indirect=false tag_id=[<hex>,<hex>])
 [trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MOVOUT (addr_name=tagN dram=<hex> rank=N elem_bits=N async=false indirect=false tag=<hex> stride=[N,N] size=[N,N] tag_idx=[N] tile=N)
 [trace] [N][Core N][L2CACHE_STAT   ][INST_ID=N] dram=<hex> cacheable=false
+[trace] [N][Core N][REQ_TO_MEM     ] MOVIN dram=<hex> channel=N
+[trace] [N][Core N][REQ_TO_MEM     ] MOVOUT dram=<hex> channel=N
 [trace] [N][Core N][TILE_SCHEDULED ] spad_footprint=N max_dispatch=N
 [warning] [TOGSim] indirect dma without its index dump (<path>: absent); modeled as a dense tile
 # after the run, in order

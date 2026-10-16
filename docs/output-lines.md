@@ -166,7 +166,7 @@ Some lines are spelled differently in the two places they appear: the final
 ## Trace lines
 
 `--log_level trace` adds one line per event, `[cycle][Core c][TAG][INST_ID=n] OPCODE (fields)`.
-`TILE_SCHEDULED`, `SPAD_HOLD` and `SPAD_HOLD_END` lines have no `INST_ID`.
+`TILE_SCHEDULED`, `SPAD_HOLD`, `SPAD_HOLD_END` and `REQ_TO_MEM` lines have no `INST_ID`.
 
 | Tag | Printed when | Fields worth reading |
 |---|---|---|
@@ -180,6 +180,7 @@ Some lines are spelled differently in the two places they appear: the final
 | `DMA_LATENCY` | The DMA engine takes a DMA and holds it `cycles` before its first request (`dma_load_latency_cycles` or `dma_store_latency_cycles`, when it is not 0). | `cycles`. |
 | `DRAM_NUMA` | A DMA is issued. | `numa_id`, `is_write`. |
 | `L2CACHE_STAT` | A DMA is issued on a machine with the L2 data cache. | `cacheable`. |
+| `REQ_TO_MEM` | One request of a DMA leaves the interconnect into the memory partition of its channel. | `MOVIN` or `MOVOUT`, `dram` (the request's address), `channel`. |
 
 `INST_ID` numbers instructions in the order TOGSim created them, over the whole run. The opcodes
 are `MOVIN` (load), `MOVOUT` (store), `COMP` and `MEMORY_BAR`.
