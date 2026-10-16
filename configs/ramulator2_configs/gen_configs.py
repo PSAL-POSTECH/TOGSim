@@ -1,11 +1,12 @@
 """
-Generate machine-readable ramulator2 v2.1 config files for PyTorchSim.
+Generate the Ramulator 2.1 configs TOGSim ships, one per TPU memory, with the
+DSL in extern/ramulator2/python.
 
 Usage:
     python gen_configs.py
 
-Each function generates a JSON config that C++ can load directly via
-Config::parse_config_file(). No preset resolution happens in C++ anymore.
+A TPU's memory is a named organization and timing preset below; Ramulator
+resolves the rest of the timings from them.
 """
 
 import json
@@ -28,58 +29,55 @@ import ramulator.channel_mapper
 import ramulator.memory_system
 
 
-def _dram_standard_name(dram_obj):
-    """DRAMStandard.name from class or instance (e.g. 'HBM2', 'DDR4')."""
-    return getattr(type(dram_obj), "name", None) or getattr(dram_obj, "name", None) or ""
+# TPUv3 and TPUv4: 1 KB rows (HBM's column address already counts the burst); the densities give
+# the refresh times TOGSim has used, tRFC 350 ns and tRFCpb 160 ns.
+ramulator.dram.HBM2.org_presets["HBM2_TPU"] = {
+    "pseudochannel_density": 4096, "channel_density": 8192, "die_density": None, "stack_height": None,
+    "dq": 64, "channel_width": 128, "pseudochannel": 2, "sid": 1, "bankgroup": 4, "bank": 4,
+    "row": 1 << 14, "column": (1 << 5) << 2,
+}
+ramulator.dram.HBM2.timing_presets["HBM2_1880Mbps"] = {
+    "rate": 1880, "nBL": 2, "nCL": 13, "nRCDRD": 13, "nRCDWR": 11,
+    "nRP": 13, "nRAS": 31, "nWR": 15, "nRTPL": 5, "nCWL": 5,
+    "nWTRS": 6, "nWTRL": 8,
+    "tCK_ps": 1064,
+}
+
+# TPUv6e: 1 KB rows; the densities give the refresh times TOGSim has used, tRFC 350 ns and tRFCpb 200 ns.
+ramulator.dram.HBM3.org_presets["HBM3_TPUv6e"] = {
+    "die_density": 16384, "channel_density": 8192, "stack_height": 8,
+    "dq": 32, "channel_width": 64, "pseudochannel": 2, "sid": 1, "bankgroup": 4, "bank": 4,
+    "row": 1 << 15, "column": (1 << 5) << 3,
+}
+ramulator.dram.HBM3.timing_presets["HBM3_TPUv6e"] = {
+    "rate": 6400, "nBL": 2, "nCL": 26, "nRCDRD": 26, "nRCDWR": 14,
+    "nRP": 26, "nRAS": 48, "nWR": 24, "nRTP": 6, "nCWL": 8,
+    "nCCDS": 2, "nWTRS": 8, "nWTRL": 12,
+    "nRRDS": 8, "nRRDL": 8, "nFAW": 24, "nPPD": 2,
+    "tCK_ps": 625,
+}
 
 
-def make_config(dram_obj, clock_ratio=1, refresh_scope="Channel", addr_mapper=None):
-    """Wrap a DRAM object in a single-channel GenericDRAM config for PyTorchSim.
-
-    PyTorchSim creates one Ramulator2 instance per channel, so each config
-    always has exactly one controller (channel=1 in org is enforced by v2.1).
-    The wrapper overrides 'frontend' to ExternalFrontEnd automatically.
-
-    Refresh: HBM refreshes one bank at a time (PerBank: the other banks keep serving, JESD238 6.3.2.6);
-    DDR4 / LPDDR5 / LPDDR5X refresh all banks of refresh_scope ("Channel") at once (AllBank).
-
-    Controller choice (matches C++ controller impls):
-      - HBM*      -> ramulator.controller.HBM
-      - LPDDR*    -> ramulator.controller.LPDDR5 (incl. LPDDR5X timing on the LPDDR5 DRAM model)
-      - otherwise -> GenericDDR
-    """
-    dram_name = str(_dram_standard_name(dram_obj)).upper()
-    addr_mapper = addr_mapper or ramulator.addr_mapper.RoBaRaCoCh()
-    if dram_name.startswith("HBM"):
-        ctrl = ramulator.controller.HBM(
-            dram=dram_obj,
-            scheduler=ramulator.scheduler.FRFCFS(),
-            refresh_manager=ramulator.refresh_manager.PerBank(),
-            row_policy=ramulator.row_policy.Open(),
-            addr_mapper=addr_mapper,
-            read_buffer_size=64,
-            write_buffer_size=64,
-        )
-    elif dram_name.startswith("LPDDR"):
-        ctrl = ramulator.controller.LPDDR5(
-            dram=dram_obj,
-            scheduler=ramulator.scheduler.FRFCFS(),
-            refresh_manager=ramulator.refresh_manager.AllBank(scope=refresh_scope),
-            row_policy=ramulator.row_policy.Open(),
-            addr_mapper=addr_mapper,
-        )
-    else:
-        ctrl = ramulator.controller.GenericDDR(
-            dram=dram_obj,
-            scheduler=ramulator.scheduler.FRFCFS(),
-            refresh_manager=ramulator.refresh_manager.AllBank(scope=refresh_scope),
-            row_policy=ramulator.row_policy.Open(),
-            addr_mapper=addr_mapper,
-        )
+def make_config(dram_cls, org_preset, timing_preset, controller, addr_mapper, **overrides):
+    """One HBM channel per Ramulator2 instance (TOGSim makes one per channel): FRFCFS, per-bank
+    refresh, open rows, External frontend. PerBank refreshes the channel's banks one at a time, so
+    tREFIpb is tREFI (3.9 us) over all the channel's banks, not one pseudo channel's."""
+    org, timing = dram_cls.org_presets[org_preset], dram_cls.timing_presets[timing_preset]
+    banks = org["pseudochannel"] * org["sid"] * org["bankgroup"] * org["bank"]
+    dram = dram_cls(org_preset=org_preset, timing_preset=timing_preset,
+                    nREFIpb=3_900_000 // (banks * timing["tCK_ps"]), **overrides)
+    ctrl = controller(
+        dram=dram,
+        scheduler=ramulator.scheduler.FRFCFS(),
+        refresh_manager=ramulator.refresh_manager.PerBank(),
+        row_policy=ramulator.row_policy.Open(),
+        addr_mapper=addr_mapper,
+        read_buffer_size=64,
+        write_buffer_size=64,
+    )
     ms = ramulator.memory_system.GenericDRAM(
-        clock_ratio=clock_ratio,
+        clock_ratio=1,
         controllers=[ctrl],
-        # Single-channel per Ramulator2 instance — passthrough maps everything to ch 0
         channel_mapper=ramulator.channel_mapper.PassThroughChannelMapper(),
     )
     return {
@@ -88,48 +86,25 @@ def make_config(dram_obj, clock_ratio=1, refresh_scope="Channel", addr_mapper=No
     }
 
 
-def gen_hbm2():
-    # Available timing presets: HBM2_1600Mbps, HBM2_2000Mbps, HBM2_2400Mbps
-    dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_2000Mbps")
-    return make_config(dram, clock_ratio=1)
+def gen_hbm2_tpuv3():
+    """JESD235D lists no tDQSQ at 1880 Mbps, so Ramulator cannot resolve tRTW: it is tCL + tBL + 2 - tCWL."""
+    t = ramulator.dram.HBM2.timing_presets["HBM2_1880Mbps"]
+    return make_config(ramulator.dram.HBM2, "HBM2_TPU", "HBM2_1880Mbps", ramulator.controller.HBM12,
+                       ramulator.addr_mapper.RoBaRaCoCh(), nRTW=t["nCL"] + t["nBL"] + 2 - t["nCWL"])
 
 def gen_hbm2_tpuv4():
-    dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_2400Mbps")
-    return make_config(dram, clock_ratio=1)
-
-def gen_hbm2_tpuv3():
-    dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_1880Mbps")
-    return make_config(dram, clock_ratio=1)
+    return make_config(ramulator.dram.HBM2, "HBM2_TPU", "HBM2_2400Mbps", ramulator.controller.HBM12,
+                       ramulator.addr_mapper.RoBaRaCoCh())
 
 def gen_hbm3_tpuv6e():
-    dram = ramulator.dram.HBM3(org_preset="HBM3_8Gb", timing_preset="HBM3_6400Mbps", column=256)
-    return make_config(dram, clock_ratio=1, addr_mapper=ramulator.addr_mapper.MOP4CLXOR())
-
-def gen_ddr4():
-    # Available timing presets — check python/ramulator/dram/ddr4.py
-    dram = ramulator.dram.DDR4(org_preset="DDR4_8Gb_x8", timing_preset="DDR4_3200AA")
-    return make_config(dram, clock_ratio=1)
-
-
-def gen_lpddr5():
-    dram = ramulator.dram.LPDDR5(org_preset="LPDDR5_8Gb_x16", timing_preset="LPDDR5_6400")
-    return make_config(dram, clock_ratio=1)
-
-
-def gen_lpddr5x():
-    # LPDDR5X_8533: 8533 MT/s, tCK=938ps, CK=1066MHz
-    dram = ramulator.dram.LPDDR5(org_preset="LPDDR5_8Gb_x16", timing_preset="LPDDR5X_8533")
-    return make_config(dram, clock_ratio=1)
+    return make_config(ramulator.dram.HBM3, "HBM3_TPUv6e", "HBM3_TPUv6e", ramulator.controller.HBM34,
+                       ramulator.addr_mapper.MOP4CLXOR())
 
 
 CONFIGS = {
-    "HBM2.yaml":        gen_hbm2,
-    "HBM2_TPUv4.yaml":  gen_hbm2_tpuv4,
     "HBM2_TPUv3.yaml":  gen_hbm2_tpuv3,
+    "HBM2_TPUv4.yaml":  gen_hbm2_tpuv4,
     "HBM3_TPUv6e.yaml": gen_hbm3_tpuv6e,
-    "DDR4.yaml":        gen_ddr4,
-    "LPDDR5.yaml":      gen_lpddr5,
-    "LPDDR5X.yaml":     gen_lpddr5x,
 }
 
 class CompactJSONEncoder(json.JSONEncoder):
@@ -153,4 +128,3 @@ if __name__ == "__main__":
         with open(out_path, "w") as f:
             f.write(CompactJSONEncoder().encode(cfg))
         print(f"Generated {out_path}")
-

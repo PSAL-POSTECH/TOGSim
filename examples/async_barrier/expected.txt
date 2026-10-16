@@ -7,33 +7,33 @@
 [trace] [45][Core 0][ASYNC_DMA_ISSUE][INST_ID=0] MOVIN (ASYNC subgraph_id=0 addr_name=tag0 tag_id=[0x0000000000000000,0x0000000000000000] tag_idx=[0] tag_stride=[1] tile=0)
 [trace] [88][Core 0][ASYNC_DMA_ISSUE][INST_ID=1] MOVIN (ASYNC subgraph_id=0 addr_name=tag1 tag_id=[0x0000000000000001,0x0000000000000000] tag_idx=[0] tag_stride=[1] tile=0)
 [trace] [89][Core 0][INST_ISSUED    ][INST_ID=2] MEMORY_BAR (addr_name=tag0 tag_id=[0x0000000000000000,0x0000000000000000] tag_idx=[0] tag_stride=[1] tile=0)
-[trace] [1011][Core 0][DRAM_RESP_DONE ][INST_ID=0] MOVIN (ASYNC subgraph_id=0 addr_name=tag0 tag_id=[0x0000000000000000,0x0000000000000000] tag_idx=[0] tag_stride=[1] tile=0)
-[trace] [1053][Core 0][DRAM_RESP_DONE ][INST_ID=1] MOVIN (ASYNC subgraph_id=0 addr_name=tag1 tag_id=[0x0000000000000001,0x0000000000000000] tag_idx=[0] tag_stride=[1] tile=0)
-[trace] [1054][Core 0][INST_FINISHED  ][INST_ID=2] MEMORY_BAR (addr_name=tag0 tag_id=[0x0000000000000000,0x0000000000000000] tag_idx=[0] tag_stride=[1] tile=0)
-[trace] [1054][Core 0][INST_ISSUED    ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [1654][Core 0][INST_FINISHED  ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [1655][Core 0][INST_ISSUED    ][INST_ID=4] MOVOUT (addr_name=tag2 dram=0x0000000000008000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
-[trace] [1671][Core 0][INST_FINISHED  ][INST_ID=4] MOVOUT (addr_name=tag2 tile=0)
-[info] Total execution cycles: 1751
+[trace] [1012][Core 0][DRAM_RESP_DONE ][INST_ID=0] MOVIN (ASYNC subgraph_id=0 addr_name=tag0 tag_id=[0x0000000000000000,0x0000000000000000] tag_idx=[0] tag_stride=[1] tile=0)
+[trace] [1055][Core 0][DRAM_RESP_DONE ][INST_ID=1] MOVIN (ASYNC subgraph_id=0 addr_name=tag1 tag_id=[0x0000000000000001,0x0000000000000000] tag_idx=[0] tag_stride=[1] tile=0)
+[trace] [1056][Core 0][INST_FINISHED  ][INST_ID=2] MEMORY_BAR (addr_name=tag0 tag_id=[0x0000000000000000,0x0000000000000000] tag_idx=[0] tag_stride=[1] tile=0)
+[trace] [1056][Core 0][INST_ISSUED    ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1656][Core 0][INST_FINISHED  ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1657][Core 0][INST_ISSUED    ][INST_ID=4] MOVOUT (addr_name=tag2 dram=0x0000000000008000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
+[trace] [1673][Core 0][INST_FINISHED  ][INST_ID=4] MOVOUT (addr_name=tag2 tile=0)
+[info] Total execution cycles: 1755
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DSYNC examples/async_barrier/async_barrier_tog.cpp -o examples/async_barrier/sync.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/async_barrier/sync.so --cycle_table examples/async_barrier/tog_cycles.tsv --unit_table examples/async_barrier/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=49152 max_dispatch=2
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
 [trace] [3][Core 0][INST_ISSUED    ][INST_ID=1] MOVIN (addr_name=tag1 dram=0x0000000000004000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000001,0x0000000000000000])
-[trace] [1011][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
-[trace] [1053][Core 0][INST_FINISHED  ][INST_ID=1] MOVIN (addr_name=tag1 tile=0)
-[trace] [1054][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [1654][Core 0][INST_FINISHED  ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [1655][Core 0][INST_ISSUED    ][INST_ID=3] MOVOUT (addr_name=tag2 dram=0x0000000000008000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
-[trace] [1671][Core 0][INST_FINISHED  ][INST_ID=3] MOVOUT (addr_name=tag2 tile=0)
-[info] Total execution cycles: 1751
+[trace] [1012][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
+[trace] [1055][Core 0][INST_FINISHED  ][INST_ID=1] MOVIN (addr_name=tag1 tile=0)
+[trace] [1056][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1656][Core 0][INST_FINISHED  ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1657][Core 0][INST_ISSUED    ][INST_ID=3] MOVOUT (addr_name=tag2 dram=0x0000000000008000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
+[trace] [1673][Core 0][INST_FINISHED  ][INST_ID=3] MOVOUT (addr_name=tag2 tile=0)
+[info] Total execution cycles: 1755
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DTWO_STEPS examples/async_barrier/async_barrier_tog.cpp -o examples/async_barrier/two_steps.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/async_barrier/two_steps.so --cycle_table examples/async_barrier/tog_cycles.tsv --unit_table examples/async_barrier/tog_units.tsv --log_level trace
-[trace] [1054][Core 0][INST_ISSUED    ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [1655][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[info] Total execution cycles: 2353
+[trace] [1056][Core 0][INST_ISSUED    ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1657][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[info] Total execution cycles: 2356
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DTWO_STEPS -DSYNC examples/async_barrier/async_barrier_tog.cpp -o examples/async_barrier/two_steps_sync.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/async_barrier/two_steps_sync.so --cycle_table examples/async_barrier/tog_cycles.tsv --unit_table examples/async_barrier/tog_units.tsv --log_level trace
-[trace] [1012][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [1613][Core 0][INST_ISSUED    ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[info] Total execution cycles: 2310
+[trace] [1013][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[trace] [1614][Core 0][INST_ISSUED    ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
+[info] Total execution cycles: 2313

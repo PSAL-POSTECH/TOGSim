@@ -78,18 +78,7 @@ static float peak_gbps_per_channel_from_ramulator_yaml(const Ramulator::ConfigNo
   if (rate <= 0)
     throw std::runtime_error("invalid dram.timing[0] (rate / MT/s)");
 
-  int pseudo_ch = 1;
-  const std::string impl = dram["impl"].as<std::string>("");
-  if (impl == "HBM2" || impl == "HBM3") {
-    const Ramulator::ConfigNode org = dram["org"];
-    const Ramulator::ConfigNode org_count = org["count"];
-    const auto& counts = org_count.seq();
-    if (counts.size() > 1)
-      pseudo_ch = std::max(1, counts[1].as<int>());
-  }
-
-  return static_cast<float>(static_cast<double>(rate) * static_cast<double>(pseudo_ch) *
-                             static_cast<double>(ch_width) / 8.0 / 1000.0);
+  return static_cast<float>(static_cast<double>(rate) * static_cast<double>(ch_width) / 8.0 / 1000.0);
 }
 
 }  // namespace
