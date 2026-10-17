@@ -137,7 +137,7 @@ names the [held buffers](tog-abi.md#data-that-is-already-on-the-chip) of each co
 |---|---|---|
 | `========= Core stat =========` block with `Total_cycles: N` | Every `core_stats_print_period_cycles` core cycles | The interval ending at cycle `N`: unit utilization, DMA cycles and DRAM bandwidth of that interval only. |
 | `[DRAM] all N channels combined \| B GB/s aggregate, U% of utilization (avg. per channel) \| R reads, W writes (interval P cycles)` | With Ramulator2, every `dram_stats_print_period_cycles` | The DRAM traffic of that interval. |
-| `=== DRAM statistics ===`, then one `--- channel N ---` dump per channel | With Ramulator2, at the end | Ramulator2's own counters, 58 lines per channel on tpuv6e. No key turns the dump off. |
+| `=== DRAM statistics ===`, then one `--- channel N ---` dump per channel | With Ramulator2, at the end | Ramulator2's own counters, 63 lines per channel on tpuv6e. No key turns the dump off. |
 | `[DRAM] channel N \| B GB/s avg., U% of utilization \| R reads, W writes` | With Ramulator2, at the end | The average bandwidth of each channel over the run. |
 | `[DRAM] channels 0..N combined \| ...` | With Ramulator2, at the end | The sum over the channels. |
 
@@ -147,14 +147,14 @@ bytes); `examples/run.sh hello` prints these three lines above the final statist
 
 ```text
 [info] [DRAM] Per-channel average bandwidth
-[info] [DRAM] channel 0 | 1.92 GB/s avg., 3.75% of utilization | 16 reads, 16 writes
+[info] [DRAM] channel 0 | 1.92 GB/s avg., 3.74% of utilization | 16 reads, 16 writes
 ...
-[info] [DRAM] channels 0..31 combined | 61.45 GB/s aggregate, 3.75% of utilization (avg. per channel) | 512 reads, 512 writes
+[info] [DRAM] channels 0..31 combined | 61.34 GB/s aggregate, 3.74% of utilization (avg. per channel) | 512 reads, 512 writes
 ```
 
-**Why a log is long.** The log of that run is 2,072 lines. 1,857 of them are the
-`=== DRAM statistics ===` dump (58 lines for each of the 32 channels and the heading), and 56 are
-the periodic statistics of a run of 1709 cycles on a config that prints every 200. On a long run
+**Why a log is long.** The log of that run is 2,234 lines. 2,017 of them are the
+`=== DRAM statistics ===` dump (63 lines for each of the 32 channels and the heading), and 56 are
+the periodic statistics of a run of 1712 cycles on a config that prints every 200. On a long run
 the periodic blocks dominate, and `core_stats_print_period_cycles: 0` and
 `dram_stats_print_period_cycles: 0` remove them; nothing removes the dump, so read a log through
 `grep` or `tail`.

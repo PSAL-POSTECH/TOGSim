@@ -17,6 +17,7 @@ add_subdirectory("${PROJECT_SOURCE_DIR}/src")
 
 # Add libaray ramulator
 include_directories("${PROJECT_SOURCE_DIR}/include")
+set(RAMULATOR_PYTHON_BINDINGS OFF CACHE BOOL "TOGSim links the library only")
 add_subdirectory("${PROJECT_SOURCE_DIR}/extern/ramulator2")
 
 # Add libaray booksim

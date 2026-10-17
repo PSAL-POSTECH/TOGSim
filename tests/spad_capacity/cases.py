@@ -58,7 +58,7 @@ def expect_both_ran(run, total):
 
 def fits_exactly_runs(t):
     """32 KB + 16384 bytes in a 48 KB spad: each work-item fills it to the byte, and the second waits for the first."""
-    expect_both_ran(replay(t, 16 * KB, 48), 623)
+    expect_both_ran(replay(t, 16 * KB, 48), 625)
 
 
 def one_byte_over_refused(t):
@@ -78,7 +78,7 @@ def later_work_item_refused(t):
 
 
 def session_fits_exactly_runs(t):
-    expect_both_ran(session(t, 48, 16 * KB), 623)
+    expect_both_ran(session(t, 48, 16 * KB), 625)
 
 
 def expect_launch_refused(run, command, saying, so):
@@ -103,7 +103,7 @@ def session_second_kernel_refused(t):
 def names_more_than_it_holds_runs(t):
     """APART: 16 KB and 32 KB are named, 48 KB against a 32 KB spad, and each is consumed before the other is
     needed. The big load waits for the spad, and the run ends."""
-    expect_both_ran(replay(t, 32 * KB, 32, "APART"), 1248)
+    expect_both_ran(replay(t, 32 * KB, 32, "APART"), 1249)
 
 
 def apart_one_byte_over_refused(t):
@@ -123,7 +123,7 @@ def version_left_open_runs(t):
     """APART, LEFT_OPEN: the TOG ends with a 16 KB load nothing reads, so the measuring leaves a buffer version open.
     The run numbers its versions from the start all the same and ends at its total. That load keeps its bytes until
     its work-item ends, so the 32 KB load beside it needs a 48 KB spad."""
-    expect_both_ran(replay(t, 32 * KB, 48, "APART", "LEFT_OPEN"), 1248)
+    expect_both_ran(replay(t, 32 * KB, 48, "APART", "LEFT_OPEN"), 1249)
 
 
 def version_left_open_refused(t):
@@ -155,7 +155,7 @@ def unread_load_kept_to_the_end_of_its_work_item(t):
     the third load is issued only once the compute that frees the second is; and it leaves with its work-item, so the
     second work-item finds the spad empty and runs the same way."""
     run = work_items(t, UNREAD, (0, 16 * KB, 16 * KB, 16 * KB), 32, items=2)
-    expect_both_ran(run, 1149)
+    expect_both_ran(run, 1150)
     loads, computes = issued(run, "MOVIN"), issued(run, "COMP")
     if len(loads) != 6 or len(computes) != 4 or loads[2] < computes[0] or loads[5] < computes[2]:
         run.fail(f"expected each work-item's third load issued once its first compute was, got loads @{loads} and "
@@ -171,7 +171,7 @@ def unread_load_larger_than_spad_refused(t):
 def unread_loads_fit_together_or_are_refused(t):
     """Three loads of 16 KB that nothing reads are all in the spad when the last of them is issued: 48 KB holds them,
     47 KB does not, though no load waits for another."""
-    work_items(t, "L(1); L(2); L(3)", (0, 16 * KB, 16 * KB, 16 * KB), 48).expect_total_cycles(176)
+    work_items(t, "L(1); L(2); L(3)", (0, 16 * KB, 16 * KB, 16 * KB), 48).expect_total_cycles(178)
     expect_refused_before_the_run(work_items(t, "L(1); L(2); L(3)", (0, 16 * KB, 16 * KB, 16 * KB), 47),
                                   refusal(0, 48 * KB, 47), t.work_dir / "tog.so")
 
@@ -239,7 +239,7 @@ def freed_when_every_reader_is_issued(t):
     an 88 KB spad takes only without buffer 1, is issued once the first reader is."""
     run = work_items(t, "L(1); L(2); C({1, 2}, {}); C({1}, {}); L(3); C({3}, {})",
                      (0, 16 * KB, 64 * KB, 16 * KB), 88)
-    run.expect_total_cycles(745)
+    run.expect_total_cycles(747)
     loads, computes = issued(run, "MOVIN"), issued(run, "COMP")
     if len(loads) != 3 or len(computes) != 3 or not computes[0] < computes[1] <= loads[2]:
         run.fail(f"expected the reader of buffer 1 alone issued first, then the reader of 1 and 2, then the load of "
@@ -253,7 +253,7 @@ def every_reader_holds_its_buffer(t):
     """Three computes read 64 KB and 512 KB together and a fourth, stated last, the 64 KB alone: each of the three
     is issued with both in the spad, whichever reader the TOG states last. 576 KB holds that and 575 KB does not."""
     sizes = (0, 64 * KB, 512 * KB)
-    work_items(t, FOUR_READERS, sizes, 576).expect_total_cycles(1521)
+    work_items(t, FOUR_READERS, sizes, 576).expect_total_cycles(1522)
     expect_refused_before_the_run(work_items(t, FOUR_READERS, sizes, 575), refusal(0, 576 * KB, 575),
                                   t.work_dir / "tog.so")
 
@@ -272,7 +272,7 @@ LANES = dict(vpu_spad_size_kb_per_lane=16, vpu_num_lanes=3)   # a 48 KB spad, st
 
 def lanes_fit_exactly_runs(t):
     """16 KB on each of 3 lanes is a 48 KB spad: the TOG that fills 48 KB runs to the total of fits_exactly_runs."""
-    expect_both_ran(replay(t, 16 * KB, None, **LANES), 623)
+    expect_both_ran(replay(t, 16 * KB, None, **LANES), 625)
 
 
 def lanes_one_byte_over_refused(t):
@@ -283,7 +283,7 @@ def lanes_one_byte_over_refused(t):
 
 def lanes_restated_runs(t):
     """core_spad_size_kb: 48 beside 16 KB x 3 lanes restates the spad, and the run is fits_exactly_runs."""
-    expect_both_ran(replay(t, 16 * KB, None, core_spad_size_kb=48, **LANES), 623)
+    expect_both_ran(replay(t, 16 * KB, None, core_spad_size_kb=48, **LANES), 625)
 
 
 def stated_twice_disagreeing_refused(t):

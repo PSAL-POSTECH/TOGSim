@@ -7,7 +7,7 @@
 
 #include "Common.h"
 #include "DMA.h"
-#include "ramulator2.hh"
+#include "Ramulator2.h"
 #include "Hashing.h"
 #include "Cache.h"
 #include "DelayQueue.h"
