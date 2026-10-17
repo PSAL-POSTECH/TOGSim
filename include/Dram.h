@@ -16,7 +16,7 @@
 class Dram {
  public:
   Dram(SimulationConfig config, cycle_type* core_cycle);
-  virtual ~Dram() = default;
+  virtual ~Dram();
   virtual bool running() = 0;
   virtual void cycle() = 0;
   virtual void cache_cycle() = 0;
@@ -30,8 +30,13 @@ class Dram {
   virtual void print_cache_stats() {};
   uint32_t get_channels_per_partition() { return _n_ch_per_partition; }
   new_addr_type partition_dram_address(new_addr_type raw_addr) const;
+  // A kernel ended, its writes all in the channels: a barrier enters every channel behind them.
+  void push_barriers();
 
  protected:
+  mem_fetch* to_dram(uint32_t ch, bool hold);
+  void enter_dram(uint32_t ch, mem_fetch* req);
+  bool to_cache(uint32_t ch, mem_fetch* req);
   SimulationConfig _config;
   CacheConfig _m_cache_config;
   uint32_t _n_ch;
@@ -69,6 +74,7 @@ class DramRamulator2 : public Dram {
 
  private:
   std::vector<std::unique_ptr<Ramulator2>> _mem;
+  std::vector<uint64_t> _wr_inflight;
   int _tx_ch_log2;
   int _tx_log2;
 };

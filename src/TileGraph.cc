@@ -48,6 +48,7 @@ std::shared_ptr<Tile> TileSubGraph::get_tile() {
 
 void TileGraph::append_subgraph(std::shared_ptr<TileSubGraph> subgraph) {
   subgraph->init_cache_plan(_cache_plan);
+  subgraph->set_progress(_progress);
   _subgraph_vec.push_back(std::move(subgraph));
 }
 
@@ -59,23 +60,21 @@ bool TileGraph::refill() {
   auto sg = _pull();
   if (!sg) { _exhausted = true; return false; }
   sg->init_cache_plan(_cache_plan);
+  sg->set_progress(_progress);
   _subgraph_vec.push_back(std::move(sg));
   return true;
 }
 
+// A kernel ends once every work-item has been handed out and finished, and every write of its stores has left the
+// interconnect into a memory partition: the next kernel of its stream reads what it wrote.
 bool TileGraph::is_finished() {
-  bool finished = _subgraph_vec.empty() && (!_pull || _exhausted);
-  /* Check all outer loop is allocated */
-  if (!finished)
-    return finished;
-
-  /* Check allocated subgraph is finished */
-  for (const auto& core_pair: _cpu_graph_map) {
+  if (!_subgraph_vec.empty() || (_pull && !_exhausted) || _progress->tiles || _progress->writes)
+    return false;
+  for (const auto& core_pair: _cpu_graph_map)
     for (const auto& tile_pair: core_pair.second)
-      if (tile_pair.second != nullptr)
-        finished &= tile_pair.second->is_finished();
-  }
-  return finished;
+      if (tile_pair.second != nullptr && !tile_pair.second->is_finished())
+        return false;
+  return true;
 }
 
 const std::shared_ptr<Tile> TileGraph::peek_tile(int core_id, int slot_id) {

@@ -27,6 +27,9 @@ inline constexpr const char* kAsyncDmaAllRequestsIssued = "ASYNC_DMA_ISSUE";
 inline constexpr const char* kFirstDramResponse = "DRAM_RESP_FIRST";
 inline constexpr const char* kAllDramResponsesReceived = "DRAM_RESP_DONE";
 inline constexpr const char* kDmaLatency = "DMA_LATENCY";
+inline constexpr const char* kRequestToMemory = "REQ_TO_MEM";
+inline constexpr const char* kRequestToDram = "REQ_TO_DRAM";
+inline constexpr const char* kDramWriteAck = "DRAM_WRITE_ACK";
 
 inline constexpr const char* kL2CacheableStatusForAddress = "L2CACHE_STAT";
 inline constexpr const char* kDmaNumaPlacement = "DRAM_NUMA";

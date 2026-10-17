@@ -374,45 +374,6 @@ def nobody_joins_a_holder(t):
                  f"scheduled @{scheduled}")
 
 
-def kernels_that_hold_nothing_overlap(t):
-    """Two kernels that load what they read, with no DEVICE_SYNC between: kernel 1's work-item is handed to the core
-    while kernel 0's last one is still running, as before."""
-    run = launch(t, 64, [kernel_dir(t, 0, *LOADS, 2), kernel_dir(t, 1, *LOADS, 1)]).expect_ok()
-    scheduled = [c for c, _, _ in run.core_lines("TILE_SCHEDULED")]
-    if len(scheduled) != 3 or scheduled[2] >= last_finish(run, range(4)) or run.core_lines("SPAD_HOLD"):
-        run.fail(f"expected kernel 1's work-item scheduled before kernel 0's last instruction finished "
-                 f"(@{last_finish(run, range(4))}) and no hold, got work-items scheduled @{scheduled}")
-
-
-def a_kernel_ending_beside_another_frees_only_its_own(t):
-    """Kernel 0 fills a 32 KB spad with two 16 KB loads that one compute reads, and loads 16 KB more after it.
-    Kernel 1, one compute of 50 cycles that names no buffer, runs beside it and ends first. Its end frees nothing
-    of kernel 0: the third load is issued once the compute that reads the first two is, not when kernel 1 ends."""
-    homes = [kernel_dir(t, 0, "L(1); L(2); C({1, 2}, {}); L(3); C({3}, {})",
-                        sizes(b1=16 * KB, b2=16 * KB, b3=16 * KB), 1),
-             kernel_dir(t, 1, "T(1, {}, {})", sizes(b1=16 * KB), 1)]
-    run = launch(t, 32, homes).expect_ok()
-    loads, computes = issued(run, "MOVIN"), sorted(run.computes(), key=lambda c: c.start)
-    if len(loads) != 3 or [c.cycles for c in computes] != [50, 200, 200] or loads[2] < computes[1].start:
-        run.fail(f"expected kernel 1's compute of 50 cycles first, and kernel 0's third load issued once its first "
-                 f"compute was (@{computes[1].start if len(computes) > 1 else '?'}); got loads @{loads}")
-
-
-def versions_of_two_kernels_at_once_are_apart(t):
-    """Kernel 0 loads 8 KB that nothing reads and ends with that load. Kernel 1 runs beside it in a 40 KB spad: two
-    16 KB loads of buffer 1, the compute that reads them, a third load and its compute. The buffers of the two
-    kernels are numbered apart, so kernel 0's end frees its 8 KB and no more: the third load still waits for the
-    compute that frees the first two."""
-    homes = [kernel_dir(t, 0, "L(1)", sizes(b1=8 * KB), 1),
-             kernel_dir(t, 1, "L(1); L(1); C({1}, {}); L(1); C({1}, {})", sizes(b1=16 * KB), 1)]
-    run = launch(t, 40, homes).expect_ok()
-    loads, computes = sorted(issued(run, "MOVIN")), sorted(issued(run, "COMP"))
-    ended = last_finish(run, [0])
-    if len(loads) != 4 or len(computes) != 2 or not ended < computes[0] <= loads[3]:
-        run.fail(f"expected kernel 0 to end (@{ended}) before kernel 1's first compute is issued, and kernel 1's "
-                 f"third load issued once that compute was; got loads @{loads} and computes @{computes}")
-
-
 COPY = ("L(9)", sizes(b9=24 * KB))      # a kernel that only loads: what puts the data on the chip
 
 
@@ -451,15 +412,12 @@ def copy_larger_than_the_spad_refused(t):
 
 
 def no_spad_size_holds_nothing(t):
-    """Without a spad size nothing is accounted: the held buffers are named while the TOG is loaded, no hold is
-    traced, and two kernels overlap on a core whatever they read."""
-    run = launch(t, 0, [kernel_dir(t, 0, *READS, 2), kernel_dir(t, 1, *LOADS, 1)]).expect_ok()
+    """Without a spad size nothing is accounted: the held buffers are named while the TOG is loaded, and no hold is
+    traced."""
+    run = launch(t, 0, [kernel_dir(t, 0, *READS, 2)]).expect_ok()
     named = "read buffers 9 without having written them: 24576 bytes on the chip already, which nothing accounts"
     if run.core_lines("SPAD_HOLD") or named not in run.log or "bytes for the kernel" in run.log:
         run.fail("expected the held buffers named and no SPAD_HOLD line")
-    scheduled = [c for c, _, _ in run.core_lines("TILE_SCHEDULED")]
-    if len(scheduled) != 3 or scheduled[2] >= last_finish(run, range(4)):
-        run.fail(f"expected kernel 1's work-item scheduled beside kernel 0's last, got @{scheduled}")
 
 
 CASES = [
@@ -492,10 +450,6 @@ CASES = [
     *in_both_modes("loads_everything_it_reads_is_unchanged", loads_everything_it_reads_is_unchanged),
     Case("session.holder_waits_for_the_core", holder_waits_for_the_core),
     Case("session.nobody_joins_a_holder", nobody_joins_a_holder),
-    Case("session.kernels_that_hold_nothing_overlap", kernels_that_hold_nothing_overlap),
-    Case("session.a_kernel_ending_beside_another_frees_only_its_own",
-         a_kernel_ending_beside_another_frees_only_its_own),
-    Case("session.versions_of_two_kernels_at_once_are_apart", versions_of_two_kernels_at_once_are_apart),
     *[copy_then_use(sync, cores) for sync in (True, False) for cores in (1, 2)],
     Case("session.use_then_copy", use_then_copy),
     Case("session.refused.copy_larger_than_the_spad", copy_larger_than_the_spad_refused),

@@ -8,6 +8,13 @@
 #include "Tile.h"
 #include "IntervalTree.h"
 
+// What a kernel still has in flight: work-items handed to a core and not finished, and writes of its stores that
+// have not yet left the interconnect into a memory partition (mem_fetch::count_until_delivered).
+struct KernelProgress {
+  int64_t tiles = 0;
+  int64_t writes = 0;
+};
+
 class TileSubGraph {
  public:
   TileSubGraph();
@@ -24,6 +31,8 @@ class TileSubGraph {
   int get_core_id() { return _core_id; }
   void init_cache_plan(std::shared_ptr<IntervalTree<unsigned long long,int>> plan) { _cache_plan = plan; }
   bool is_cacheable(unsigned long long start, unsigned long long end) { return _cache_plan->findOverlapping(start, end).size() != 0; }
+  void set_progress(std::shared_ptr<KernelProgress> progress) { _progress = std::move(progress); }
+  KernelProgress& progress() { return *_progress; }
   struct CompareReadyTile {
     bool operator()(const std::shared_ptr<Tile>& a, const std::shared_ptr<Tile>& b) const {
       return a->get_required_sram_size() > b->get_required_sram_size();
@@ -37,6 +46,7 @@ class TileSubGraph {
   int _core_id = -1;
   static int _next_id;
   std::shared_ptr<IntervalTree<unsigned long long, int>> _cache_plan;
+  std::shared_ptr<KernelProgress> _progress;
 };
 
 class TileGraph {
@@ -69,6 +79,7 @@ class TileGraph {
     return true;
   }
   bool is_finished();
+  KernelProgress& progress() { return *_progress; }
   const std::shared_ptr<Tile> peek_tile(int core_id, int slot_id);
   std::shared_ptr<Tile> get_tile(int core_id, int slot_id);
   void allocate_subgraph(int core_id, int slot_id);
@@ -155,6 +166,7 @@ class TileGraph {
   std::vector<std::shared_ptr<TileSubGraph>> _subgraph_vec;
   std::map<int, std::map<int, std::shared_ptr<TileSubGraph>>> _cpu_graph_map;
   std::shared_ptr<IntervalTree<unsigned long long, int>> _cache_plan;
+  std::shared_ptr<KernelProgress> _progress = std::make_shared<KernelProgress>();
   cycle_type _arrival_time;
   cycle_type _start_time = 0;  // First tile issue time, 0 means not started yet
   static std::shared_ptr<Tile> null_tile;

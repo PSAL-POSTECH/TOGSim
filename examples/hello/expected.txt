@@ -57,8 +57,8 @@ systolic_array_split: none
 [info] [Config/Interconnect] interconnect_freq_mhz: 1000
 [info] [Config/Interconnect] Simple interconnect selected
 [info] ======Start Simulation=====
-[info] [Scheduler 0] Kernel 0 has completed - TOG path: kernel operation: kernel finished at cycle 1
-[info] [Scheduler 0] Kernel 0 execution summary - Started at: 1 cycles, Total compute time: 0 cycles
+[info] [Scheduler 0] Kernel 0 has completed - TOG path: kernel operation: kernel finished at cycle 1645
+[info] [Scheduler 0] Kernel 0 execution summary - Started at: 1 cycles, Total compute time: 1644 cycles
 [info] [TOGSim] Total cycles: 1659
 [info] Simulation finished
 [info] ===== Instructions count =====

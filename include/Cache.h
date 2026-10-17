@@ -289,6 +289,7 @@ class Cache {
   virtual void fill(mem_fetch *mf, uint32_t time);
   virtual bool waiting_for_fill(mem_fetch *mf);
   virtual bool access_ready() { return m_mshrs->access_ready(); }
+  bool miss_queue_empty() const { return m_miss_queue.empty(); }
   virtual mem_fetch *pop_next_access() { return m_mshrs->pop_next_access(); }
   virtual mem_fetch *top_next_access() { return m_mshrs->top_next_access(); }
   virtual void invalidate() { m_tag_array->invalidate(); }
