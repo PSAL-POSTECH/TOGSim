@@ -75,8 +75,10 @@ class Simulator {
     for (auto& core : _cores) core->set_unit_table(_unit_table.get());
   }
   void core_cycle();
+  bool return_finished_tile(int core_id);
   void dram_cycle();
   void icnt_cycle();
+  void trace_request_to_memory(mem_fetch* req, int mem_id);
   bool running();
   // Spad-too-small guard: if the sim stays frozen (running() but nothing in
   // flight) past kWedgeThreshold cycles, error out and exit. Called each cycle.

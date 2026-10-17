@@ -5,6 +5,8 @@ bool NoL2Cache::push(mem_fetch* req) {
   return true;
 }
 void NoL2Cache::cycle() {
+  while (!l_from_xbar_queue->empty() && l_from_xbar_queue->front()->is_barrier())
+    pass_barrier();
   if (!l_from_xbar_queue->empty()) {
     mem_fetch* req = l_from_xbar_queue->front();
     l_to_mem_queue.push(req);
@@ -50,7 +52,9 @@ void L2DataCache::cycle() {
 
   /* Pass a request to cache */
   for (int i = 0; i < (n_read_port + n_write_port) * _n_cores; i++) {
-    if (!l_from_xbar_queue->empty()) {
+    if (!l_from_xbar_queue->empty() && l_from_xbar_queue->front()->is_barrier()) {
+      if (l_cache->miss_queue_empty()) pass_barrier();
+    } else if (!l_from_xbar_queue->empty()) {
       mem_fetch* req = l_from_xbar_queue->front();
       /* Check cache plan */
       bool is_cacheable = req->is_cacheable();

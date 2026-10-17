@@ -49,7 +49,8 @@ struct SimulationConfig {
   // Core cycles from a load's last data to its completion, waited, not held: the loads in flight wait theirs
   // together; 0 = none.
   uint32_t dma_load_ready_cycles = 0;
-  // Core cycles a store keeps the core running after its requests are out; only the kernel's end waits; 0 = none.
+  // Core cycles a store keeps the core running after its requests are out; only the end of the run or of a
+  // DEVICE_SYNC waits; 0 = none.
   uint32_t dma_store_ready_cycles = 0;
 
   /* DRAM config */

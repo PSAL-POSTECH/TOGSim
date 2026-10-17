@@ -75,6 +75,7 @@ std::shared_ptr<std::vector<mem_fetch*>> DMA::get_memory_access(cycle_type core_
           static_cast<void*>(_current_inst.get()));
 
       access->set_cacheable(is_cacheable);
+      if (type == mf_type::WRITE_REQUEST) access->count_until_delivered(&owner_subgraph->progress().writes);
       _current_inst->inc_waiting_request();
       _pending_accesses.push(access);
     }
