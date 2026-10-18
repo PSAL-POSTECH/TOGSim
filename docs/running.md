@@ -69,13 +69,13 @@ line. The final statistics of the hello TOG on tpuv6e (the third run of `example
 [info] Core [0] : COMP     inst_count: 1 (GEMM: 0, Vector: 1, XLU: 0)
 [info] Core [0] : MEMORY_BAR inst_count: 0
 [info] ========= Core stat =========
-[info] Core [0] : TPUV6E_MXU utilization(%): 7.49, active_cycles: 128, idle_cycles: 1581
-[info] Core [0] : Vpu utilization(%): 5.85, active_cycles: 100, idle_cycles: 1609
-[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 1677, DRAM BW: 33.000 GB/s (1024 responses)
+[info] Core [0] : TPUV6E_MXU utilization(%): 5.25, active_cycles: 128, idle_cycles: 2309
+[info] Core [0] : Vpu utilization(%): 4.10, active_cycles: 100, idle_cycles: 2337
+[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 2405, DRAM BW: 23.000 GB/s (1024 responses)
 [info] Core [0] : NUMA local memory: 1024 requests, remote memory: 0 requests
-[info] Core [0] : Total_cycles: 1709
+[info] Core [0] : Total_cycles: 2437
 [info] Core [0] : computes held at least once by the core's compute in flight: 0
-[info] Total execution cycles: 1709
+[info] Total execution cycles: 2437
 ```
 
 - **`Total execution cycles`** is the result: the cycles of the core clock (`core_freq_mhz`) until
@@ -86,12 +86,12 @@ line. The final statistics of the hello TOG on tpuv6e (the third run of `example
   zero cycles is not counted; it is reported as `skipped inst_count`. All computes with
   `compute_type` 0 are under `Vector`.
 - **`<unit> utilization(%)`**: one line per unit of the unit table. 128 rows at 1 per cycle are 128
-  active cycles of 1709, or 7.49%. With more than one core each core prints its block, and a
+  active cycles of 2437, or 5.25%. With more than one core each core prints its block, and a
   `Total : <unit> utilization(%)` line per unit follows.
 - **`DMA active_cycles`** are the cycles the core's DMA engine spent sending requests: 2 DMAs of
-  512 requests at 32 per cycle. The cycles it holds a DMA (`dma_load_latency_cycles`) count as
-  idle, and so do the cycles a load waits after its data (`dma_load_ready_cycles`), which do not
-  hold the engine. **`DRAM BW`** is the bytes DRAM answered (32 x 1024 here) over the run, in
+  512 requests at 32 per cycle. The cycles it holds a DMA (`dma_load_latency_cycles`, `dma_store_latency_cycles`) count as
+  idle, and so do the cycles a load waits after its data (`dma_load_ready_cycles`) and a store
+  after its requests (`dma_store_ready_cycles`), which do not hold the engine. **`DRAM BW`** is the bytes DRAM answered (32 x 1024 here) over the run, in
   GB/s, cut to a whole number.
 - **`NUMA local / remote`** counts requests that went to a DRAM channel of the core's own
   partition or to another's (`dram_num_partitions`).

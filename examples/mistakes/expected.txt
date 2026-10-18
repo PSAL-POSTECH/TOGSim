@@ -1,9 +1,9 @@
 == mistakes
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/mistakes/refused_tog.cpp -o examples/mistakes/valid.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-[info] Core [0] : TPUV6E_MXU utilization(%): 7.49, active_cycles: 128, idle_cycles: 1581
-[info] Core [0] : Vpu utilization(%): 5.85, active_cycles: 100, idle_cycles: 1609
-[info] Total execution cycles: 1709
+[info] Core [0] : TPUV6E_MXU utilization(%): 5.25, active_cycles: 128, idle_cycles: 2309
+[info] Core [0] : Vpu utilization(%): 4.10, active_cycles: 100, idle_cycles: 2337
+[info] Total execution cycles: 2437
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DOTHER_ABI examples/mistakes/refused_tog.cpp -o examples/mistakes/OTHER_ABI.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/OTHER_ABI.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
 togsim: refusing TOG examples/mistakes/OTHER_ABI.so: it was built against TOG ABI 15, TOGSim expects ABI 16; rebuild the TOG
@@ -83,28 +83,28 @@ exit 134
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
 [trace] [1012][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1613][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
-[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 1677, DRAM BW: 33.000 GB/s (1024 responses)
-[info] Total execution cycles: 1709
+[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 2405, DRAM BW: 23.000 GB/s (1024 responses)
+[info] Total execution cycles: 2437
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/silent_valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/rows_of_tile_1.gen.tsv
 [warning] [TOGSim] TOG examples/mistakes/silent_valid.so: the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units
-[info] Core [0] : TPUV6E_MXU utilization(%): 0.00, active_cycles: 0, idle_cycles: 1709
-[info] Core [0] : Vpu utilization(%): 0.00, active_cycles: 0, idle_cycles: 1709
-[info] Total execution cycles: 1709
+[info] Core [0] : TPUV6E_MXU utilization(%): 0.00, active_cycles: 0, idle_cycles: 2437
+[info] Core [0] : Vpu utilization(%): 0.00, active_cycles: 0, idle_cycles: 2437
+[info] Total execution cycles: 2437
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DTENSOR_PAST_LIST examples/mistakes/silent_tog.cpp -o examples/mistakes/TENSOR_PAST_LIST.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TENSOR_PAST_LIST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
 [warning] [TOGSim] TOG examples/mistakes/TENSOR_PAST_LIST.so: its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
 [trace] [1012][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1613][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000000000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
-[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 1676, DRAM BW: 33.000 GB/s (1024 responses)
-[info] Total execution cycles: 1708
+[info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 2405, DRAM BW: 23.000 GB/s (1024 responses)
+[info] Total execution cycles: 2437
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DNULL_STRIDES examples/mistakes/silent_tog.cpp -o examples/mistakes/NULL_STRIDES.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/NULL_STRIDES.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
 [trace] [957][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1558][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
-[info] Core [0] : DMA active_cycles: 17, DMA idle_cycles: 1638, DRAM BW: 17.000 GB/s (513 responses)
-[info] Total execution cycles: 1655
+[info] Core [0] : DMA active_cycles: 17, DMA idle_cycles: 2365, DRAM BW: 12.000 GB/s (513 responses)
+[info] Total execution cycles: 2382
 + g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DCONSUMER_FIRST examples/mistakes/silent_tog.cpp -o examples/mistakes/CONSUMER_FIRST.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
 [info] [TOGSim] TOG examples/mistakes/CONSUMER_FIRST.so: core 0 holds 16384 bytes for the kernel: buffers 2, which its work-items read without having written them
