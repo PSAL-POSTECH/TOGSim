@@ -15,6 +15,11 @@ systolic_array_unit: TPUV6E_MXU
 #   ready 842 = 998 cycles one load (570 ns) - 129 cycles one load here - the 27 hold
 dma_load_latency_cycles: 27
 dma_load_ready_cycles: 842
+# A store's, from the same file (4 KiB f32 stores): one is 462 ns (809 cycles), and stores started together grow
+# 15.8 ns (27.7 cycles) a store (par_store 462..699 ns). The two keys were fitted on this simulator, since its own
+# charge does not add to them: at 24 and 784 the par_store points and a 64 KiB store are within -2.5% .. +0.8%.
+dma_store_latency_cycles: 24
+dma_store_ready_cycles: 784
 
 vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 1024
