@@ -1,5 +1,5 @@
-# One TPU v3 TensorCore. The array unit TPUV3_MXU and the ISA's vcix_tpuv3 name a vcix model and compiler support
-# that do not exist yet; vcix holds that model's keys once it states them.
+# One TPU v3 TensorCore. The array unit TPUV3_MXU and the ISA's vcix_tpuv3 name vcix-accelerator libtpuv3.so and
+# compiler support that does not exist yet.
 num_cores: 1
 core_freq_mhz: 940
 core_stats_print_period_cycles: 10000
@@ -10,7 +10,10 @@ vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 128
 
 isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv3]
-vcix: {}
+# The MXU's delay line, tpu_mxu_delay_cycles 97 in place of the model's 255 (width + depth - 1): libtpu 0.0.21's cost
+# model puts a v3 vmatmul's first vpop 105 cycles after it (128x128), and on libtpuv3.so at 128 lanes a vpop of 8
+# rows issues the delay + 8 cycles after its vmatmul on gem5. No v3 hardware measurement backs it.
+vcix: {tpu_mxu_delay_cycles: 97}
 address_map: {spad_vaddr: 0xd0000000, spad_paddr: 0x2000000000, dram_base: 0x80000000, dram_size: 17179869184}
 
 dram_type: ramulator2

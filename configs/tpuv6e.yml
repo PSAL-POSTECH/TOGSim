@@ -25,7 +25,11 @@ vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 1024
 
 isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv6e]
-vcix: {tpu_mxu_queue_entries: 512, tpu_xlu_queue_entries: 256, tpu_xlu_latency_cycles: 137, tpu_xlu_elements_per_cycle: 16, tpu_xlu_issue_per_cycle: 2, tpu_sfu_latency_cycles: 10, tpu_sfu_queue_registers: 16}
+# The MXU's delay line, tpu_mxu_delay_cycles 187 in place of the model's 511 (width + depth - 1): on one v6e a
+# dependent chain x = dot(x, W), x 8x128 f32, W 128x128, takes 195.8 cycles a step (tpu-perf-archive
+# runs/v6e/mxu_chain/2026-10-19_pallas_mirror, 111.8 ns a step at 1751 MHz). The same chain on libtpuv6e.so, 8 rows
+# a step, takes the delay + 9 cycles a step on gem5 (vmatmul 1 cycle after its vmatprep, vpop the delay + 8 after).
+vcix: {tpu_mxu_queue_entries: 512, tpu_mxu_delay_cycles: 187, tpu_xlu_queue_entries: 256, tpu_xlu_latency_cycles: 137, tpu_xlu_elements_per_cycle: 16, tpu_xlu_issue_per_cycle: 2, tpu_sfu_latency_cycles: 10, tpu_sfu_queue_registers: 16}
 address_map: {spad_vaddr: 0xd0000000, spad_paddr: 0x2000000000, dram_base: 0x80000000, dram_size: 107374182400}
 
 dram_type: ramulator2

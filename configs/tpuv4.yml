@@ -10,7 +10,10 @@ vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 128
 
 isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv4]
-vcix: {}
+# The MXU's delay line, tpu_mxu_delay_cycles 75: libtpu 0.0.21's cost model puts a v4 vmatmul's first vpop 83 cycles
+# after it (128x128), less the 8 cycles 8 rows take to enter an array of one register an operand and a row a cycle,
+# as on libtpuv3.so. There is no v4 model to check it on, and no v4 hardware measurement backs it.
+vcix: {tpu_mxu_delay_cycles: 75}
 address_map: {spad_vaddr: 0xd0000000, spad_paddr: 0x2000000000, dram_base: 0x80000000, dram_size: 17179869184}
 
 dram_type: ramulator2
