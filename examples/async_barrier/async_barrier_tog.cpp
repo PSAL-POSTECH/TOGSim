@@ -1,4 +1,4 @@
-// Two async loads, A and B, in one batch that one wait covers, then a compute that reads both and a store.
+// Two async loads, A and B, on one semaphore that one wait covers, then a compute that reads both and a store.
 // -DSYNC makes the loads synchronous, with no wait; -DTWO_STEPS first computes PARTIAL from A alone.
 #include "togsim.hpp"
 using namespace togsim;
@@ -14,17 +14,17 @@ struct AsyncBarrier : Tog<AsyncBarrier> {
 
   void entry(Kernel& k) const { dispatch<&AsyncBarrier::body>(k); }
 
-  // An async load is done once its requests are sent; the wait is done once the data of every load of its batch
-  // has arrived.
+  // An async load is done once its requests are sent; the wait is done once the data of every load that signaled
+  // its semaphore has arrived.
   void body(Item& w) const {
 #if defined(SYNC)
     load(w, {.from = LHS, .to = A});
     load(w, {.from = RHS, .to = B});
 #else
-    Batch ab = batch(w);
-    load(w, {.from = LHS, .to = A, .batch = ab});
-    load(w, {.from = RHS, .to = B, .batch = ab});
-    wait(w, {.batch = ab});
+    Semaphore ab = semaphore(w);
+    load(w, {.from = LHS, .to = A, .sem = ab});
+    load(w, {.from = RHS, .to = B, .sem = ab});
+    wait(w, {.sem = ab});
 #endif
 #if defined(TWO_STEPS)
     compute(w, {.node = STEP, .reads = {A}, .writes = {PARTIAL}});

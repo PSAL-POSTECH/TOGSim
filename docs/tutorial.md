@@ -98,7 +98,7 @@ Read it from the top down:
 - **`body`** is the body of that work-item. Its three calls are three instructions: a load into
   buffer 1, a compute that reads buffer 1 and writes buffer 2, and a store of buffer 2.
 
-Every call takes one struct of named arguments. A load is synchronous unless it names a batch
+Every call takes one struct of named arguments. A load is synchronous unless it names a semaphore
 (step 2). [The TOGSim API](tog-api.md#togsim-api-v100) lists every call and field, and
 [the TOG ABI](tog-abi.md#the-tog-abi) the C call each one lowers to.
 
@@ -181,20 +181,21 @@ A load can be synchronous or asynchronous.
 
 - A **synchronous** load is finished when its data has arrived (on tpuv6e, 842 cycles after
   that). Whatever reads its buffer simply waits for it.
-- An **asynchronous** load joins a batch (`.batch`). It counts as finished once its last request
-  has been sent, without waiting for the data. The TOG must then `wait` for the batch before it
+- An **asynchronous** load signals a semaphore (`.sem`). It counts as finished once its last request
+  has been sent, without waiting for the data. The TOG must then `wait` on the semaphore before it
   uses the data.
 
 `examples/async_barrier/async_barrier_tog.cpp` loads two operands the second way:
 
 ```cpp
-    Batch ab = batch(w);
-    load(w, {.from = LHS, .to = A, .batch = ab});
-    load(w, {.from = RHS, .to = B, .batch = ab});
-    wait(w, {.batch = ab});
+    Semaphore ab = semaphore(w);
+    load(w, {.from = LHS, .to = A, .sem = ab});
+    load(w, {.from = RHS, .to = B, .sem = ab});
+    wait(w, {.sem = ab});
 ```
 
-`wait` waits for every load of the batch and closes it; in the log it is a barrier, `MEMORY_BAR`.
+`wait` waits for every load that signaled the semaphore since its last wait; in the log it is a barrier,
+`MEMORY_BAR`. The semaphore stays usable for later loads.
 After it, a compute that reads buffer 1 or 2 waits for the barrier, not for the loads.
 
 ```bash
@@ -233,11 +234,11 @@ synchronous, no barrier) and with `-DTWO_STEPS` (a first compute that reads only
 | one compute reads both operands | 2479 | 2479 |
 | `-DTWO_STEPS`: a first compute reads only A | 3080, first compute at 1054 | 3038, first compute at 1012 |
 
-A barrier holds every reader of its loads' buffers until the whole batch has completed. A
+A barrier holds every reader of its loads' buffers until all of them have completed. A
 synchronous load releases its readers when it completes, without waiting for the other load,
 which is cycle 1011 for A. In these runs the asynchronous form is never the faster one. Use it to replay a kernel that
-really issues a batch of loads and then waits for all of them; in a hand-written TOG, synchronous
-loads are simpler. A work-item that returns without waiting for a batch a load joined is refused
+really issues several loads and then waits for all of them; in a hand-written TOG, synchronous
+loads are simpler. A work-item that returns without waiting for a semaphore a load signaled is refused
 (step 6).
 
 ## 3. Many work-items, on one core, two and four
@@ -456,7 +457,7 @@ For example:
 exit 1
 ```
 
-The script prints 19 refusals; the [refusal table](tog-abi.md#what-gets-a-run-refused) lists each with its
+The script prints 18 refusals; the [refusal table](tog-abi.md#what-gets-a-run-refused) lists each with its
 cause and its fix.
 
 **Said, but not refused.** Two mistakes still run to the end with exit 0, and TOGSim names them in

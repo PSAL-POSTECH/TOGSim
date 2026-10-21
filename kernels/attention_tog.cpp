@@ -48,18 +48,19 @@ struct Attention : Tog<Attention> {
     const int64_t q_short = short_axis({.axis = AXIS_Q, .extent = tq, .tile = TILE_Q});
     const int64_t head = a.h * a.seq * D;
 
+    const Semaphore k = semaphore(w), q = semaphore(w), vv = semaphore(w);
     for (int64_t kv0 = 0; kv0 < a.seq; kv0 += TILE_KV) {
       const int64_t tkv = extent({.dim = a.seq, .at = kv0, .tile = TILE_KV});
       const int64_t v = q_short | short_axis({.axis = AXIS_KV, .extent = tkv, .tile = TILE_KV});
       const Desc keys{.ptr = 1, .type = f32, .offset = head + kv0 * D, .dims = {tkv, D}, .strides = {D, 1}};
       const Desc queries{.ptr = 0, .type = f32, .offset = head + a.q0 * D, .dims = {tq, D}, .strides = {D, 1}};
       const Desc values{.ptr = 2, .type = f32, .offset = head + kv0 * D, .dims = {tkv, D}, .strides = {D, 1}};
-      Batch k = load_async(w, {.from = keys, .to = K_TILE});
-      Batch q = load_async(w, {.from = queries, .to = Q_TILE});
-      Batch vv = load_async(w, {.from = values, .to = V_TILE});
+      load(w, {.from = keys, .to = K_TILE, .sem = k});
+      load(w, {.from = queries, .to = Q_TILE, .sem = q});
+      load(w, {.from = values, .to = V_TILE, .sem = vv});
 
-      wait(w, {.batch = k});
-      wait(w, {.batch = q});
+      wait(w, {.sem = k});
+      wait(w, {.sem = q});
       for (int64_t hh = 0; hh < a.heads_per_kv; ++hh)
         compute(w, {.node = QK, .variant = v, .reads = {K_TILE, Q_TILE}, .writes = {LOGIT}});
       compute(w, {.node = ROWMAX, .variant = v, .reads = {LOGIT}, .writes = {STAT}});
@@ -69,7 +70,7 @@ struct Attention : Tog<Attention> {
       compute(w, {.node = MAC, .variant = v, .reads = {LOGIT, STAT}, .writes = {STAT}});
       compute(w, {.node = RESCALE, .variant = v, .reads = {STAT, ACC}, .writes = {ACC}});
 
-      wait(w, {.batch = vv});
+      wait(w, {.sem = vv});
       for (int64_t hh = 0; hh < a.heads_per_kv; ++hh)
         compute(w, {.node = SV, .variant = v, .reads = {V_TILE, LOGIT, ACC}, .writes = {ACC}});
     }

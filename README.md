@@ -122,7 +122,7 @@ hand or by a compiler. Every call takes one struct of named arguments:
 |---|---|
 | `dispatch<&X::f>(k, ...)` | One work-item, from the kernel's `entry`. |
 | `load(w, {.from, .to, ...})`, `store(w, {.from, .to, ...})` | One DMA between DRAM and the scratchpad. |
-| `load_async`, `batch`, `wait(w, {.batch})` | Asynchronous loads and the wait for them. |
+| `load_async`, `semaphore`, `wait(w, {.sem})` | Asynchronous loads and the wait for them. |
 | `compute(w, {.node, .variant, .reads, .writes})` | One compute. Its cycles are a row of the cycle table. |
 
 The header lowers each call to the C ABI 16 of `include/togsim_runtime.h`, which is what TOGSim

@@ -14,15 +14,11 @@ exit 1
 exit 1
 + g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DNO_WAIT examples/mistakes/refused_tog.cpp -o examples/mistakes/NO_WAIT.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/NO_WAIT.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-togsim.hpp: a work-item returned with an async batch it did not wait
+togsim.hpp: a work-item returned with a semaphore whose loads it did not wait
 exit 1
 + g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DEMPTY_WAIT examples/mistakes/refused_tog.cpp -o examples/mistakes/EMPTY_WAIT.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/EMPTY_WAIT.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-togsim.hpp: a wait on a batch that no load joined
-exit 1
-+ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DTWO_WAITS examples/mistakes/refused_tog.cpp -o examples/mistakes/TWO_WAITS.so
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TWO_WAITS.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-togsim.hpp: a batch that is not open: waited already, or never made by load_async() or batch()
+togsim.hpp: a wait on a semaphore no load signaled since its last wait
 exit 1
 + g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DTILE_PAST_TABLE examples/mistakes/refused_tog.cpp -o examples/mistakes/TILE_PAST_TABLE.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TILE_PAST_TABLE.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv

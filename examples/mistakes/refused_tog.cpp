@@ -1,5 +1,5 @@
 // A valid TOG (an async load, its wait, a compute, a store) that one -D<NAME> breaks. togsim.hpp refuses NOT_A_TOG
-// (no Tog<> base), NO_WAIT, EMPTY_WAIT (a wait on a batch no load joined) and TWO_WAITS; TOGSim refuses
+// (no Tog<> base), NO_WAIT and EMPTY_WAIT (a wait on a semaphore no load signaled since its last wait); TOGSim refuses
 // UNSIZED_BUFFER (OUT not in buffers) and TILE_PAST_TABLE (variant 1: a row the one-line cycle table lacks).
 #include "togsim.hpp"
 using namespace togsim;
@@ -28,15 +28,12 @@ struct Refused : Tog<Refused> {
 
   void body(Item& w) const {
 #if defined(EMPTY_WAIT)
-    Batch none = batch(w);
-    wait(w, {.batch = none});
+    Semaphore none = semaphore(w);
+    wait(w, {.sem = none});
 #endif
-    Batch in = load_async(w, {.from = SRC, .to = IN});
+    Semaphore in = load_async(w, {.from = SRC, .to = IN});
 #if !defined(NO_WAIT)
-    wait(w, {.batch = in});
-#endif
-#if defined(TWO_WAITS)
-    wait(w, {.batch = in});
+    wait(w, {.sem = in});
 #endif
     compute(w, {.node = STEP, .variant = VARIANT, .reads = {IN}, .writes = {OUT}});
     store(w, {.from = OUT, .to = DST});

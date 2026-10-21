@@ -104,25 +104,24 @@ struct ShortAxis {
 };
 constexpr int64_t short_axis(const ShortAxis& s) { return s.extent < s.tile ? (int64_t)1 << s.axis : 0; }
 
-constexpr int32_t BATCH_SLOTS = 64;
+constexpr int32_t SEMAPHORES = 64;
 struct Ops_;
 
-// An async batch made by load_async(...) or batch(w): a handle only its Item opens, joins and closes.
-// Batch() is no batch: a Load with it is synchronous.
-class Batch {
+// A semaphore made by semaphore(w) or load_async(...): a handle only its Item signals and waits.
+// Semaphore() is no semaphore: a Load with it is synchronous.
+class Semaphore {
  public:
-  Batch() = default;
+  Semaphore() = default;
 
  private:
   friend class Item;
   friend struct Ops_;
-  constexpr Batch(int32_t slot, uint32_t gen) : slot_(slot), gen_(gen) {}
+  constexpr explicit Semaphore(int32_t slot) : slot_(slot) {}
   int32_t slot_ = -1;
-  uint32_t gen_ = 0;
 };
 
-// One replay of a work-item and its open batches. A batch that a load joined must be waited before the work-item
-// returns; one no load joined may be left open.
+// One replay of a work-item and its semaphores, ABI sem ids 1, 2, ... in creation order. A semaphore a load
+// signaled since its last wait must be waited before the work-item returns.
 class Item {
  public:
   Item(const Item&) = delete;
@@ -131,43 +130,34 @@ class Item {
  private:
   friend struct Ops_;
   explicit Item(EmitCtx* c) : c_(c) {}
-  Batch open_() {
-    for (int32_t s = 0; s < BATCH_SLOTS; ++s)
-      if (!(open_mask_ >> s & 1)) {
-        open_mask_ |= uint64_t{1} << s;
-        joined_mask_ &= ~(uint64_t{1} << s);
-        sum_[s] = 0;
-        return Batch(s, gen_[s]);
-      }
-    fail_("more than 64 async batches open in one work-item");
+  Semaphore make_() {
+    if (made_ == SEMAPHORES) fail_("more than 64 semaphores in one work-item");
+    return Semaphore(made_++);
   }
-  void check_(Batch b) const {
-    if (b.slot_ < 0 || b.slot_ >= BATCH_SLOTS || !(open_mask_ >> b.slot_ & 1) || gen_[b.slot_] != b.gen_)
-      fail_("a batch that is not open: waited already, or never made by load_async() or batch()");
+  void check_(Semaphore s) const {
+    if (s.slot_ < 0 || s.slot_ >= made_)
+      fail_("a semaphore this work-item did not make with semaphore() or load_async()");
   }
-  uint64_t sem_(Batch b) const {
-    check_(b);
-    return (uint64_t)b.slot_ + 1;
+  void signal_(Semaphore s, int64_t elements) {
+    check_(s);
+    signaled_ |= uint64_t{1} << s.slot_;
+    sum_[s.slot_] += elements;
   }
-  void add_(Batch b, int64_t elements) {
-    check_(b);
-    joined_mask_ |= uint64_t{1} << b.slot_;
-    sum_[b.slot_] += elements;
-  }
-  int64_t close_(Batch b) {
-    check_(b);
-    if (!(joined_mask_ >> b.slot_ & 1)) fail_("a wait on a batch that no load joined");
-    open_mask_ &= ~(uint64_t{1} << b.slot_);
-    ++gen_[b.slot_];
-    return sum_[b.slot_];
+  int64_t wait_(Semaphore s) {
+    check_(s);
+    if (!(signaled_ >> s.slot_ & 1)) fail_("a wait on a semaphore no load signaled since its last wait");
+    signaled_ &= ~(uint64_t{1} << s.slot_);
+    const int64_t sum = sum_[s.slot_];
+    sum_[s.slot_] = 0;
+    return sum;
   }
   void end_() const {
-    if (open_mask_ & joined_mask_) fail_("a work-item returned with an async batch it did not wait");
+    if (signaled_) fail_("a work-item returned with a semaphore whose loads it did not wait");
   }
   EmitCtx* c_;
-  uint64_t open_mask_ = 0, joined_mask_ = 0;
-  int64_t sum_[BATCH_SLOTS]{};
-  uint32_t gen_[BATCH_SLOTS]{};
+  int32_t made_ = 0;
+  uint64_t signaled_ = 0;
+  int64_t sum_[SEMAPHORES]{};
 };
 
 // The kernel scope: its shape and how it keys its dispatches (counted 0, 1, ... or each given).
@@ -189,11 +179,11 @@ class Kernel {
 // The few places that reach the ABI context of an Item or a Kernel.
 struct Ops_ {
   static EmitCtx* ctx(Item& w) { return w.c_; }
-  static Batch open(Item& w) { return w.open_(); }
-  static bool none(Batch b) { return b.slot_ == -1; }
-  static uint64_t sem(Item& w, Batch b) { return w.sem_(b); }
-  static void add(Item& w, Batch b, int64_t e) { w.add_(b, e); }
-  static int64_t close(Item& w, Batch b) { return w.close_(b); }
+  static Semaphore make(Item& w) { return w.make_(); }
+  static bool none(Semaphore s) { return s.slot_ == -1; }
+  static void signal(Item& w, Semaphore s, int64_t e) { w.signal_(s, e); }
+  static int64_t wait(Item& w, Semaphore s) { return w.wait_(s); }
+  static uint64_t id(Semaphore s) { return (uint64_t)s.slot_ + 1; }
   static EmitCtx* ctx(Kernel& k) { return k.c_; }
   static int32_t n_shape(const Kernel& k) { return k.n_; }
   static int64_t shape(const Kernel& k, int32_t i) { return k.shape_[i]; }
@@ -241,32 +231,32 @@ inline int64_t elements_(const Dims& d) {
   return e;
 }
 
-// A new async batch: load(w, {..., .batch = b}) joins it, wait(w, {.batch = b}) waits for all of its loads.
-inline Batch batch(Item& w) { return Ops_::open(w); }
+// A new semaphore: load(w, {..., .sem = s}) signals it, wait(w, {.sem = s}) waits for those loads.
+inline Semaphore semaphore(Item& w) { return Ops_::make(w); }
 
-// DRAM -> spad: `from` into `to`. With `batch` it joins that batch and is done once its requests are sent, else
+// DRAM -> spad: `from` into `to`. With `sem` it signals that semaphore and is done once its requests are sent, else
 // once its data has arrived. `after`: buffers it must follow (an index it reads, a buffer it must not overtake).
 struct Load {
   Desc from;
   Buf to;
-  Batch batch = Batch();
+  Semaphore sem = Semaphore();
   std::vector<Buf> after = {};
 };
 inline void load(Item& w, const Load& l) {
-  if (Ops_::none(l.batch)) {
+  if (Ops_::none(l.sem)) {
     dma_(w, TOGSIM_DMA_LOAD, l.from, 0, 0, l.after, {l.to});
     return;
   }
-  dma_(w, TOGSIM_DMA_LOAD, l.from, 1, Ops_::sem(w, l.batch), l.after, {l.to});
-  Ops_::add(w, l.batch, elements_(l.from.dims));
+  Ops_::signal(w, l.sem, elements_(l.from.dims));
+  dma_(w, TOGSIM_DMA_LOAD, l.from, 1, Ops_::id(l.sem), l.after, {l.to});
 }
 
-// One async load in a batch of its own, returned.
-inline Batch load_async(Item& w, const Load& l) {
-  if (!Ops_::none(l.batch)) fail_("load_async makes its own batch: give it no .batch");
-  Batch b = batch(w);
-  load(w, Load{l.from, l.to, b, l.after});
-  return b;
+// One async load on a semaphore of its own, returned.
+inline Semaphore load_async(Item& w, const Load& l) {
+  if (!Ops_::none(l.sem)) fail_("load_async makes its own semaphore: give it no .sem");
+  Semaphore s = semaphore(w);
+  load(w, Load{l.from, l.to, s, l.after});
+  return s;
 }
 
 // spad -> DRAM: `from` into `to`. `also`: further buffers it reads (an indirect store's index buffer) or follows.
@@ -281,13 +271,13 @@ inline void store(Item& w, const Store& s) {
   dma_(w, TOGSIM_DMA_STORE, s.to, 0, 0, read, {});
 }
 
-// Waits for every load of `batch`, and closes it.
+// Waits for every load that signaled `sem` since its last wait; later loads may signal it again.
 struct Wait {
-  Batch batch;
+  Semaphore sem;
 };
 inline void wait(Item& w, const Wait& x) {
-  const uint64_t sem = Ops_::sem(w, x.batch);
-  togsim_memory_barrier(Ops_::ctx(w), sem, Ops_::close(w, x.batch));
+  const int64_t elements = Ops_::wait(w, x.sem);
+  togsim_memory_barrier(Ops_::ctx(w), Ops_::id(x.sem), elements);
 }
 
 // A compute of `node` at row `node.id + node.count * variant` of the cycle and unit tables (a short last tile, or
