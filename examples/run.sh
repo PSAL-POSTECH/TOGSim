@@ -9,10 +9,10 @@ V6E=configs/tpuv6e.yml
 EXAMPLES="hello async_barrier tiles gemm session mistakes"
 ulimit -c 0
 
-# tog <g++ arguments>: compile a TOG against include/togsim_runtime.h. It links against nothing.
+# tog <g++ arguments>: compile a TOG against include/togsim.hpp (TOGSim API v1.0.0). It links against nothing.
 tog() {
-  echo "+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude $*"
-  ${CXX:-g++} -std=c++17 -shared -fPIC -O1 -Iinclude "$@"
+  echo "+ g++ -std=c++20 -shared -fPIC -O1 -Iinclude $*"
+  ${CXX:-g++} -std=c++20 -shared -fPIC -O1 -Iinclude "$@"
 }
 
 # sim <filter> <Simulator arguments>: replay, and print what <filter> (one of the functions below) keeps of the log.
@@ -57,7 +57,7 @@ unrefused() { awk '/\[warning\]|bytes for the kernel|INST_ISSUED/ || (final && /
 statistics() { awk '/\[DRAM\] (Per-channel average|channel 0 \||channels 0\.\.)/ || final; /Simulation finished/ { end = 1 } end && /Instructions count/ { final = 1; print }'; }
 result() { awk '/\[warning\]|INST_ISSUED.*COMP/ || (final && /utilization\(%\)|Total execution cycles/); /Simulation finished/ { final = 1 }'; }
 kernels() { grep -E 'Enqueued kernel_id|INST_ISSUED.*COMP|Total execution cycles'; }
-first_error() { grep -m 1 -E '^togsim: |\[error\]|what\(\):|does not exist!'; }
+first_error() { grep -m 1 -E '^togsim(\.hpp)?: |\[error\]|what\(\):|does not exist!'; }
 whole() { cat; }
 
 # One work-item: its timeline, one instruction's events and the final statistics on tpuv6e, then a whole log on a
@@ -128,15 +128,15 @@ session() {
   sim kernels --config $dir/two_partitions.gen.yml --models_list $dir/commands_two_partitions.txt --log_level trace
 }
 
-# The valid TOG and each way of breaking it that is refused; the valid TOG with each wrong input or machine that is
-# refused; then what is not refused: two mistakes that a warning names, one that nothing names and one that reads as
-# data already on the chip, which an info line names and a spad without room for it refuses.
+# The valid TOG and each way to break it, refused by togsim.hpp or by TOGSim; the valid TOG with each wrong input or
+# machine that is refused; then what is not refused: two mistakes that a warning names and one that reads as data
+# already on the chip, which an info line names and a spad without room for it refuses.
 mistakes() {
   local dir=examples/mistakes broken
   local tables="--cycle_table $dir/tog_cycles.tsv --unit_table $dir/tog_units.tsv"
   tog $dir/refused_tog.cpp -o $dir/valid.so
   sim result --config $V6E --tog_so $dir/valid.so $tables
-  for broken in OTHER_ABI NO_VERSION NO_KERNEL NO_BUFFER_TABLE UNSIZED_BUFFER WRONG_COUNT UNSIGNALED_SEM NO_WAIT TILE_PAST_TABLE; do
+  for broken in NOT_A_TOG UNSIZED_BUFFER NO_WAIT EMPTY_WAIT TWO_WAITS TILE_PAST_TABLE; do
     tog -D$broken $dir/refused_tog.cpp -o $dir/$broken.so
     sim first_error --config $V6E --tog_so $dir/$broken.so $tables
   done
@@ -165,7 +165,7 @@ mistakes() {
   sim unrefused --config $V6E --tog_so $dir/silent_valid.so $tables --log_level trace
   printf '1\tTPUV6E_MXU\trows\t1\t128\n1\tVpu\tcycles\t1\t100\n' > $dir/rows_of_tile_1.gen.tsv
   sim result --config $V6E --tog_so $dir/silent_valid.so --cycle_table $dir/tog_cycles.tsv --unit_table $dir/rows_of_tile_1.gen.tsv
-  for broken in TENSOR_PAST_LIST NULL_STRIDES CONSUMER_FIRST; do
+  for broken in TENSOR_PAST_LIST CONSUMER_FIRST; do
     tog -D$broken $dir/silent_tog.cpp -o $dir/$broken.so
     sim unrefused --config $V6E --tog_so $dir/$broken.so $tables --log_level trace
   done

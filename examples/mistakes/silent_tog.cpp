@@ -1,38 +1,30 @@
-// A valid TOG (a load, a compute, a store) that one -D<NAME> breaks in a way TOGSim does NOT refuse: the run
-// exits 0. TENSOR_PAST_LIST is said in a warning and NULL_STRIDES is not said at all. CONSUMER_FIRST is a valid
-// TOG of another meaning, a store of data already on the chip, and an info line names the buffer it holds.
-#include "togsim_runtime.h"
+// A valid TOG (a load, a compute, a store) that one -D<NAME> breaks in a way TOGSim does NOT refuse: the run exits
+// 0. TENSOR_PAST_LIST stores to a tensor tog_tensors.txt lacks, which a warning names. CONSUMER_FIRST stores OUT
+// before the compute that writes it: a store of data already on the chip, which an info line names.
+#include "togsim.hpp"
+using namespace togsim;
 
-#define ROWS 64
-#define COLS 64
-
-// TENSOR_PAST_LIST names an arg_id tog_tensors.txt lacks, NULL_STRIDES passes no strides, CONSUMER_FIRST calls
-// the store before the compute that feeds it: the store reads buffer 2 before anything wrote it.
-static void body(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
-  (void)iv; (void)n_iv;
-  const int64_t dims[2] = {ROWS, COLS}, strides[2] = {COLS, 1};
-  const int64_t in[1] = {1}, out[1] = {2};
-#if defined(NULL_STRIDES)
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, 0, 0, 2, dims, nullptr, 32, 0, 0, nullptr, 0, in, 1, 0);
+struct Silent : Tog<Silent> {
+  static constexpr Buf IN{.id = 1, .bytes = f32(64, 64)}, OUT{.id = 2, .bytes = f32(64, 64)};
+  static constexpr std::array buffers{IN, OUT};
+  static constexpr Node STEP{.id = 0, .count = 1};
+  static constexpr Desc SRC{.ptr = 0, .type = f32, .offset = 0, .dims = {64, 64}, .strides = {64, 1}};
+#if defined(TENSOR_PAST_LIST)
+  static constexpr Desc DST{.ptr = 2, .type = f32, .offset = 0, .dims = {64, 64}, .strides = {64, 1}};
 #else
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, 0, 0, 2, dims, strides, 32, 0, 0, nullptr, 0, in, 1, 0);
+  static constexpr Desc DST{.ptr = 1, .type = f32, .offset = 0, .dims = {64, 64}, .strides = {64, 1}};
 #endif
+
+  void entry(Kernel& k) const { dispatch<&Silent::body>(k); }
+
+  void body(Item& w) const {
+    load(w, {.from = SRC, .to = IN});
 #if defined(CONSUMER_FIRST)
-  togsim_dma(ctx, TOGSIM_DMA_STORE, 1, 0, 2, dims, strides, 32, 0, 0, out, 1, nullptr, 0, 0);
-  togsim_compute(ctx, 0, 0, 0, nullptr, in, 1, out, 1);
-#elif defined(TENSOR_PAST_LIST)
-  togsim_compute(ctx, 0, 0, 0, nullptr, in, 1, out, 1);
-  togsim_dma(ctx, TOGSIM_DMA_STORE, 2, 0, 2, dims, strides, 32, 0, 0, out, 1, nullptr, 0, 0);
+    store(w, {.from = OUT, .to = DST});
+    compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
 #else
-  togsim_compute(ctx, 0, 0, 0, nullptr, in, 1, out, 1);
-  togsim_dma(ctx, TOGSIM_DMA_STORE, 1, 0, 2, dims, strides, 32, 0, 0, out, 1, nullptr, 0, 0);
+    compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
+    store(w, {.from = OUT, .to = DST});
 #endif
-}
-
-extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape_args) {
-  (void)shape_args; (void)n_shape_args;
-  togsim_dispatch(ctx, body, nullptr, 0, 0);
-}
-
-extern "C" const int32_t togsim_spad_buffer_count = 3;
-extern "C" const int64_t togsim_spad_buffer_bytes[3] = {0, ROWS * COLS * 4, ROWS * COLS * 4};
+  }
+};

@@ -36,7 +36,7 @@ def standalone(tog_dir, stem, macros=(), shape=None, tensors=(MIB,) * 8, cycles=
     tog_dir.mkdir(parents=True)
     if isinstance(cycles, dict):
         cycles = [cycles.get(i, 0) for i in range(max(cycles) + 1)]
-    subprocess.run(["g++", "-shared", "-fPIC", "-std=gnu++17", "-O1", "-I", str(paths.include_dir()),
+    subprocess.run(["g++", "-shared", "-fPIC", "-std=c++20", "-O1", "-I", str(paths.include_dir()),
                     *[f"-D{m}" for m in macros], str(paths.kernel_source(stem)), "-o", str(tog_dir / "tog.so")],
                    check=True)
     (tog_dir / "tog_tensors.txt").write_text("".join(f"{b}\n" for b in tensors))

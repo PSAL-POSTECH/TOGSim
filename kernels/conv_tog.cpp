@@ -1,151 +1,127 @@
-// Convolution of an I_C x (I_H+P_T+P_B) x (I_W+P_L+P_R) padded input by O_C x K_H x K_W x I_C weights: output (oh, ow)
-// reads row oh*S_H + kh*D_H, column ow*S_W + kw*D_W. A work-item is a TILE_N x TILE_I_H x TILE_M output tile (-D, as SA).
-// shape_args: I_C I_H I_W O_C O_H O_W K_H K_W S_H S_W D_H D_W P_T P_L P_B P_R (example 64 16 16 64 16 16 3 3, then 1s).
-#include "togsim_runtime.h"
+// Convolution of a padded I_C x (I_H+P_T+P_B) x (I_W+P_L+P_R) input (argument 0) by O_C x K_H x K_W x I_C weights (1)
+// into 2: output (oh, ow) reads row oh*S_H + kh*D_H, column ow*S_W + kw*D_W, a TILE_N x TILE_I_H x TILE_M output tile
+// per work-item. shape_args: CONV_NAMES (example 64 16 16 64 16 16 3 3, then 1s). Build options: the tiles and -DSA=.
+#include <cstdio>
+#include <cstdlib>
 
-#include "kernel_shape.h"
+#include "togsim.hpp"
+using namespace togsim;
 
-#ifndef TILE_M
-#define TILE_M 16
+struct Conv : Tog<Conv> {
+#ifdef TILE_M
+  static constexpr int64_t TILE_W = TILE_M;
+#else
+  static constexpr int64_t TILE_W = 16;
 #endif
-#ifndef TILE_N
-#define TILE_N 64
+#ifdef TILE_N
+  static constexpr int64_t TILE_OC = TILE_N;
+#else
+  static constexpr int64_t TILE_OC = 64;
 #endif
-#ifndef TILE_K
-#define TILE_K 64
+#ifdef TILE_K
+  static constexpr int64_t TILE_IC = TILE_K;
+#else
+  static constexpr int64_t TILE_IC = 64;
 #endif
-#ifndef TILE_I_H
-#define TILE_I_H 8
+#ifdef TILE_I_H
+  static constexpr int64_t TILE_H = TILE_I_H;
+#else
+  static constexpr int64_t TILE_H = 8;
 #endif
-#ifndef SA
-#define SA 8
+#ifdef SA
+  static constexpr int64_t SA_WIDTH = SA;
+#else
+  static constexpr int64_t SA_WIDTH = 8;
 #endif
+  static constexpr int64_t IC_PIECES = (TILE_IC + SA_WIDTH - 1) / SA_WIDTH;
+  static constexpr int64_t W_PIECES = (TILE_W + SA_WIDTH - 1) / SA_WIDTH;
+  static constexpr Buf ACC{.id = 0, .bytes = f32(TILE_OC, TILE_H, TILE_W)},
+                       W_TILE{.id = 1, .bytes = f32(IC_PIECES, TILE_OC, SA_WIDTH)},
+                       X_TILE{.id = 2, .bytes = f32(TILE_H, W_PIECES, SA_WIDTH, TILE_IC)};
+  static constexpr std::array buffers{ACC, W_TILE, X_TILE};
+  static constexpr Node ACC_INIT{.id = 0, .count = 2}, MATMUL{.id = 1, .count = 2};
+  static constexpr int32_t AXIS_O_C = 0, AXIS_O_H = 1, AXIS_O_W = 2, AXIS_I_C = 3;
+  static constexpr const char* CONV_NAMES = "I_C I_H I_W O_C O_H O_W K_H K_W S_H S_W D_H D_W P_T P_L P_B P_R";
 
-static const int32_t ELEM_BITS = KERNEL_ELEM_BITS;
+  struct TileArgs {
+    int64_t oc0, oh0, ow0, I_C, I_H, I_W, O_C, O_H, O_W, K_H, K_W, S_H, S_W, D_H, D_W, P_T, P_L, P_B, P_R;
+  };
 
-static const int32_t ARG_X   = 0;
-static const int32_t ARG_W   = 1;
-static const int32_t ARG_OUT = 2;
+  // One work-item per output tile: output channels, then rows, then columns.
+  void entry(Kernel& k) const {
+    const auto [I_C, I_H, I_W, O_C, O_H, O_W, K_H, K_W, S_H, S_W, D_H, D_W, P_T, P_L, P_B, P_R] =
+        shape<16>(k, {.kernel = "conv",
+                      .names = CONV_NAMES,
+                      .example = {64, 16, 16, 64, 16, 16, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1},
+                      .extents = 12});
+    window_fits("row", O_H, S_H, K_H, D_H, I_H + P_T + P_B);
+    window_fits("column", O_W, S_W, K_W, D_W, I_W + P_L + P_R);
+    for (int64_t oc0 = 0; oc0 < O_C; oc0 += TILE_OC)
+      for (int64_t oh0 = 0; oh0 < O_H; oh0 += TILE_H)
+        for (int64_t ow0 = 0; ow0 < O_W; ow0 += TILE_W)
+          dispatch<&Conv::tile>(k, TileArgs{.oc0 = oc0, .oh0 = oh0, .ow0 = ow0, .I_C = I_C, .I_H = I_H, .I_W = I_W,
+                                            .O_C = O_C, .O_H = O_H, .O_W = O_W, .K_H = K_H, .K_W = K_W, .S_H = S_H,
+                                            .S_W = S_W, .D_H = D_H, .D_W = D_W, .P_T = P_T, .P_L = P_L, .P_B = P_B,
+                                            .P_R = P_R});
+  }
 
-static const int64_t BUF_ACC[1] = {0};
-static const int64_t BUF_W[1]   = {1};
-static const int64_t BUF_X[1]   = {2};
+  // Refuse a shape whose last output along `axis` reads past the padded input: its loads would leave the tensor.
+  static void window_fits(const char* axis, int64_t out, int64_t stride, int64_t kernel, int64_t dilation,
+                          int64_t padded) {
+    const int64_t last = (out - 1) * stride + (kernel - 1) * dilation;
+    if (last < padded) return;
+    std::fprintf(stderr, "kernel conv: output %s %lld reads input %s %lld, and the padded input has %lld %ss\n", axis,
+                 (long long)(out - 1), axis, (long long)last, (long long)padded, axis);
+    std::exit(1);
+  }
 
-static const int64_t MM_READ[3] = {0, 1, 2};
+  // A kernel position and TILE_K input channels is one compute, fed the weights and the input pixel each output of
+  // the tile reads there, S_H rows and S_W columns apart. A short tile loads, in SA-wide pieces, only what is left.
+  void tile(Item& w, const TileArgs& a) const {
+    const int64_t x_row = (a.I_W + a.P_L + a.P_R) * a.I_C, x_plane = (a.I_H + a.P_T + a.P_B) * x_row;
+    const int64_t tn = extent({.dim = a.O_C, .at = a.oc0, .tile = TILE_OC});
+    const int64_t th = extent({.dim = a.O_H, .at = a.oh0, .tile = TILE_H});
+    const int64_t tw = extent({.dim = a.O_W, .at = a.ow0, .tile = TILE_W});
+    const int64_t out = short_axis({.axis = AXIS_O_C, .extent = tn, .tile = TILE_OC}) |
+                        short_axis({.axis = AXIS_O_H, .extent = th, .tile = TILE_H}) |
+                        short_axis({.axis = AXIS_O_W, .extent = tw, .tile = TILE_W});
+    const Dims x_strides{x_plane, a.S_H * x_row, a.S_W * a.I_C, 1};
+    const Dims w_strides{a.I_C * a.O_C * a.K_W, a.I_C * a.O_C, a.I_C, 1};
 
-static const int32_t SYNC  = 0;
-static const int32_t ASYNC = 1;
-static const int32_t DENSE = 0;
-
-static const uint64_t SEM_NONE = 0;
-static const uint64_t SEM_X    = 1;
-static const uint64_t SEM_W    = 2;
-
-static const int32_t CT_SEGMENT = 0;
-
-static const int64_t  NODES        = 2;
-static const uint64_t TID_ACC_INIT = 0;
-static const uint64_t TID_MATMUL   = 1;
-
-static const int32_t AXIS_O_C = 0;
-static const int32_t AXIS_O_H = 1;
-static const int32_t AXIS_O_W = 2;
-static const int32_t AXIS_I_C = 3;
-
-extern "C" const int32_t togsim_spad_buffer_count = 3;
-extern "C" const int64_t togsim_spad_buffer_bytes[3] = {
-    TILE_N * TILE_I_H * TILE_M * KERNEL_ELEM_BYTES,
-    KERNEL_CEIL(TILE_K, SA) * TILE_N * SA * KERNEL_ELEM_BYTES,
-    TILE_I_H * KERNEL_CEIL(TILE_M, SA) * SA * TILE_K * KERNEL_ELEM_BYTES};
-
-#define CONV_NAMES "I_C I_H I_W O_C O_H O_W K_H K_W S_H S_W D_H D_W P_T P_L P_B P_R"
-static const int32_t CONV_ARGS = 16;
-static const int32_t CONV_EXTENTS = 12;
-
-// One output tile at (oc0, oh0, ow0). A kernel position and TILE_K input channels is one compute, fed the weights
-// and the one input pixel each output of the tile reads there: S_H rows and S_W columns apart. A tile short of
-// outputs or channels loads, in SA-wide pieces, only what is left, and computes under the tile id of its variant.
-static void conv_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
-  (void)n_iv;
-  const int64_t oc0 = iv[0], oh0 = iv[1], ow0 = iv[2];
-  const int64_t I_C = iv[3], I_H = iv[4], I_W = iv[5], O_C = iv[6], O_H = iv[7], O_W = iv[8], K_H = iv[9], K_W = iv[10];
-  const int64_t S_H = iv[11], S_W = iv[12], D_H = iv[13], D_W = iv[14];
-  const int64_t X_H = I_H + iv[15] + iv[17], X_W = I_W + iv[16] + iv[18];
-  const int64_t X_ROW = X_W * I_C;
-  const int64_t tn = kernel_extent(O_C, oc0, TILE_N), th = kernel_extent(O_H, oh0, TILE_I_H);
-  const int64_t tw = kernel_extent(O_W, ow0, TILE_M);
-  const int64_t out_short = kernel_short(tn, TILE_N, AXIS_O_C) | kernel_short(th, TILE_I_H, AXIS_O_H) |
-                            kernel_short(tw, TILE_M, AXIS_O_W);
-  const int64_t TILE_OUT[4]   = {1, tn, th, tw};
-  const int64_t STRIDE_X[4]   = {X_H * X_ROW, S_H * X_ROW, S_W * I_C, 1};
-  const int64_t STRIDE_W[4]   = {I_C * O_C * K_W, I_C * O_C, I_C, 1};
-  const int64_t STRIDE_OUT[4] = {0, O_H * O_W, O_W, 1};
-
-  togsim_compute(ctx, kernel_tile_id(out_short, NODES, TID_ACC_INIT), CT_SEGMENT, 0, nullptr,
-                 nullptr, 0, BUF_ACC, 1);
-
-  for (int64_t kh = 0; kh < K_H; ++kh) {
-    for (int64_t kw = 0; kw < K_W; ++kw) {
-      for (int64_t ic0 = 0; ic0 < I_C; ic0 += TILE_K) {
-        const int64_t tk = kernel_extent(I_C, ic0, TILE_K);
-        const int64_t x_off = (oh0 * S_H + kh * D_H) * X_ROW + (ow0 * S_W + kw * D_W) * I_C + ic0;
-        const int64_t w_off = (kh * K_W + kw) * O_C * I_C + oc0 * I_C + ic0;
-
-        for (int64_t s = 0; s < tk; s += SA) {
-          const int64_t TILE_W[4] = {1, 1, tn, kernel_extent(tk, s, SA)};
-          togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_W, (uint64_t)(w_off + s),
-                     4, TILE_W, STRIDE_W, ELEM_BITS,
-                     ASYNC, SEM_W, nullptr, 0, BUF_W, 1, DENSE);
-        }
-        for (int64_t r = 0; r < th; ++r) {
-          for (int64_t s = 0; s < tw; s += SA) {
-            const int64_t TILE_X[4] = {1, 1, kernel_extent(tw, s, SA), tk};
-            togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X,
-                       (uint64_t)(x_off + r * S_H * X_ROW + s * S_W * I_C),
-                       4, TILE_X, STRIDE_X, ELEM_BITS,
-                       ASYNC, SEM_X, nullptr, 0, BUF_X, 1, DENSE);
+    compute(w, {.node = ACC_INIT, .variant = out, .writes = {ACC}});
+    for (int64_t kh = 0; kh < a.K_H; ++kh) {
+      for (int64_t kw = 0; kw < a.K_W; ++kw) {
+        for (int64_t ic0 = 0; ic0 < a.I_C; ic0 += TILE_IC) {
+          const int64_t tk = extent({.dim = a.I_C, .at = ic0, .tile = TILE_IC});
+          const int64_t x_off = (a.oh0 * a.S_H + kh * a.D_H) * x_row + (a.ow0 * a.S_W + kw * a.D_W) * a.I_C + ic0;
+          const int64_t w_off = (kh * a.K_W + kw) * a.O_C * a.I_C + a.oc0 * a.I_C + ic0;
+          Batch x = batch(w), wb = batch(w);
+          for (int64_t s = 0; s < tk; s += SA_WIDTH) {
+            const int64_t piece = extent({.dim = tk, .at = s, .tile = SA_WIDTH});
+            const Desc weights{
+                .ptr = 1, .type = f32, .offset = w_off + s, .dims = {1, 1, tn, piece}, .strides = w_strides};
+            load(w, {.from = weights, .to = W_TILE, .batch = wb});
           }
+          for (int64_t r = 0; r < th; ++r) {
+            for (int64_t s = 0; s < tw; s += SA_WIDTH) {
+              const int64_t piece = extent({.dim = tw, .at = s, .tile = SA_WIDTH});
+              const int64_t at = x_off + r * a.S_H * x_row + s * a.S_W * a.I_C;
+              const Desc pixels{.ptr = 0, .type = f32, .offset = at, .dims = {1, 1, piece, tk}, .strides = x_strides};
+              load(w, {.from = pixels, .to = X_TILE, .batch = x});
+            }
+          }
+          wait(w, {.batch = wb});
+          wait(w, {.batch = x});
+          const int64_t variant = out | short_axis({.axis = AXIS_I_C, .extent = tk, .tile = TILE_IC});
+          compute(w, {.node = MATMUL, .variant = variant, .reads = {ACC, W_TILE, X_TILE}, .writes = {ACC}});
         }
-        togsim_memory_barrier(ctx, SEM_W, tn * tk);
-        togsim_memory_barrier(ctx, SEM_X, th * tw * tk);
-        togsim_compute(ctx, kernel_tile_id(out_short | kernel_short(tk, TILE_K, AXIS_I_C), NODES, TID_MATMUL),
-                       CT_SEGMENT, 0, nullptr, MM_READ, 3, BUF_ACC, 1);
       }
     }
+    const Desc dst{.ptr = 2,
+                   .type = f32,
+                   .offset = a.oc0 * a.O_H * a.O_W + a.oh0 * a.O_W + a.ow0,
+                   .dims = {1, tn, th, tw},
+                   .strides = {0, a.O_H * a.O_W, a.O_W, 1}};
+    store(w, {.from = ACC, .to = dst});
   }
-
-  togsim_dma(ctx, TOGSIM_DMA_STORE, ARG_OUT,
-             (uint64_t)(oc0 * O_H * O_W + oh0 * O_W + ow0),
-             4, TILE_OUT, STRIDE_OUT, ELEM_BITS,
-             SYNC, SEM_NONE, BUF_ACC, 1, nullptr, 0, DENSE);
-}
-
-// Refuse a shape whose last output along `axis` reads past the padded input: its loads would leave the tensor.
-static void conv_window_fits(const char* axis, int64_t out, int64_t stride, int64_t kernel, int64_t dilation,
-                             int64_t padded) {
-  const int64_t last = (out - 1) * stride + (kernel - 1) * dilation;
-  if (last >= padded) {
-    fprintf(stderr, "kernel conv: output %s %lld reads input %s %lld, and the padded input has %lld %ss\n",
-            axis, (long long)(out - 1), axis, (long long)last, (long long)padded, axis);
-    exit(1);
-  }
-}
-
-// One work-item per output tile: output channels, then rows, then columns.
-extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n) {
-  static const int64_t EXAMPLE[CONV_ARGS] = {64, 16, 16, 64, 16, 16, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1};
-  int64_t iv[3 + CONV_ARGS];
-  int64_t* shape = iv + 3;
-  kernel_shape_from("conv", CONV_NAMES, CONV_ARGS, CONV_EXTENTS, EXAMPLE, shape_args, n, shape);
-  const int64_t O_C = shape[3], O_H = shape[4], O_W = shape[5];
-  conv_window_fits("row", O_H, shape[8], shape[6], shape[10], shape[1] + shape[12] + shape[14]);
-  conv_window_fits("column", O_W, shape[9], shape[7], shape[11], shape[2] + shape[13] + shape[15]);
-  int64_t key = 0;
-  for (iv[0] = 0; iv[0] < O_C; iv[0] += TILE_N) {
-    for (iv[1] = 0; iv[1] < O_H; iv[1] += TILE_I_H) {
-      for (iv[2] = 0; iv[2] < O_W; iv[2] += TILE_M) {
-        togsim_dispatch(ctx, conv_tile, iv, 3 + CONV_ARGS, key++);
-      }
-    }
-  }
-}
+};

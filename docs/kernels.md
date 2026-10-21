@@ -1,6 +1,6 @@
 # The kernel library
 
-`kernels/` holds fourteen kernels written by hand against the [TOG ABI](tog-abi.md), one
+`kernels/` holds fourteen kernels written by hand against [TOGSim API v1.0.0](tog-api.md), one
 `<name>_tog.cpp` each: `gemm`, `conv`, `attention`, `softmax`, `layernorm`, `embed_layernorm`,
 `global_avgpool`, `bias_act`, `bias_gelu`, `maxpool`, `adaptive_avgpool`, `concat`,
 `kvcache_concat` and `flatten`. They come from
@@ -8,7 +8,7 @@
 from TOG ABI 12 to 16. `tests/kernels/` replays them, and the [frontend](frontend.md) builds on
 them; neither the simulator nor its build needs them.
 
-- **Shape.** A kernel's dimensions are the shape arguments of `togsim_kernel`, which TOGSim reads
+- **Shape.** A kernel's dimensions are its shape arguments (`shape<N>`), which TOGSim reads
   from `tog_shape.txt` beside the TOG. The comment at the head of each file names them in order
   (`gemm`: `M K N`). Without a `tog_shape.txt` a kernel runs its example shape; another count
   than its own, or a dimension below 1, ends the run with exit `1` and a `kernel <name>: ...` line
@@ -22,17 +22,16 @@ them; neither the simulator nor its build needs them.
   loads and not their number or size. The addresses need the pads only as the padded extent, so
   an asymmetric padding costs nothing extra. `O_H` and `O_W` are arguments, not derived: a shape
   whose last output would read past the padded input is refused (exit `1`). It has no group count.
-- **Tile.** The tile a work-item moves and computes is compile-time, a `-D` macro per extent with
-  a default (`gemm`: `-DTM=32 -DTN=256 -DTK=64`). It cannot be a shape argument: TOGSim reads
-  `togsim_spad_buffer_bytes` before it calls `togsim_kernel`, and the buffer sizes follow from the
-  tile.
+- **Tile.** The tile a work-item moves and computes is compile-time, a `-D` build option per
+  extent with a default (`gemm`: `-DTM=32 -DTN=256 -DTK=64`). It cannot be a shape argument: TOGSim
+  reads the buffer sizes before it runs the kernel's `entry`, and they follow from the tile.
 - **Short last tiles.** A dimension the tile does not divide ends in a short tile: its DMAs move
   what is left of the dimension and no DMA leaves its tensor (conv clips its `SA`-wide loads the
   same way, so 3 input channels are loaded as 3). A short tile costs something else than a whole
-  one, so it computes under tile ids of its own: `tile id = node + nodes * variant`, where `node`
-  is the compute's id in the whole tile, `nodes` the kernel's count of them, and bit `i` of
-  `variant` is set when the tile is short on the kernel's axis `i` (`kernel_tile_id` in
-  `kernels/kernel_shape.h`). Variant 0 is the whole tile and keeps the ids the kernel always had,
+  one, so it computes under tile ids of its own: a compute's `Node{.id, .count}` and `variant` name
+  the row `id + count * variant`, where `id` is the compute's node in the whole tile, `count` the
+  kernel's count of them, and bit `i` of `variant` is set when the tile is short on the kernel's
+  axis `i` (`short_axis`). Variant 0 is the whole tile and keeps the ids the kernel always had,
   so a shape every tile divides names the same ids as before. A compute outside an inner loop
   carries only the axes of the loops around it. The axes, in bit order:
 
@@ -52,7 +51,7 @@ them; neither the simulator nor its build needs them.
 
   A gemm of `M K N = 100 200 300` in the default tile computes acc_init as ids 0, 2, 4, 6 and a
   block as the odd ids 1 to 15; a cycle table for it has 16 lines.
-- **Compute.** Every `togsim_compute` is `compute_type` `0`. `gemm`, `conv` and `attention` issue
+- **Compute.** Every `compute` lowers to `compute_type` `0`. `gemm`, `conv` and `attention` issue
   one compute per block of systolic work (a `TM x TK x TN` block of gemm's K loop) instead of one
   per preload and matmul; what a block costs and how many array-unit rows it holds is the cycle
   table's and the unit table's to say.
@@ -64,7 +63,7 @@ argument) and give the simulator a cycle table and a unit table with a row per t
 (two at a shape the tile divides, as here; the ids of the short variants as well at another):
 
 ```bash
-mkdir -p /tmp/gemm && g++ -std=c++17 -shared -fPIC -Iinclude kernels/gemm_tog.cpp -o /tmp/gemm/tog.so
+mkdir -p /tmp/gemm && g++ -std=c++20 -shared -fPIC -Iinclude kernels/gemm_tog.cpp -o /tmp/gemm/tog.so
 printf '131072\n262144\n131072\n' > /tmp/gemm/tog_tensors.txt        # A 128x256, B 256x256, C 128x256
 printf '128\t0\n8206\t0\n' > /tmp/gemm/tog_cycles.tsv                # tile 0 accumulator init, tile 1 a block
 printf '0\tTPUV6E_MXU\trows\t1\t0\n1\tTPUV6E_MXU\trows\t1\t8192\n' > /tmp/gemm/tog_units.tsv

@@ -34,7 +34,7 @@ def compile_so(cpp_path: str, include_dir: str, out_so: str, macros: list[str] =
         return out_so
     os.makedirs(os.path.dirname(out_so) or ".", exist_ok=True)
     subprocess.run(
-        [os.environ.get("CXX", "g++"), "-shared", "-fPIC", "-std=gnu++17", "-O1",
+        [os.environ.get("CXX", "g++"), "-shared", "-fPIC", "-std=c++20", "-O1",
          "-I", include_dir, *[f"-D{m}" for m in macros], cpp_path, "-o", out_so],
         check=True, capture_output=True, text=True, errors="replace")
     return out_so

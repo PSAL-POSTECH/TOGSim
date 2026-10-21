@@ -1,80 +1,48 @@
-// Embedding lookup with its layer normalization, SEQ token ids into SEQ x DIM, one TSEQ x TDIM tile per work-item.
-// shape_args: SEQ DIM (example 128 256). Compile-time: -DTSEQ= -DTDIM= (the spad sizes); a short last tile has its
-// own tile id. The table load is modeled dense, as the original was: it depends on the ids but is not an indirect dma.
-#include "togsim_runtime.h"
+// Embedding lookup with its layer normalization, SEQ i64 token ids (argument 0) into SEQ x DIM rows of the table
+// (argument 1) and out (argument 2), one TSEQ x TDIM tile per work-item; a short tile has its own variant. The table
+// load waits for the ids but is dense. shape_args: SEQ DIM (example 128 256). Build options: -DTSEQ= -DTDIM=.
+#include "togsim.hpp"
+using namespace togsim;
 
-#include "kernel_shape.h"
-
-#ifndef TSEQ
-#define TSEQ 128
+struct EmbedLayernorm : Tog<EmbedLayernorm> {
+#ifdef TSEQ
+  static constexpr int64_t TILE_SEQ = TSEQ;
+#else
+  static constexpr int64_t TILE_SEQ = 128;
 #endif
-#ifndef TDIM
-#define TDIM 64
+#ifdef TDIM
+  static constexpr int64_t TILE_DIM = TDIM;
+#else
+  static constexpr int64_t TILE_DIM = 64;
 #endif
+  static constexpr Buf IDS{.id = 0, .bytes = i64(TILE_SEQ, TILE_DIM)}, ROW{.id = 1, .bytes = f32(TILE_SEQ, TILE_DIM)};
+  static constexpr std::array buffers{IDS, ROW};
+  static constexpr Node GATHER{.id = 0, .count = 1};
+  static constexpr int32_t AXIS_SEQ = 0, AXIS_DIM = 1;
 
-static const int32_t ELEM_BITS = KERNEL_ELEM_BITS;
-static const int32_t IDX_BITS  = 64;
+  struct TileArgs {
+    int64_t s0, d0, SEQ, DIM;
+  };
 
-static const int32_t ARG_IDS   = 0;
-static const int32_t ARG_TABLE = 1;
-static const int32_t ARG_OUT   = 2;
-
-static const int64_t BUF_IDS[1] = {0};
-static const int64_t BUF_ROW[1] = {1};
-
-static const int64_t VEC_READ[2] = {0, 1};
-
-static const int64_t STRIDE_IDS[2] = {1, 0};
-static const int64_t STRIDE_ROW[2] = {0, 1};
-
-static const int32_t SYNC = 0;
-static const int32_t DENSE = 0;
-
-static const uint64_t SEM_NONE = 0;
-
-static const int32_t CT_VECTOR = 0;
-
-static const int64_t  NODES = 1;
-static const uint64_t TID_GATHER = 0;
-
-static const int32_t AXIS_SEQ = 0;
-static const int32_t AXIS_DIM = 1;
-
-extern "C" const int32_t togsim_spad_buffer_count = 2;
-extern "C" const int64_t togsim_spad_buffer_bytes[2] = {TSEQ * TDIM * (IDX_BITS / 8), TSEQ * TDIM * KERNEL_ELEM_BYTES};
-
-static void embed_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
-  (void)n_iv;
-  const int64_t s0 = iv[0], d0 = iv[1], SEQ = iv[2], DIM = iv[3];
-  const int64_t tseq = kernel_extent(SEQ, s0, TSEQ), tdim = kernel_extent(DIM, d0, TDIM);
-  const int64_t variant = kernel_short(tseq, TSEQ, AXIS_SEQ) | kernel_short(tdim, TDIM, AXIS_DIM);
-  const int64_t TILE[2] = {tseq, tdim};
-  const int64_t STRIDE_OUT[2] = {DIM, 1};
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_IDS, (uint64_t)s0,
-             2, TILE, STRIDE_IDS, IDX_BITS,
-             SYNC, SEM_NONE, nullptr, 0, BUF_IDS, 1, DENSE);
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_TABLE, (uint64_t)d0,
-             2, TILE, STRIDE_ROW, ELEM_BITS,
-             SYNC, SEM_NONE, BUF_IDS, 1, BUF_ROW, 1, DENSE);
-
-  togsim_compute(ctx, kernel_tile_id(variant, NODES, TID_GATHER), CT_VECTOR, 0, nullptr,
-                 VEC_READ, 2, nullptr, 0);
-  togsim_dma(ctx, TOGSIM_DMA_STORE, ARG_OUT, (uint64_t)(s0 * DIM + d0),
-             2, TILE, STRIDE_OUT, ELEM_BITS,
-             SYNC, SEM_NONE, BUF_ROW, 1, nullptr, 0, DENSE);
-}
-
-// One work-item per tile, in row-major order.
-extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n) {
-  static const int64_t EXAMPLE[2] = {128, 256};
-  int64_t shape[2];
-  kernel_shape("embed_layernorm", "SEQ DIM", 2, EXAMPLE, shape_args, n, shape);
-  const int64_t SEQ = shape[0], DIM = shape[1];
-  int64_t key = 0;
-  for (int64_t s0 = 0; s0 < SEQ; s0 += TSEQ) {
-    for (int64_t d0 = 0; d0 < DIM; d0 += TDIM) {
-      int64_t iv[4] = {s0, d0, SEQ, DIM};
-      togsim_dispatch(ctx, embed_tile, iv, 4, key++);
-    }
+  // One work-item per tile, in row-major order.
+  void entry(Kernel& k) const {
+    const auto [SEQ, DIM] = shape<2>(k, {.kernel = "embed_layernorm", .names = "SEQ DIM", .example = {128, 256}});
+    for (int64_t s0 = 0; s0 < SEQ; s0 += TILE_SEQ)
+      for (int64_t d0 = 0; d0 < DIM; d0 += TILE_DIM)
+        dispatch<&EmbedLayernorm::tile>(k, TileArgs{.s0 = s0, .d0 = d0, .SEQ = SEQ, .DIM = DIM});
   }
-}
+
+  void tile(Item& w, const TileArgs& a) const {
+    const int64_t tseq = extent({.dim = a.SEQ, .at = a.s0, .tile = TILE_SEQ});
+    const int64_t tdim = extent({.dim = a.DIM, .at = a.d0, .tile = TILE_DIM});
+    const int64_t variant = short_axis({.axis = AXIS_SEQ, .extent = tseq, .tile = TILE_SEQ}) |
+                            short_axis({.axis = AXIS_DIM, .extent = tdim, .tile = TILE_DIM});
+    const Desc ids{.ptr = 0, .type = i64, .offset = a.s0, .dims = {tseq, tdim}, .strides = {1, 0}};
+    const Desc table{.ptr = 1, .type = f32, .offset = a.d0, .dims = {tseq, tdim}, .strides = {0, 1}};
+    const Desc out{.ptr = 2, .type = f32, .offset = a.s0 * a.DIM + a.d0, .dims = {tseq, tdim}, .strides = {a.DIM, 1}};
+    load(w, {.from = ids, .to = IDS});
+    load(w, {.from = table, .to = ROW, .after = {IDS}});
+    compute(w, {.node = GATHER, .variant = variant, .reads = {IDS, ROW}});
+    store(w, {.from = ROW, .to = out});
+  }
+};

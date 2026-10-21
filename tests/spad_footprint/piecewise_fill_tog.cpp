@@ -1,34 +1,36 @@
 // A 16 KB load buffer filled by four 4 KB pieces, reloaded once after a consuming read,
 // and a 16 KB output drained by four 4 KB stores: each buffer counts 16 KB (one version),
 // so a work-item's spad footprint is 32 KB. Two work-items share the spad.
-#include "togsim_runtime.h"
+#include "togsim.hpp"
+using namespace togsim;
 
-#define ROWS 64
-#define COLS 64
-#define PIECE_ROWS 16
+struct PiecewiseFill : Tog<PiecewiseFill> {
+  static constexpr int64_t ROWS = 64, COLS = 64, PIECE_ROWS = 16;
+  static constexpr Buf IN{.id = 1, .bytes = f32(ROWS, COLS)}, OUT{.id = 2, .bytes = f32(ROWS, COLS)};
+  static constexpr std::array buffers{IN, OUT};
+  static constexpr Node STEP{.id = 0, .count = 1};
 
-static void pieces_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
-  (void)n_iv;
-  const int64_t piece[2] = {PIECE_ROWS, COLS}, st[2] = {COLS, 1};
-  const int64_t in[1] = {1}, out[1] = {2}, both[2] = {1, 2};
-  const uint64_t base = (uint64_t)iv[0] * ROWS * COLS;
-  for (int k = 0; k < 2; k++) {
-    for (int p = 0; p < ROWS / PIECE_ROWS; p++)
-      togsim_dma(ctx, 0, 0, base + p * PIECE_ROWS * COLS, 2, piece, st, 32, 0, 0, nullptr, 0, in, 1, 0);
-    if (k == 0) togsim_compute(ctx, 0, 0, 0, nullptr, in, 1, out, 1);
-    else        togsim_compute(ctx, 0, 0, 0, nullptr, both, 2, out, 1);
+  struct At {
+    int64_t i;
+  };
+
+  static constexpr Desc piece(int32_t ptr, int64_t at) {
+    return {.ptr = ptr, .type = f32, .offset = at, .dims = {PIECE_ROWS, COLS}, .strides = {COLS, 1}};
   }
-  for (int p = 0; p < ROWS / PIECE_ROWS; p++)
-    togsim_dma(ctx, 1, 1, base + p * PIECE_ROWS * COLS, 2, piece, st, 32, 0, 0, out, 1, nullptr, 0, 0);
-}
 
-extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape_args) {
-  (void)shape_args; (void)n_shape_args;
-  for (int64_t i = 0; i < 2; i++) {
-    int64_t iv[1] = {i};
-    togsim_dispatch(ctx, pieces_tile, iv, 1, i);
+  void entry(Kernel& k) const {
+    for (int64_t i = 0; i < 2; i++) dispatch<&PiecewiseFill::tile>(k, At{.i = i});
   }
-}
 
-extern "C" const int32_t togsim_spad_buffer_count = 3;
-extern "C" const int64_t togsim_spad_buffer_bytes[3] = {0, ROWS * COLS * 4, ROWS * COLS * 4};
+  void tile(Item& w, const At& a) const {
+    const int64_t base = a.i * ROWS * COLS;
+    for (int k = 0; k < 2; k++) {
+      for (int64_t p = 0; p < ROWS / PIECE_ROWS; p++)
+        load(w, {.from = piece(0, base + p * PIECE_ROWS * COLS), .to = IN});
+      if (k == 0) compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
+      else compute(w, {.node = STEP, .reads = {IN, OUT}, .writes = {OUT}});
+    }
+    for (int64_t p = 0; p < ROWS / PIECE_ROWS; p++)
+      store(w, {.from = OUT, .to = piece(1, base + p * PIECE_ROWS * COLS)});
+  }
+};

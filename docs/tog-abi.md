@@ -1,33 +1,34 @@
 # The TOG ABI
 
-The ABI is one header, `include/togsim_runtime.h`, at version 16 (`TOGSIM_ABI_VERSION`). A TOG is a
-C++ translation unit that includes it and is compiled to a shared object with
-`g++ -std=c++17 -shared -fPIC -I<TOGSim>/include`.
+A TOG has two layers:
+
+- **TOGSim API v1.0.0**, `include/togsim.hpp`: what every TOG author writes against, by hand or
+  from a compiler. [The TOGSim API](tog-api.md#togsim-api-v100) is its reference.
+- **The C ABI 16**, `include/togsim_runtime.h` (`TOGSIM_ABI_VERSION`): what togsim.hpp lowers
+  each call to and what TOGSim loads. This page is its reference: what the calls model, the
+  buffer and scratchpad rules, the files and tables, and the refusals.
+
+A TOG is compiled to a shared object with `g++ -std=c++20 -shared -fPIC -I<TOGSim>/include`.
 
 ## What a TOG defines and what it calls
 
-A TOG defines three symbols and gets a fourth from the header:
+A TOG `.so` exports four symbols. togsim.hpp defines all of them:
 
-| Symbol | Who writes it | What it is |
-|---|---|---|
-| `togsim_kernel(ctx, shape_args, n_shape_args)` | you, `extern "C"` | The entry point. |
-| `togsim_spad_buffer_count` | you, `extern "C" const int32_t` | The number of entries in the next array. |
-| `togsim_spad_buffer_bytes[]` | you, `extern "C" const int64_t[]` | The byte size of each spad buffer id; 0 for an id that is not a buffer. |
-| `togsim_abi_version` | the header | The ABI version the TOG was compiled against. Including the header defines it. |
-
-The `extern "C"` on the two constants is required: without it a C++ `const` has no external linkage
-and TOGSim cannot find it.
+| Symbol | What it is |
+|---|---|
+| `togsim_kernel(ctx, shape_args, n_shape_args)` | The entry point: the TOG's `entry`. |
+| `togsim_spad_buffer_count` | The number of entries in the next array. |
+| `togsim_spad_buffer_bytes[]` | The byte size of each spad buffer id, from the TOG's `buffers`; 0 for an id that is not a buffer. |
+| `togsim_abi_version` | The ABI version the TOG was compiled against. Including `togsim_runtime.h` defines it. |
 
 A TOG calls four functions, which TOGSim provides at load time:
 
 | Call | What it models |
 |---|---|
-| `togsim_dispatch(ctx, fn, iv, n_iv, key)` | Registers one work-item. Called from `togsim_kernel`. |
-| `togsim_dma(ctx, ...)` | One load or store. Called from a work-item body. |
-| `togsim_compute(ctx, ...)` | One compute. Called from a work-item body. |
-| `togsim_memory_barrier(ctx, sem, expected)` | A wait for asynchronous loads. Called from a work-item body. |
-
-`ctx` is an opaque handle; pass it through.
+| `togsim_dispatch(ctx, fn, iv, n_iv, key)` | Registers one work-item. `dispatch` in togsim.hpp. |
+| `togsim_dma(ctx, ...)` | One load or store. `load`, `load_async`, `store`. |
+| `togsim_compute(ctx, ...)` | One compute. `compute`. |
+| `togsim_memory_barrier(ctx, sem, expected)` | A wait for asynchronous loads. `wait`. |
 
 ## How a TOG is replayed
 
@@ -41,7 +42,7 @@ A TOG calls four functions, which TOGSim provides at load time:
 3. The recorded instructions run on the modeled core as [the model](tutorial.md#the-model) says: each as soon
    as the instructions it depends on are done and the resource it needs is free.
 
-Three rules follow, and none of them is checked for you:
+Three rules follow. togsim.hpp keeps the third; nothing checks the first two:
 
 - **A body must be pure.** It may read only `ctx` and its `iv`, and must make the same calls every
   time. A counter, a static variable or I/O in a body happens three times.
@@ -50,8 +51,9 @@ Three rules follow, and none of them is checked for you:
   Write the producer before the consumer: otherwise the consumer reads
   [data already on the chip](#data-that-is-already-on-the-chip). Two instructions that share no
   buffer are not ordered at all.
-- **Make body functions `static`.** In a session all TOGs are loaded into one process, and a
-  second kernel's non-static `body` function resolves to the first kernel's.
+- **Body functions have internal linkage.** In a session all TOGs are loaded into one process, and
+  a second kernel's exported `body` function would resolve to the first kernel's. togsim.hpp
+  gives every function of a TOG internal linkage.
 
 ## `togsim_dispatch`
 
@@ -90,7 +92,7 @@ void togsim_dma(EmitCtx* ctx, int32_t dir, int32_t arg_id,
 | `elem_bits` | The width of an element in bits: a multiple of 8. The division above is an integer division, so a width below 8 drops the offset. |
 | `is_async` | 0, or 1 for an asynchronous load. Pass 0 for a store. |
 | `sem` | The semaphore an asynchronous load signals. Ignored otherwise. |
-| `read_bufs`, `n_read` | For a store: the buffer it drains first, then any buffer it only depends on. For a load: null, 0. |
+| `read_bufs`, `n_read` | For a store: the buffer it drains first, then any buffer it only depends on (`.also`). For a load: any buffer it depends on (`.after`), else null, 0. |
 | `write_bufs`, `n_write` | For a load: the buffers it fills. For a store: null, 0. |
 | `indirect` | 0, or 1 for a gather or scatter (see [indirect DMAs](#indirect-dmas)). |
 
@@ -207,8 +209,8 @@ indirect DMAs from 0. The file holds one native `uint64` per element of the data
 offset in elements. If the file is absent or has another size the DMA is modeled as a dense data
 tile, with one warning (`[TOGSim] indirect dma without its index dump ...`) and a summary line
 (`[TOGSim] indirect dmas: X with their index dump, Y without`). An indirect store lists its index
-buffer after the buffer it drains, in `read_bufs`. `tests/spad_footprint/indirect_store_tog.cpp` is
-a worked example.
+buffer after the buffer it drains, in `read_bufs` (`.also` in togsim.hpp; `Desc.indirect` sets
+`indirect`). `tests/spad_footprint/indirect_store_tog.cpp` is a worked example.
 
 ## Files beside `tog.so`
 
@@ -340,14 +342,11 @@ needs a unit table that has rows of its array unit**. To run without one, set
 
 | Message | Exit | Cause | Fix |
 |---|---|---|---|
-| `togsim: refusing TOG <so>: it was built against TOG ABI 15, TOGSim expects ABI 16; rebuild the TOG` | 1 | The TOG's `togsim_abi_version` is another number: it was compiled against another version of the header. | Recompile it against this tree's `include/`. |
-| `togsim: refusing TOG <so>: it embeds no togsim_abi_version (built without togsim_runtime.h); TOGSim expects ABI 16` | 1 | The TOG does not include the header. | Include it instead of declaring the calls yourself. |
-| `togsim: dlsym togsim_kernel failed: <so>: undefined symbol: togsim_kernel` | 1 | The TOG defines no `togsim_kernel`. | Define it, `extern "C"`. |
-| `togsim: refusing TOG <so>: it states no spad buffer sizes (togsim_spad_buffer_count / togsim_spad_buffer_bytes)` | 1 | The buffer table is missing or not `extern "C"`. | Define both constants. |
 | `[TOGSim] spad buffer 2 is DMA'd but the TOG states no size for it (togsim_spad_buffer_bytes has 2 entries)` | 1 | A DMA moves a buffer whose id is past the table or has size 0. | Add its size. |
-| `[TOGSim] wait expects another element count: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects 2048` | 1 | `expected` is not the sum of the loads' element counts. | Pass the sum. |
-| `[TOGSim] wait on a semaphore never signaled: work-item 0 (key 0) sem 8 signaled 0 elements, wait expects 4096` | 1 | The barrier names a semaphore no asynchronous load of this work-item used. | Use the loads' `sem`. |
-| `[TOGSim] unwaited load batch: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects none` | 1 | An asynchronous load has no barrier after it. | Add the barrier, or make the load synchronous. |
+| `togsim.hpp: no TOG registered: derive the TOG's struct from togsim::Tog<itself>` | 1 | The TOG's struct does not derive from `togsim::Tog<itself>` (generated code: no `register_tog`). | Derive it. |
+| `togsim.hpp: a work-item returned with an async batch it did not wait` | 1 | A load joined a batch that no `wait` closed. | Wait for it, or make the load synchronous. |
+| `togsim.hpp: a wait on a batch that no load joined` | 1 | A `wait` on a batch no load joined. | Wait on the loads' batch. |
+| `togsim.hpp: a batch that is not open: waited already, or never made by load_async() or batch()` | 1 | A second `wait` on one batch, or a `Batch` from elsewhere. | Wait once. |
 | `[TOGSim] TOG <so>: work-item 0 (key 0) computes tile id 1, which the cycle table does not hold (it has 1 tile ids, 0 to 0)` | 1 | A `togsim_compute` names a `tile_id` at or beyond the number of rows of the cycle table. | Add the row, or fix the `tile_id`. |
 | `[TOGSim] --tog_so needs --cycle_table: the TOG's computes take their cycles from it` | 1 | No `--cycle_table`. | Give the table. |
 | `[TOGSim] cycle table <file> cannot be opened: the TOG's computes take their cycles from it` | 1 | The path of the cycle table is wrong. | Fix the path. |
@@ -372,10 +371,19 @@ In a session a refusal is the error of the command that met it, `[TOGSim] Error 
 contract is the launch's error too; without a spad size it is the error of the `DEVICE_SYNC` that
 runs the kernel.
 
-TOGSim has more refusals than a first TOG runs into. These are not in the example; all exit 1:
+TOGSim has more refusals than a first TOG runs into. These are not in the example; all exit 1.
+Only a TOG written on the raw C ABI can meet the first eight and `issued tile is not supported
+format`: togsim.hpp refuses those mistakes itself ([its refusals](tog-api.md#refusals)).
 
 | Message contains | Cause |
 |---|---|
+| `togsim: refusing TOG <so>: it was built against TOG ABI 15, TOGSim expects ABI 16; rebuild the TOG` | The TOG's `togsim_abi_version` is another number: it was compiled against another version of the header. |
+| `togsim: refusing TOG <so>: it embeds no togsim_abi_version (built without togsim_runtime.h); TOGSim expects ABI 16` | The TOG does not include the header. |
+| `togsim: dlsym togsim_kernel failed: <so>: undefined symbol: togsim_kernel` | The TOG defines no `togsim_kernel`. |
+| `togsim: refusing TOG <so>: it states no spad buffer sizes (togsim_spad_buffer_count / togsim_spad_buffer_bytes)` | The buffer table is missing or not `extern "C"`. |
+| `[TOGSim] wait expects another element count: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects 2048` | `expected` is not the sum of the loads' element counts. |
+| `[TOGSim] wait on a semaphore never signaled: work-item 0 (key 0) sem 8 signaled 0 elements, wait expects 4096` | The barrier names a semaphore no asynchronous load of this work-item used. |
+| `[TOGSim] unwaited load batch: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects none` | An asynchronous load has no barrier after it. |
 | `re-wait expects another element count` | A second barrier on a semaphore, with no new loads, states another count than the first. |
 | `issued tile is not supported format` | A DMA has `ndim` 0, `ndim` above 4, or null `dims`. |
 | `[Simulator] simulation wedged at cycle <n>: work remains but nothing is in flight` | A work-item waits for spad that is never freed, in a way the loader does not see ([known limitations](running.md#known-limitations)). |
@@ -390,20 +398,12 @@ TOGSim has more refusals than a first TOG runs into. These are not in the exampl
 
 ## Checklist for a TOG generator
 
-If you emit TOGs from another frontend, this is the whole contract:
+A frontend that emits TOGs writes them against togsim.hpp, like a hand-written TOG
+([generated code](tog-api.md#generated-code)). Beside the TOG it writes:
 
-1. Emit one C++ file that includes `togsim_runtime.h` and defines `togsim_kernel` and the two
-   buffer-table constants, all `extern "C"`. Make every body function `static`.
-2. In `togsim_kernel`, call `togsim_dispatch` once per work-item, passing the loop indices in `iv`.
-3. In each body, emit producers before consumers, pass explicit `strides`, use `compute_type` 0
-   and an `elem_bits` that is a multiple of 8, and follow every batch of asynchronous loads with a
-   barrier that states their element count. Number buffers per work-item; the same ids can serve
-   every work-item.
-4. Number the distinct kinds of compute from 0 and use that number as `tile_id`.
-5. Compile with `g++ -std=c++17 -shared -fPIC -I<TOGSim>/include`.
-6. Write `tog_tensors.txt` (and `tog_shape.txt` if the kernel reads shape arguments) beside the
-   `.so`.
-7. Write the cycle table, one row per `tile_id` and no header, and the unit table, with at least
-   one row per `tile_id` and a row of the array unit for every compute tile that uses the array.
-8. Replay once with `--log_level trace` and check that there is no `[warning]` line, and the
-   computes, addresses and issue order.
+1. `tog_tensors.txt`, and `tog_shape.txt` if the kernel reads shape arguments.
+2. The cycle table, one row per row a compute names (`node.id + node.count * variant`) and no
+   header, and the unit table, with at least one row per such row and a row of the array unit for
+   every compute that uses the array.
+3. Then it replays once with `--log_level trace` and checks that there is no `[warning]` line, and
+   the computes, addresses and issue order.

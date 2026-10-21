@@ -1,5 +1,5 @@
 == tiles
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/tiles/tiles_tog.cpp -o examples/tiles/tog.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/tiles/tiles_tog.cpp -o examples/tiles/tog.so
 # examples/tiles/two_cores.gen.yml: configs/tpuv6e.yml with num_cores: 2
 # examples/tiles/four_cores.gen.yml: configs/tpuv6e.yml with num_cores: 4
 # examples/tiles/small_spad.gen.yml: configs/tpuv6e.yml with no vpu_spad_size_kb_per_lane, core_spad_size_kb: 48

@@ -14,9 +14,9 @@ other tables and in prose were copied from those files by hand.
 Three things nest:
 
 ```
-kernel       one TOG; its entry point togsim_kernel runs once
-  work-item  one togsim_dispatch call: a body function and its loop indices, bound to one core
-    instruction  one call in the body: togsim_dma, togsim_compute or togsim_memory_barrier
+kernel       one TOG; its entry runs once
+  work-item  one dispatch: a body function and its arguments, bound to one core
+    instruction  one call in the body: load, store, compute or wait
 ```
 
 **What a core can do at once.** The simulator enforces each of these limits:
@@ -54,10 +54,10 @@ Six terms carry the rest of these pages; the [glossary](glossary.md#glossary) ha
 | Term | Meaning |
 |---|---|
 | TOG | A shared object (`tog.so`) whose calls are one kernel's DMAs, computes and barriers. |
-| work-item | One `togsim_dispatch` call: the unit of parallelism. The log calls it a tile: `TILE_SCHEDULED`, `tile=N`. |
+| work-item | One `dispatch`: the unit of parallelism. The log calls it a tile: `TILE_SCHEDULED`, `tile=N`. |
 | DMA, data tile | A DMA is a transfer between DRAM and a core's scratchpad: a load (`MOVIN` in the log) or a store (`MOVOUT`). The block of a tensor it moves is a data tile. |
 | buffer | A region of the scratchpad, named by a small integer id. Buffers are what DMAs fill and drain, and what orders instructions. |
-| compute tile, `tile_id` | A kind of compute. Every `togsim_compute` call names one by its `tile_id`, and many calls can name the same one. |
+| compute tile, `tile_id` | A kind of compute: a row of the cycle table. Every `compute` names one, `node.id + node.count * variant`, and many calls can name the same one. |
 | cycle table, unit table | Per `tile_id`: how many cycles the compute takes, and what each hardware unit did during it. You supply both. |
 
 ## 1. Load, compute, store
@@ -65,69 +65,42 @@ Six terms carry the rest of these pages; the [glossary](glossary.md#glossary) ha
 `examples/hello/hello_tog.cpp` is a complete TOG:
 
 ```cpp
-#include "togsim_runtime.h"
+#include "togsim.hpp"
+using namespace togsim;
 
-#define ROWS 64
-#define COLS 64
+struct Hello : Tog<Hello> {
+  static constexpr Buf IN{.id = 1, .bytes = f32(64, 64)}, OUT{.id = 2, .bytes = f32(64, 64)};
+  static constexpr std::array buffers{IN, OUT};
+  static constexpr Node STEP{.id = 0, .count = 1};
+  static constexpr Desc SRC{.ptr = 0, .type = f32, .offset = 0, .dims = {64, 64}, .strides = {64, 1}};
+  static constexpr Desc DST{.ptr = 1, .type = f32, .offset = 0, .dims = {64, 64}, .strides = {64, 1}};
 
-// The body of the work-item: each call is one modeled instruction, and the buffer ids order them.
-static void body(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
-  (void)iv; (void)n_iv;
-  const int64_t dims[2] = {ROWS, COLS}, strides[2] = {COLS, 1};
-  const int64_t in[1] = {1}, out[1] = {2};
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, 0, 0, 2, dims, strides, 32, 0, 0, nullptr, 0, in, 1, 0);
-  togsim_compute(ctx, 0, 0, 0, nullptr, in, 1, out, 1);
-  togsim_dma(ctx, TOGSIM_DMA_STORE, 1, 0, 2, dims, strides, 32, 0, 0, out, 1, nullptr, 0, 0);
-}
+  void entry(Kernel& k) const { dispatch<&Hello::body>(k); }
 
-// The entry point, called once when the TOG is loaded: it registers the one work-item.
-extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape_args) {
-  (void)shape_args; (void)n_shape_args;
-  togsim_dispatch(ctx, body, nullptr, 0, 0);
-}
-
-// The byte size of each spad buffer id named above; id 0 is not a buffer.
-extern "C" const int32_t togsim_spad_buffer_count = 3;
-extern "C" const int64_t togsim_spad_buffer_bytes[3] = {0, ROWS * COLS * 4, ROWS * COLS * 4};
+  void body(Item& w) const {
+    load(w, {.from = SRC, .to = IN});
+    compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
+    store(w, {.from = OUT, .to = DST});
+  }
+};
 ```
 
-Read it from the bottom up:
+Read it from the top down:
 
-- **The buffer table.** The TOG uses spad buffers 1 and 2. `togsim_spad_buffer_bytes[id]` is the
-  size of buffer `id`, here 64 x 64 elements of 4 bytes each.
-- **`togsim_kernel`** is the entry point. It calls `togsim_dispatch` once per work-item; this TOG
-  has one.
+- **`buffers`.** The TOG uses spad buffers 1 and 2, each 64 x 64 elements of 4 bytes. Every
+  buffer a call names must be in this list.
+- **`STEP`** is the compute node: node 0 of the kernel's 1. A compute takes row
+  `id + count * variant` of the cycle table; with the default variant 0 that is row 0.
+- **`SRC` and `DST`** are DMA descriptors: tensor argument `ptr` (0 is the first line of
+  `tog_tensors.txt`), elements of `f32`, from element `offset`, `dims` 64 x 64 with rows `strides`
+  64 elements apart, so one contiguous block.
+- **`entry`** runs once and dispatches each work-item; this TOG has one.
 - **`body`** is the body of that work-item. Its three calls are three instructions: a load into
   buffer 1, a compute that reads buffer 1 and writes buffer 2, and a store of buffer 2.
 
-The calls take positional arguments. The load, argument by argument:
-
-| # | Argument | Here | Meaning |
-|---|---|---|---|
-| 1 | `ctx` | `ctx` | The handle the body was given. |
-| 2 | `dir` | `TOGSIM_DMA_LOAD` | A load: DRAM to spad. |
-| 3 | `arg_id` | `0` | Tensor argument 0, the first line of `tog_tensors.txt`. |
-| 4 | `offset` | `0` | The data tile starts at element 0 of that tensor. |
-| 5, 6 | `ndim`, `dims` | `2`, `{64, 64}` | It is 64 x 64 elements. |
-| 7 | `strides` | `{64, 1}` | Its rows are 64 elements apart, so it is one contiguous block. |
-| 8 | `elem_bits` | `32` | An element is 4 bytes. |
-| 9, 10 | `is_async`, `sem` | `0`, `0` | Synchronous; no semaphore (step 2). |
-| 11, 12 | `read_bufs`, `n_read` | `nullptr`, `0` | A load reads no buffer. |
-| 13, 14 | `write_bufs`, `n_write` | `in`, `1` | It fills one buffer, id 1. |
-| 15 | `indirect` | `0` | Not a gather. |
-
-The store is the same call with `TOGSIM_DMA_STORE`, tensor argument 1, and the buffer in
-`read_bufs` instead of `write_bufs`. The compute:
-
-| # | Argument | Here | Meaning |
-|---|---|---|---|
-| 2 | `tile_id` | `0` | Compute tile 0: row 0 of the cycle table gives its cycles. |
-| 3 | `compute_type` | `0` | Always 0. |
-| 4, 5 | `ndim`, `dims` | `0`, `nullptr` | Not used. |
-| 6, 7 | `read_bufs`, `n_read` | `in`, `1` | It reads buffer 1, so it waits for the load that fills buffer 1. |
-| 8, 9 | `write_bufs`, `n_write` | `out`, `1` | It writes buffer 2, so the store that reads buffer 2 waits for it. |
-
-[The TOG ABI](tog-abi.md#the-tog-abi) has the full reference of each call.
+Every call takes one struct of named arguments. A load is synchronous unless it names a batch
+(step 2). [The TOGSim API](tog-api.md#togsim-api-v100) lists every call and field, and
+[the TOG ABI](tog-abi.md#the-tog-abi) the C call each one lowers to.
 
 Three small files stand beside the source:
 
@@ -139,7 +112,8 @@ Three small files stand beside the source:
 
 `tog_tensors.txt` must be in the directory of `tog.so` under that name. The two tables are named on
 the command line: `--cycle_table` is always required, `--unit_table` on every shipped config. The
-TOG links against nothing: TOGSim provides the four `togsim_*` functions when it loads the TOG.
+TOG links against nothing: togsim.hpp lowers each call to one of four C functions that TOGSim
+provides when it loads the TOG.
 
 ```bash
 examples/run.sh hello
@@ -150,7 +124,7 @@ The script echoes each command after `+`. Its first run is the replay of the Qui
 
 ```text
 == hello
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/hello/hello_tog.cpp -o examples/hello/tog.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/hello/hello_tog.cpp -o examples/hello/tog.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false ...
@@ -189,7 +163,7 @@ cp examples/hello/hello_tog.cpp my_kernel/my_tog.cpp
 printf '16384\n16384\n' > my_kernel/tog_tensors.txt
 printf '600\t0\n' > my_kernel/tog_cycles.tsv
 printf '0\tTPUV6E_MXU\trows\t1\t128\n0\tVpu\tcycles\t1\t100\n' > my_kernel/tog_units.tsv
-g++ -std=c++17 -shared -fPIC -O1 -Iinclude my_kernel/my_tog.cpp -o my_kernel/tog.so
+g++ -std=c++20 -shared -fPIC -O1 -Iinclude my_kernel/my_tog.cpp -o my_kernel/tog.so
 build/bin/Simulator --config configs/tpuv6e.yml \
   --tog_so my_kernel/tog.so --cycle_table my_kernel/tog_cycles.tsv \
   --unit_table my_kernel/tog_units.tsv | tail -n 1
@@ -205,23 +179,23 @@ Change the 600 in `tog_cycles.tsv` to 1000 and the total becomes 2837.
 
 A load can be synchronous or asynchronous.
 
-- A **synchronous** load (`is_async` 0) is finished when its data has arrived (on tpuv6e, 842
-  cycles after that). Whatever reads its buffer simply waits for it.
-- An **asynchronous** load (`is_async` 1) counts as finished once its last request has been sent,
-  without waiting for the data, and signals a semaphore with the number of elements it moves. The
-  TOG must then call `togsim_memory_barrier` on that semaphore before it uses the data.
+- A **synchronous** load is finished when its data has arrived (on tpuv6e, 842 cycles after
+  that). Whatever reads its buffer simply waits for it.
+- An **asynchronous** load joins a batch (`.batch`). It counts as finished once its last request
+  has been sent, without waiting for the data. The TOG must then `wait` for the batch before it
+  uses the data.
 
 `examples/async_barrier/async_barrier_tog.cpp` loads two operands the second way:
 
 ```cpp
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, 0, 0, 2, dims, strides, 32, 1, SEM, nullptr, 0, a, 1, 0);
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, 1, 0, 2, dims, strides, 32, 1, SEM, nullptr, 0, b, 1, 0);
-  togsim_memory_barrier(ctx, SEM, 2 * ROWS * COLS);
+    Batch ab = batch(w);
+    load(w, {.from = LHS, .to = A, .batch = ab});
+    load(w, {.from = RHS, .to = B, .batch = ab});
+    wait(w, {.batch = ab});
 ```
 
-The barrier waits for every load signaled on `SEM` since the last barrier on it, and its last
-argument must be the sum of their element counts (here two loads of 64 x 64). After the barrier,
-a compute that reads buffer 1 or 2 waits for the barrier, not for the loads.
+`wait` waits for every load of the batch and closes it; in the log it is a barrier, `MEMORY_BAR`.
+After it, a compute that reads buffer 1 or 2 waits for the barrier, not for the loads.
 
 ```bash
 examples/run.sh async_barrier
@@ -263,8 +237,8 @@ A barrier holds every reader of its loads' buffers until the whole batch has com
 synchronous load releases its readers when it completes, without waiting for the other load,
 which is cycle 1011 for A. In these runs the asynchronous form is never the faster one. Use it to replay a kernel that
 really issues a batch of loads and then waits for all of them; in a hand-written TOG, synchronous
-loads are simpler. A TOG that signals a semaphore and never waits on it, or waits for another
-count, is refused (step 6).
+loads are simpler. A work-item that returns without waiting for a batch a load joined is refused
+(step 6).
 
 ## 3. Many work-items, on one core, two and four
 
@@ -272,27 +246,24 @@ A real kernel is a loop over data tiles. `examples/tiles/tiles_tog.cpp` dispatch
 per cell of an M x N grid, in ordinary C++ loops:
 
 ```cpp
-extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape_args) {
-  const int64_t M = n_shape_args > 0 ? shape_args[0] : 1, N = n_shape_args > 1 ? shape_args[1] : 1;
-  for (int64_t m = 0; m < M; m++)
-    for (int64_t n = 0; n < N; n++) {
-      int64_t iv[3] = {m, n, N};
-      togsim_dispatch(ctx, body, iv, 3, m * N + n);
-    }
-}
+  void entry(Kernel& k) const {
+    const auto [M, N] = shape<2>(k, {.kernel = "tiles", .names = "M N", .example = {1, 1}});
+    for (int64_t m = 0; m < M; m++)
+      for (int64_t n = 0; n < N; n++) dispatch<&Tiles::body>(k, Cell{.m = m, .n = n, .N = N});
+  }
 ```
 
 Three things are new:
 
-- **Shape arguments.** `shape_args` holds the integers of `tog_shape.txt`, a file beside `tog.so`.
-  Here it contains `2 4`, so the kernel dispatches eight work-items. The same `tog.so` serves
-  another grid when the file changes. Without the file `shape_args` is null and `n_shape_args` 0.
-- **`iv`.** `togsim_dispatch` copies the `n_iv` integers of `iv` and hands the copy to the body
-  later. It is the only way to tell a body which work-item it is: the body here uses it to compute
-  the element offset of its own data tile.
+- **Shape arguments.** `shape<2>` reads the two integers of `tog_shape.txt`, a file beside
+  `tog.so`. Here it contains `2 4`, so the kernel dispatches eight work-items. The same `tog.so`
+  serves another grid when the file changes. Without the file the shape is `.example`.
+- **Arguments.** `dispatch` copies the `Cell`, a struct of `int64_t` fields, and hands the copy to
+  the body later. It is the only way to tell a body which work-item it is: the body here uses it to
+  compute the element offset of its own data tile.
 - **Cores.** The TOG never names a core. TOGSim binds work-items to the cores round-robin, in
-  dispatch order. The last argument of `togsim_dispatch` is a key that names the work-item in
-  messages; it does not choose a core.
+  dispatch order. Each dispatch also gets a key, 0, 1, ..., that names the work-item in messages;
+  it does not choose a core.
 
 All eight work-items run compute tile 0, so the cycle table still has one row. They also all use
 buffer ids 1 and 2: buffer ids are local to a work-item, so these are sixteen separate buffers.
@@ -342,20 +313,20 @@ The script's last two runs shrink the scratchpad and halve the DRAM channels;
 `examples/gemm/gemm_tog.cpp` is one work-item of a matrix multiply C = A x B, in K = 2 steps:
 
 ```cpp
-  for (int64_t k = 0; k < K; k++) {
-    togsim_dma(ctx, TOGSIM_DMA_LOAD, 0, (uint64_t)(k * T), 2, dims, a_strides, 32, 0, 0, nullptr, 0, a, 1, 0);
-    togsim_dma(ctx, TOGSIM_DMA_LOAD, 1, (uint64_t)(k * T * T), 2, dims, b_strides, 32, 0, 0, nullptr, 0, b, 1, 0);
-    togsim_compute(ctx, 0, 0, 0, nullptr, a_b_acc, 3, acc, 1);
-  }
-  togsim_compute(ctx, 1, 0, 0, nullptr, acc, 1, out, 1);
-  togsim_dma(ctx, TOGSIM_DMA_STORE, 2, 0, 2, dims, b_strides, 32, 0, 0, out, 1, nullptr, 0, 0);
+    for (int64_t k = 0; k < K; k++) {
+      load(w, {.from = {.ptr = 0, .type = f32, .offset = k * T, .dims = {T, T}, .strides = {K * T, 1}}, .to = A});
+      load(w, {.from = {.ptr = 1, .type = f32, .offset = k * T * T, .dims = {T, T}, .strides = {T, 1}}, .to = B});
+      compute(w, {.node = MAC, .reads = {A, B, ACC}, .writes = {ACC}});
+    }
+    compute(w, {.node = EPILOGUE, .reads = {ACC}, .writes = {OUT}});
+    store(w, {.from = OUT, .to = {.ptr = 2, .type = f32, .offset = 0, .dims = {T, T}, .strides = {T, 1}}});
 ```
 
 **Two kinds of compute and an accumulator.** Each step loads a data tile of A and one of B and
-runs compute tile 0, a multiply-accumulate. That compute lists buffer 3, the accumulator, in both
-`read_bufs` and `write_bufs`: it updates the buffer in place, and because the next step reads
-what this step wrote, the two steps run one after the other. A last compute, compute tile 1,
-turns the accumulator into the output buffer 4, which is stored. The loads here take data tiles
+runs compute tile 0, a multiply-accumulate (`MAC`, node 0 of 2). That compute lists `ACC`, buffer 3,
+in both `.reads` and `.writes`: it updates the buffer in place, and because the next step reads
+what this step wrote, the two steps run one after the other. A last compute, `EPILOGUE`, compute
+tile 1, turns the accumulator into the output buffer 4, which is stored. The loads here take data tiles
 out of larger tensors: A is 64 x 128 elements, so a data tile of A has `strides = {128, 1}` and
 step `k` starts at element offset `k * 64`.
 
@@ -466,24 +437,26 @@ In a session the total is followed by one more line, `Wall-clock time for simula
 
 ## 6. Mistakes: what TOGSim refuses, and what it does not
 
-`examples/mistakes/` holds two valid TOGs that a `-D<NAME>` flag breaks in one way each, and the
-script also feeds a valid TOG wrong inputs and wrong machines.
+`examples/mistakes/` holds two valid TOGs that a `-D<NAME>` flag breaks in one way each, in ways
+togsim.hpp still lets a TOG be written, and the script also feeds a valid TOG wrong inputs and wrong
+machines.
 
 ```bash
 examples/run.sh mistakes
 ```
 
 **Refused.** A refused run exits non-zero with a line that names the cause, before anything is
-simulated. For example:
+simulated: a `togsim.hpp:` line for a broken API rule, an `[error] [TOGSim]` line for the rest.
+For example:
 
 ```text
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DWRONG_COUNT examples/mistakes/refused_tog.cpp -o examples/mistakes/WRONG_COUNT.so
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/WRONG_COUNT.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-[error] [TOGSim] wait expects another element count: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects 2048
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DTILE_PAST_TABLE examples/mistakes/refused_tog.cpp -o examples/mistakes/TILE_PAST_TABLE.so
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TILE_PAST_TABLE.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+[error] [TOGSim] TOG examples/mistakes/TILE_PAST_TABLE.so: work-item 0 (key 0) computes tile id 1, which the cycle table does not hold (it has 1 tile ids, 0 to 0)
 exit 1
 ```
 
-The script prints 21 refusals; the [refusal table](tog-abi.md#what-gets-a-run-refused) lists each with its
+The script prints 19 refusals; the [refusal table](tog-abi.md#what-gets-a-run-refused) lists each with its
 cause and its fix.
 
 **Said, but not refused.** Two mistakes still run to the end with exit 0, and TOGSim names them in
@@ -492,7 +465,7 @@ takes 2437 cycles.
 
 | Mistake | Total | What happens | The warning |
 |---|---|---|---|
-| `TENSOR_PAST_LIST`: an `arg_id` `tog_tensors.txt` has no line for | 2437 | The tensor is placed at address 0, on top of tensor 0: `dram=0x0000000000000000` on the store's trace line. | `its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0` |
+| `TENSOR_PAST_LIST`: a `.ptr` `tog_tensors.txt` has no line for | 2437 | The tensor is placed at address 0, on top of tensor 0: `dram=0x0000000000000000` on the store's trace line. | `its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0` |
 | a unit table whose rows are all for `tile_id` 1, while the TOG computes `tile_id` 0 | 2437 | The compute adds nothing to any unit, and the array split leaves it whole: `TPUV6E_MXU utilization(%): 0.00`. | `the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units` |
 
 ```text
@@ -500,12 +473,9 @@ takes 2437 cycles.
 [warning] [TOGSim] TOG examples/mistakes/TENSOR_PAST_LIST.so: its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0
 ```
 
-**Not said at all.** The dangerous mistake is the one nothing reports. It exits 0 and prints a
-total; only the number is wrong.
-
-| Mistake (`-D` flag) | Total | What happens | How to notice |
-|---|---|---|---|
-| `NULL_STRIDES`: `strides` is a null pointer | 2382 | The whole DMA becomes one DRAM request. | `stride=[]` on the trace line; 513 responses instead of 1024. |
+**Not said at all.** On the raw C ABI a DMA with null strides runs as one DRAM request, and
+nothing reports it. togsim.hpp refuses a descriptor whose strides do not match its dims, so a TOG
+written against it cannot make that mistake.
 
 **Valid, with another meaning.** `CONSUMER_FIRST` calls the store before the compute that writes
 its buffer, so the store drains [data already on the chip](tog-abi.md#data-that-is-already-on-the-chip).

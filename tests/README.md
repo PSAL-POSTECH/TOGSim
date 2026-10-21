@@ -1,7 +1,7 @@
 # Tests
 
 `tests/run.py` runs every case of every `tests/*/cases.py` against a built tree and prints one
-`PASS` or `FAIL` line per case. It needs `g++`, `python3` (standard library only) and the default
+`PASS` or `FAIL` line per case. It needs `g++` with C++20 (g++ 10 or newer), `python3` (standard library only) and the default
 build target.
 
 ```bash
@@ -21,7 +21,7 @@ that selects nothing). A failing case says what it expected, what it saw and whe
 
 | Directory | What its cases pin |
 |---|---|
-| `tests/abi/` | A TOG built against another ABI version is refused; the same TOG at this version replays. |
+| `tests/abi/` | A TOG built against another ABI version is refused; the same TOG at this version replays. On the raw C ABI, a TOG without `togsim_kernel` is refused and a DMA with null strides replays unstrided. |
 | `tests/array_split/` | The array split of a segment TOG, and what it refuses. |
 | `tests/configs/` | Every shipped config replays a small TOG, and is refused without a unit table. Every one follows tpuv6e's convention: an `isa` with exactly one `vcix_*` entry, `vcix`, `address_map` and `systolic_array_unit`. |
 | `tests/cycle_table/` | A run without a cycle table, or with a `tile_id` the table does not hold, is refused. |
