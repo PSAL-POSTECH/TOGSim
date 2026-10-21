@@ -46,12 +46,12 @@ struct Softmax : Tog<Softmax> {
     for (int64_t n0 = 0; n0 < a.N; n0 += TILE_N) {
       const int64_t tn = extent({.dim = a.N, .at = n0, .tile = TILE_N});
       const int64_t variant = m_short | short_axis({.axis = AXIS_N, .extent = tn, .tile = TILE_N});
-      load(w, {.from = {.ptr = 0, .type = f32, .offset = a.m0 * a.N + n0, .dims = {tm, tn}, .strides = {a.N, 1}},
-               .to = X});
+      load(w, {.src = {.ptr = 0, .type = f32, .offset = a.m0 * a.N + n0, .dims = {tm, tn}, .strides = {a.N, 1}},
+               .dst = X});
       compute(w, {.node = MAX_REDUCE, .variant = variant, .reads = {X}});
     }
     compute(w, {.node = MAX_WRITE, .variant = m_short, .writes = {MAX}});
-    store(w, {.from = MAX, .to = {.ptr = 1, .type = f32, .offset = a.m0, .dims = {tm}, .strides = {1}}});
+    store(w, {.src = MAX, .dst = {.ptr = 1, .type = f32, .offset = a.m0, .dims = {tm}, .strides = {1}}});
   }
 
   // The row max is loaded broadcast along the tile's columns.
@@ -61,13 +61,13 @@ struct Softmax : Tog<Softmax> {
     for (int64_t n0 = 0; n0 < a.N; n0 += TILE_N) {
       const int64_t tn = extent({.dim = a.N, .at = n0, .tile = TILE_N});
       const int64_t variant = m_short | short_axis({.axis = AXIS_N, .extent = tn, .tile = TILE_N});
-      load(w, {.from = {.ptr = 0, .type = f32, .offset = a.m0 * a.N + n0, .dims = {tm, tn}, .strides = {a.N, 1}},
-               .to = X});
-      load(w, {.from = {.ptr = 1, .type = f32, .offset = a.m0, .dims = {tm, tn}, .strides = {1, 0}}, .to = MAX});
+      load(w, {.src = {.ptr = 0, .type = f32, .offset = a.m0 * a.N + n0, .dims = {tm, tn}, .strides = {a.N, 1}},
+               .dst = X});
+      load(w, {.src = {.ptr = 1, .type = f32, .offset = a.m0, .dims = {tm, tn}, .strides = {1, 0}}, .dst = MAX});
       compute(w, {.node = SUM_REDUCE, .variant = variant, .reads = {X, MAX}});
     }
     compute(w, {.node = SUM_WRITE, .variant = m_short, .writes = {SUM}});
-    store(w, {.from = SUM, .to = {.ptr = 2, .type = f32, .offset = a.m0, .dims = {tm}, .strides = {1}}});
+    store(w, {.src = SUM, .dst = {.ptr = 2, .type = f32, .offset = a.m0, .dims = {tm}, .strides = {1}}});
   }
 
   void quotient(Item& w, const TileArgs& a) const {
@@ -76,10 +76,10 @@ struct Softmax : Tog<Softmax> {
     const int64_t variant = short_axis({.axis = AXIS_M, .extent = tm, .tile = TILE_M}) |
                             short_axis({.axis = AXIS_N, .extent = tn, .tile = TILE_N});
     const int64_t at = a.m0 * a.N + a.n0;
-    load(w, {.from = {.ptr = 0, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}, .to = X});
-    load(w, {.from = {.ptr = 1, .type = f32, .offset = a.m0, .dims = {tm, tn}, .strides = {1, 0}}, .to = MAX});
-    load(w, {.from = {.ptr = 2, .type = f32, .offset = a.m0, .dims = {tm, tn}, .strides = {1, 0}}, .to = SUM});
+    load(w, {.src = {.ptr = 0, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}, .dst = X});
+    load(w, {.src = {.ptr = 1, .type = f32, .offset = a.m0, .dims = {tm, tn}, .strides = {1, 0}}, .dst = MAX});
+    load(w, {.src = {.ptr = 2, .type = f32, .offset = a.m0, .dims = {tm, tn}, .strides = {1, 0}}, .dst = SUM});
     compute(w, {.node = SOFTMAX, .variant = variant, .reads = {SUM, X, MAX}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = {.ptr = 3, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}});
+    store(w, {.src = OUT, .dst = {.ptr = 3, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}});
   }
 };

@@ -19,13 +19,13 @@ struct ComputedState : Tog<ComputedState> {
   }
 
   void tile(Item& w, const At& a) const {
-    load(w, {.from = {.ptr = 0, .type = f32, .offset = a.i * ROWS * COLS, .dims = {ROWS, COLS}, .strides = {COLS, 1}},
-             .to = IN});
+    load(w, {.src = {.ptr = 0, .type = f32, .offset = a.i * ROWS * COLS, .dims = {ROWS, COLS}, .strides = {COLS, 1}},
+             .dst = IN});
     compute(w, {.node = STEP, .reads = {IN}, .writes = {STATE}});
     for (int64_t k = 0; k < TRIPS; k++) {
       compute(w, {.node = STEP, .reads = {STATE}, .writes = {STATE}});
-      store(w, {.from = STATE,
-                .to = {.ptr = 1, .type = f32, .offset = (a.i * TRIPS + k) * ROWS * COLS, .dims = {ROWS, COLS},
+      store(w, {.src = STATE,
+                .dst = {.ptr = 1, .type = f32, .offset = (a.i * TRIPS + k) * ROWS * COLS, .dims = {ROWS, COLS},
                        .strides = {COLS, 1}}});
     }
   }

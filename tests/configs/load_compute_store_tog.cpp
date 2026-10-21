@@ -19,8 +19,8 @@ struct LoadComputeStore : Tog<LoadComputeStore> {
 
   void tile(Item& w, const At& a) const {
     const int64_t at = a.i * ROWS * COLS;
-    load(w, {.from = {.ptr = 0, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}, .to = IN});
+    load(w, {.src = {.ptr = 0, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}, .dst = IN});
     compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = {.ptr = 1, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}});
+    store(w, {.src = OUT, .dst = {.ptr = 1, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}});
   }
 };

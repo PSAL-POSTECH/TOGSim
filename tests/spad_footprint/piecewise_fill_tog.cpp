@@ -26,11 +26,11 @@ struct PiecewiseFill : Tog<PiecewiseFill> {
     const int64_t base = a.i * ROWS * COLS;
     for (int k = 0; k < 2; k++) {
       for (int64_t p = 0; p < ROWS / PIECE_ROWS; p++)
-        load(w, {.from = piece(0, base + p * PIECE_ROWS * COLS), .to = IN});
+        load(w, {.src = piece(0, base + p * PIECE_ROWS * COLS), .dst = IN});
       if (k == 0) compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
       else compute(w, {.node = STEP, .reads = {IN, OUT}, .writes = {OUT}});
     }
     for (int64_t p = 0; p < ROWS / PIECE_ROWS; p++)
-      store(w, {.from = OUT, .to = piece(1, base + p * PIECE_ROWS * COLS)});
+      store(w, {.src = OUT, .dst = piece(1, base + p * PIECE_ROWS * COLS)});
   }
 };

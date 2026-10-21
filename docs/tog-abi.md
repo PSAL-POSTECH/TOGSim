@@ -382,7 +382,7 @@ format`: togsim.hpp refuses those mistakes itself ([its refusals](tog-api.md#ref
 | `togsim: refusing TOG <so>: it states no spad buffer sizes (togsim_spad_buffer_count / togsim_spad_buffer_bytes)` | The buffer table is missing or not `extern "C"`. |
 | `[TOGSim] wait expects another element count: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects 2048` | `expected` is not the sum of the loads' element counts. |
 | `[TOGSim] wait on a semaphore never signaled: work-item 0 (key 0) sem 8 signaled 0 elements, wait expects 4096` | The barrier names a semaphore no asynchronous load of this work-item used. |
-| `[TOGSim] unwaited load batch: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects none` | An asynchronous load has no barrier after it. |
+| `[TOGSim] unwaited semaphore: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects none` | An asynchronous load has no barrier after it. |
 | `re-wait expects another element count` | A second barrier on a semaphore, with no new loads, states another count than the first. |
 | `issued tile is not supported format` | A DMA has `ndim` 0, `ndim` above 4, or null `dims`. |
 | `[Simulator] simulation wedged at cycle <n>: work remains but nothing is in flight` | A work-item waits for spad that is never freed, in a way the loader does not see ([known limitations](running.md#known-limitations)). |

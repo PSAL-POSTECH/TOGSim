@@ -55,14 +55,14 @@ struct Layernorm : Tog<Layernorm> {
       const int64_t tn = extent({.dim = a.N, .at = n0, .tile = TILE_N});
       const int64_t variant = m_short | short_axis({.axis = AXIS_N, .extent = tn, .tile = TILE_N});
       const int64_t at = a.m0 * a.N + n0;
-      load(w, {.from = {.ptr = 0, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}, .to = X});
-      load(w, {.from = {.ptr = 1, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}, .to = SKIP});
+      load(w, {.src = {.ptr = 0, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}, .dst = X});
+      load(w, {.src = {.ptr = 1, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}, .dst = SKIP});
       compute(w, {.node = REDUCE, .variant = variant, .reads = {X, SKIP}});
     }
     compute(w, {.node = WRITE_MEAN, .variant = m_short, .writes = {MEAN}});
-    store(w, {.from = MEAN, .to = {.ptr = 2, .type = f32, .offset = a.m0, .dims = {tm}, .strides = {1}}});
+    store(w, {.src = MEAN, .dst = {.ptr = 2, .type = f32, .offset = a.m0, .dims = {tm}, .strides = {1}}});
     compute(w, {.node = WRITE_VAR, .variant = m_short, .writes = {VAR}});
-    store(w, {.from = VAR, .to = {.ptr = 3, .type = f32, .offset = a.m0, .dims = {tm}, .strides = {1}}});
+    store(w, {.src = VAR, .dst = {.ptr = 3, .type = f32, .offset = a.m0, .dims = {tm}, .strides = {1}}});
   }
 
   // The row statistics are loaded broadcast along the tile's columns, the weights and bias down its rows.
@@ -75,13 +75,13 @@ struct Layernorm : Tog<Layernorm> {
     const auto tile = [&](int32_t ptr, int64_t offset, Dims strides) {
       return Desc{.ptr = ptr, .type = f32, .offset = offset, .dims = {tm, tn}, .strides = strides};
     };
-    load(w, {.from = tile(0, at, {a.N, 1}), .to = X});
-    load(w, {.from = tile(1, at, {a.N, 1}), .to = SKIP});
-    load(w, {.from = tile(2, a.m0, {1, 0}), .to = MEAN});
-    load(w, {.from = tile(3, a.m0, {1, 0}), .to = VAR});
-    load(w, {.from = tile(4, a.n0, {0, 1}), .to = WEIGHT});
-    load(w, {.from = tile(5, a.n0, {0, 1}), .to = BIAS});
+    load(w, {.src = tile(0, at, {a.N, 1}), .dst = X});
+    load(w, {.src = tile(1, at, {a.N, 1}), .dst = SKIP});
+    load(w, {.src = tile(2, a.m0, {1, 0}), .dst = MEAN});
+    load(w, {.src = tile(3, a.m0, {1, 0}), .dst = VAR});
+    load(w, {.src = tile(4, a.n0, {0, 1}), .dst = WEIGHT});
+    load(w, {.src = tile(5, a.n0, {0, 1}), .dst = BIAS});
     compute(w, {.node = NORM, .variant = variant, .reads = {X, WEIGHT, VAR, MEAN, SKIP, BIAS}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = tile(6, at, {a.N, 1})});
+    store(w, {.src = OUT, .dst = tile(6, at, {a.N, 1})});
   }
 };

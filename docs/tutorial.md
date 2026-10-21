@@ -78,9 +78,9 @@ struct Hello : Tog<Hello> {
   void entry(Kernel& k) const { dispatch<&Hello::body>(k); }
 
   void body(Item& w) const {
-    load(w, {.from = SRC, .to = IN});
+    load(w, {.src = SRC, .dst = IN});
     compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = DST});
+    store(w, {.src = OUT, .dst = DST});
   }
 };
 ```
@@ -189,8 +189,8 @@ A load can be synchronous or asynchronous.
 
 ```cpp
     Semaphore ab = semaphore(w);
-    load(w, {.from = LHS, .to = A, .sem = ab});
-    load(w, {.from = RHS, .to = B, .sem = ab});
+    load(w, {.src = LHS, .dst = A, .sem = ab});
+    load(w, {.src = RHS, .dst = B, .sem = ab});
     wait(w, {.sem = ab});
 ```
 
@@ -315,12 +315,12 @@ The script's last two runs shrink the scratchpad and halve the DRAM channels;
 
 ```cpp
     for (int64_t k = 0; k < K; k++) {
-      load(w, {.from = {.ptr = 0, .type = f32, .offset = k * T, .dims = {T, T}, .strides = {K * T, 1}}, .to = A});
-      load(w, {.from = {.ptr = 1, .type = f32, .offset = k * T * T, .dims = {T, T}, .strides = {T, 1}}, .to = B});
+      load(w, {.src = {.ptr = 0, .type = f32, .offset = k * T, .dims = {T, T}, .strides = {K * T, 1}}, .dst = A});
+      load(w, {.src = {.ptr = 1, .type = f32, .offset = k * T * T, .dims = {T, T}, .strides = {T, 1}}, .dst = B});
       compute(w, {.node = MAC, .reads = {A, B, ACC}, .writes = {ACC}});
     }
     compute(w, {.node = EPILOGUE, .reads = {ACC}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = {.ptr = 2, .type = f32, .offset = 0, .dims = {T, T}, .strides = {T, 1}}});
+    store(w, {.src = OUT, .dst = {.ptr = 2, .type = f32, .offset = 0, .dims = {T, T}, .strides = {T, 1}}});
 ```
 
 **Two kinds of compute and an accumulator.** Each step loads a data tile of A and one of B and

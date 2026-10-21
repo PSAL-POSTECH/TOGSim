@@ -43,12 +43,12 @@ struct Maxpool : Tog<Maxpool> {
     const auto tap = [&](int64_t at) {
       return Desc{.ptr = 0, .type = f32, .offset = at, .dims = {trow, tcol}, .strides = {2 * in_w, 2}};
     };
-    load(w, {.from = tap(base), .to = TAP0});
-    load(w, {.from = tap(base + 1), .to = TAP1});
-    load(w, {.from = tap(base + in_w), .to = TAP2});
-    load(w, {.from = tap(base + in_w + 1), .to = TAP3});
+    load(w, {.src = tap(base), .dst = TAP0});
+    load(w, {.src = tap(base + 1), .dst = TAP1});
+    load(w, {.src = tap(base + in_w), .dst = TAP2});
+    load(w, {.src = tap(base + in_w + 1), .dst = TAP3});
     compute(w, {.node = MAX, .variant = variant, .reads = {TAP3, TAP0, TAP1, TAP2}, .writes = {OUT}});
     const Desc out{.ptr = 1, .type = f32, .offset = a.r0 * a.COLS + a.c0, .dims = {trow, tcol}, .strides = {a.COLS, 1}};
-    store(w, {.from = OUT, .to = out});
+    store(w, {.src = OUT, .dst = out});
   }
 };

@@ -25,12 +25,12 @@ struct SessionKernel : Tog<SessionKernel> {
   void tile([[maybe_unused]] Item& w, [[maybe_unused]] const At& a) const {
 #if !defined(NO_CALLS)
     const int64_t at = a.i * ROWS * COLS;
-    load(w, {.from = {.ptr = 0, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}, .to = IN});
+    load(w, {.src = {.ptr = 0, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}, .dst = IN});
 #if defined(NO_COMPUTE)
-    store(w, {.from = IN, .to = {.ptr = 1, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}});
+    store(w, {.src = IN, .dst = {.ptr = 1, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}});
 #else
     compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = {.ptr = 1, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}});
+    store(w, {.src = OUT, .dst = {.ptr = 1, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}});
 #endif
 #endif
   }

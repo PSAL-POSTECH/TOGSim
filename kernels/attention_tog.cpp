@@ -55,9 +55,9 @@ struct Attention : Tog<Attention> {
       const Desc keys{.ptr = 1, .type = f32, .offset = head + kv0 * D, .dims = {tkv, D}, .strides = {D, 1}};
       const Desc queries{.ptr = 0, .type = f32, .offset = head + a.q0 * D, .dims = {tq, D}, .strides = {D, 1}};
       const Desc values{.ptr = 2, .type = f32, .offset = head + kv0 * D, .dims = {tkv, D}, .strides = {D, 1}};
-      load(w, {.from = keys, .to = K_TILE, .sem = k});
-      load(w, {.from = queries, .to = Q_TILE, .sem = q});
-      load(w, {.from = values, .to = V_TILE, .sem = vv});
+      load(w, {.src = keys, .dst = K_TILE, .sem = k});
+      load(w, {.src = queries, .dst = Q_TILE, .sem = q});
+      load(w, {.src = values, .dst = V_TILE, .sem = vv});
 
       wait(w, {.sem = k});
       wait(w, {.sem = q});
@@ -77,6 +77,6 @@ struct Attention : Tog<Attention> {
 
     compute(w, {.node = NORM, .variant = q_short, .reads = {STAT, ACC}, .writes = {ACC}});
     const Desc out{.ptr = 3, .type = f32, .offset = head + a.q0 * D, .dims = {tq, D}, .strides = {D, 1}};
-    store(w, {.from = ACC, .to = out});
+    store(w, {.src = ACC, .dst = out});
   }
 };

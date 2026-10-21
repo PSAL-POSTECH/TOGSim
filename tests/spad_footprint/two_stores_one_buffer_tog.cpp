@@ -23,9 +23,9 @@ struct TwoStores : Tog<TwoStores> {
 
   void tile(Item& w, const At& a) const {
     const int64_t base = a.i * ROWS * COLS;
-    load(w, {.from = tile_of(0, base), .to = IN});
+    load(w, {.src = tile_of(0, base), .dst = IN});
     compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = tile_of(1, base)});
-    store(w, {.from = OUT, .to = tile_of(2, base)});
+    store(w, {.src = OUT, .dst = tile_of(1, base)});
+    store(w, {.src = OUT, .dst = tile_of(2, base)});
   }
 };

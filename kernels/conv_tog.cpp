@@ -100,14 +100,14 @@ struct Conv : Tog<Conv> {
             const int64_t piece = extent({.dim = tk, .at = s, .tile = SA_WIDTH});
             const Desc weights{
                 .ptr = 1, .type = f32, .offset = w_off + s, .dims = {1, 1, tn, piece}, .strides = w_strides};
-            load(w, {.from = weights, .to = W_TILE, .sem = wb});
+            load(w, {.src = weights, .dst = W_TILE, .sem = wb});
           }
           for (int64_t r = 0; r < th; ++r) {
             for (int64_t s = 0; s < tw; s += SA_WIDTH) {
               const int64_t piece = extent({.dim = tw, .at = s, .tile = SA_WIDTH});
               const int64_t at = x_off + r * a.S_H * x_row + s * a.S_W * a.I_C;
               const Desc pixels{.ptr = 0, .type = f32, .offset = at, .dims = {1, 1, piece, tk}, .strides = x_strides};
-              load(w, {.from = pixels, .to = X_TILE, .sem = x});
+              load(w, {.src = pixels, .dst = X_TILE, .sem = x});
             }
           }
           wait(w, {.sem = wb});
@@ -122,6 +122,6 @@ struct Conv : Tog<Conv> {
                    .offset = a.oc0 * a.O_H * a.O_W + a.oh0 * a.O_W + a.ow0,
                    .dims = {1, tn, th, tw},
                    .strides = {0, a.O_H * a.O_W, a.O_W, 1}};
-    store(w, {.from = ACC, .to = dst});
+    store(w, {.src = ACC, .dst = dst});
   }
 };

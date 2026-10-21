@@ -18,12 +18,12 @@ struct AsyncBarrier : Tog<AsyncBarrier> {
   // its semaphore has arrived.
   void body(Item& w) const {
 #if defined(SYNC)
-    load(w, {.from = LHS, .to = A});
-    load(w, {.from = RHS, .to = B});
+    load(w, {.src = LHS, .dst = A});
+    load(w, {.src = RHS, .dst = B});
 #else
     Semaphore ab = semaphore(w);
-    load(w, {.from = LHS, .to = A, .sem = ab});
-    load(w, {.from = RHS, .to = B, .sem = ab});
+    load(w, {.src = LHS, .dst = A, .sem = ab});
+    load(w, {.src = RHS, .dst = B, .sem = ab});
     wait(w, {.sem = ab});
 #endif
 #if defined(TWO_STEPS)
@@ -32,6 +32,6 @@ struct AsyncBarrier : Tog<AsyncBarrier> {
 #else
     compute(w, {.node = STEP, .reads = {A, B}, .writes = {OUT}});
 #endif
-    store(w, {.from = OUT, .to = DST});
+    store(w, {.src = OUT, .dst = DST});
   }
 };

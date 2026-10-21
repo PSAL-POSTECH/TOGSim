@@ -37,13 +37,13 @@ struct Concat : Tog<Concat> {
     };
     for (int64_t r = 0; r < a.A_ROWS; r += TILE_ROWS) {
       const int64_t tr = extent({.dim = a.A_ROWS, .at = r, .tile = TILE_ROWS});
-      load(w, {.from = rows(0, r, tr), .to = A});
-      store(w, {.from = A, .to = rows(2, r, tr)});
+      load(w, {.src = rows(0, r, tr), .dst = A});
+      store(w, {.src = A, .dst = rows(2, r, tr)});
     }
     for (int64_t r = 0; r < a.B_ROWS; r += TILE_ROWS) {
       const int64_t tr = extent({.dim = a.B_ROWS, .at = r, .tile = TILE_ROWS});
-      load(w, {.from = rows(1, r, tr), .to = B});
-      store(w, {.from = B, .to = rows(2, r + a.A_ROWS, tr)});
+      load(w, {.src = rows(1, r, tr), .dst = B});
+      store(w, {.src = B, .dst = rows(2, r + a.A_ROWS, tr)});
     }
   }
 };

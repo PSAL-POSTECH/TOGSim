@@ -40,9 +40,9 @@ struct BiasAct : Tog<BiasAct> {
     const int64_t variant = short_axis({.axis = AXIS_M, .extent = tm, .tile = TILE_M}) |
                             short_axis({.axis = AXIS_N, .extent = tn, .tile = TILE_N});
     const int64_t at = a.m0 * a.N + a.n0;
-    load(w, {.from = {.ptr = 0, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}, .to = X});
-    load(w, {.from = {.ptr = 1, .type = f32, .offset = a.n0, .dims = {tm, tn}, .strides = {0, 1}}, .to = BIAS});
+    load(w, {.src = {.ptr = 0, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}, .dst = X});
+    load(w, {.src = {.ptr = 1, .type = f32, .offset = a.n0, .dims = {tm, tn}, .strides = {0, 1}}, .dst = BIAS});
     compute(w, {.node = BIAS_ACT, .variant = variant, .reads = {BIAS, X}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = {.ptr = 2, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}});
+    store(w, {.src = OUT, .dst = {.ptr = 2, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}});
   }
 };

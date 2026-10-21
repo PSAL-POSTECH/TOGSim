@@ -38,8 +38,8 @@ struct Chain : Tog<Chain> {
   }
 
   void tile(Item& w, const At& a) const {
-    load(w, {.from = tile_of(ARG, a.i), .to = LOADED});
+    load(w, {.src = tile_of(ARG, a.i), .dst = LOADED});
     compute(w, {.node = STEP, .reads = {LOADED}, .writes = {OUT}});
-    if (STORES) store(w, {.from = OUT, .to = tile_of(ARG + 1, (a.i + 1) % N)});
+    if (STORES) store(w, {.src = OUT, .dst = tile_of(ARG + 1, (a.i + 1) % N)});
   }
 };

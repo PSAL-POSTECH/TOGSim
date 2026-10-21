@@ -50,18 +50,18 @@ struct GlobalAvgpool : Tog<GlobalAvgpool> {
       const int64_t thw = extent({.dim = a.HW, .at = hw0, .tile = TILE_HW});
       const int64_t variant = c_short | short_axis({.axis = AXIS_HW, .extent = thw, .tile = TILE_HW});
       const Desc x{.ptr = 0, .type = f32, .offset = a.c0 * a.HW + hw0, .dims = {tc, thw}, .strides = {a.HW, 1}};
-      load(w, {.from = x, .to = X});
+      load(w, {.src = x, .dst = X});
       compute(w, {.node = REDUCE, .variant = variant, .reads = {X}});
     }
     compute(w, {.node = WRITE, .variant = c_short, .writes = {SUM}});
-    store(w, {.from = SUM, .to = {.ptr = 1, .type = f32, .offset = a.c0, .dims = {tc}, .strides = {1}}});
+    store(w, {.src = SUM, .dst = {.ptr = 1, .type = f32, .offset = a.c0, .dims = {tc}, .strides = {1}}});
   }
 
   void scale(Item& w, const ScaleArgs& a) const {
     const int64_t tc = extent({.dim = a.C, .at = a.c0, .tile = TILE_C_SCALE});
     const int64_t variant = short_axis({.axis = AXIS_C_SCALE, .extent = tc, .tile = TILE_C_SCALE});
-    load(w, {.from = {.ptr = 1, .type = f32, .offset = a.c0, .dims = {tc}, .strides = {1}}, .to = SUM});
+    load(w, {.src = {.ptr = 1, .type = f32, .offset = a.c0, .dims = {tc}, .strides = {1}}, .dst = SUM});
     compute(w, {.node = SCALE, .variant = variant, .reads = {SUM}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = {.ptr = 2, .type = f32, .offset = a.c0, .dims = {tc}, .strides = {1}}});
+    store(w, {.src = OUT, .dst = {.ptr = 2, .type = f32, .offset = a.c0, .dims = {tc}, .strides = {1}}});
   }
 };
