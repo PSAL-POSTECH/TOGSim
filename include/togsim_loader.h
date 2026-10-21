@@ -21,7 +21,7 @@ struct TraceRec {
   int32_t  is_async;
   uint64_t addr;          // resolved DRAM byte address = base[arg_id] + off*bytes
   uint64_t sem;           // DMA/MEMORY_BAR: the semaphore an async load signals / a bar waits
-  int64_t  expected;      // MEMORY_BAR: elements the waited batch must have moved
+  int64_t  expected;      // MEMORY_BAR: elements the waited semaphore's loads must have moved
   std::vector<int64_t> dims;     // tile extents (DMA)
   std::vector<int64_t> strides;  // tile strides (DMA)
   std::vector<int64_t> read_bufs;   // SRAM buffer ids read  (sec 10 dependency model)

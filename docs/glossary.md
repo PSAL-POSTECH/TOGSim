@@ -13,7 +13,7 @@
 | tensor argument | An array of the kernel that lives in DRAM. A TOG names it by `Desc.ptr` (`arg_id` in the C ABI); `tog_tensors.txt` gives its size. |
 | DMA | A transfer between DRAM and a core's scratchpad: a load (`MOVIN` in the log) or a store (`MOVOUT`). |
 | scratchpad (spad), buffer | The memory of a core that DMAs fill and drain. A TOG names its regions, the buffers, by small integer ids. |
-| batch, semaphore, barrier | Asynchronous loads join a batch (a semaphore in the C ABI); a `wait`, a barrier (`MEMORY_BAR`) in the log, waits for the data of its loads. |
+| semaphore, barrier | Asynchronous loads signal a semaphore; a `wait`, a barrier (`MEMORY_BAR`) in the log, waits for the data of the loads that signaled it since its last wait. |
 | cycle table | `tile_id` to cycles: what each compute tile costs. You supply it. |
 | unit table | What each hardware unit (the systolic array, the vector unit, ...) took in during one run of each compute tile. You supply it. |
 | unit, unit of work, admitted | A hardware unit named in the unit table; what it counts (rows, cycles); how many of those it took in. |

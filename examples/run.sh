@@ -136,7 +136,7 @@ mistakes() {
   local tables="--cycle_table $dir/tog_cycles.tsv --unit_table $dir/tog_units.tsv"
   tog $dir/refused_tog.cpp -o $dir/valid.so
   sim result --config $V6E --tog_so $dir/valid.so $tables
-  for broken in NOT_A_TOG UNSIZED_BUFFER NO_WAIT EMPTY_WAIT TWO_WAITS TILE_PAST_TABLE; do
+  for broken in NOT_A_TOG UNSIZED_BUFFER NO_WAIT EMPTY_WAIT TILE_PAST_TABLE; do
     tog -D$broken $dir/refused_tog.cpp -o $dir/$broken.so
     sim first_error --config $V6E --tog_so $dir/$broken.so $tables
   done

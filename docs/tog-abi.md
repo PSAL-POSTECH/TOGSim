@@ -344,9 +344,8 @@ needs a unit table that has rows of its array unit**. To run without one, set
 |---|---|---|---|
 | `[TOGSim] spad buffer 2 is DMA'd but the TOG states no size for it (togsim_spad_buffer_bytes has 2 entries)` | 1 | A DMA moves a buffer whose id is past the table or has size 0. | Add its size. |
 | `togsim.hpp: no TOG registered: derive the TOG's struct from togsim::Tog<itself>` | 1 | The TOG's struct does not derive from `togsim::Tog<itself>` (generated code: no `register_tog`). | Derive it. |
-| `togsim.hpp: a work-item returned with an async batch it did not wait` | 1 | A load joined a batch that no `wait` closed. | Wait for it, or make the load synchronous. |
-| `togsim.hpp: a wait on a batch that no load joined` | 1 | A `wait` on a batch no load joined. | Wait on the loads' batch. |
-| `togsim.hpp: a batch that is not open: waited already, or never made by load_async() or batch()` | 1 | A second `wait` on one batch, or a `Batch` from elsewhere. | Wait once. |
+| `togsim.hpp: a work-item returned with a semaphore whose loads it did not wait` | 1 | A load signaled a semaphore that no `wait` followed. | Wait for it, or make the load synchronous. |
+| `togsim.hpp: a wait on a semaphore no load signaled since its last wait` | 1 | A `wait` with no load on its semaphore since the last one. | Wait on the loads' semaphore, once per round of loads. |
 | `[TOGSim] TOG <so>: work-item 0 (key 0) computes tile id 1, which the cycle table does not hold (it has 1 tile ids, 0 to 0)` | 1 | A `togsim_compute` names a `tile_id` at or beyond the number of rows of the cycle table. | Add the row, or fix the `tile_id`. |
 | `[TOGSim] --tog_so needs --cycle_table: the TOG's computes take their cycles from it` | 1 | No `--cycle_table`. | Give the table. |
 | `[TOGSim] cycle table <file> cannot be opened: the TOG's computes take their cycles from it` | 1 | The path of the cycle table is wrong. | Fix the path. |

@@ -88,6 +88,7 @@ struct Conv : Tog<Conv> {
     const Dims x_strides{x_plane, a.S_H * x_row, a.S_W * a.I_C, 1};
     const Dims w_strides{a.I_C * a.O_C * a.K_W, a.I_C * a.O_C, a.I_C, 1};
 
+    const Semaphore x = semaphore(w), wb = semaphore(w);
     compute(w, {.node = ACC_INIT, .variant = out, .writes = {ACC}});
     for (int64_t kh = 0; kh < a.K_H; ++kh) {
       for (int64_t kw = 0; kw < a.K_W; ++kw) {
@@ -95,23 +96,22 @@ struct Conv : Tog<Conv> {
           const int64_t tk = extent({.dim = a.I_C, .at = ic0, .tile = TILE_IC});
           const int64_t x_off = (a.oh0 * a.S_H + kh * a.D_H) * x_row + (a.ow0 * a.S_W + kw * a.D_W) * a.I_C + ic0;
           const int64_t w_off = (kh * a.K_W + kw) * a.O_C * a.I_C + a.oc0 * a.I_C + ic0;
-          Batch x = batch(w), wb = batch(w);
           for (int64_t s = 0; s < tk; s += SA_WIDTH) {
             const int64_t piece = extent({.dim = tk, .at = s, .tile = SA_WIDTH});
             const Desc weights{
                 .ptr = 1, .type = f32, .offset = w_off + s, .dims = {1, 1, tn, piece}, .strides = w_strides};
-            load(w, {.from = weights, .to = W_TILE, .batch = wb});
+            load(w, {.from = weights, .to = W_TILE, .sem = wb});
           }
           for (int64_t r = 0; r < th; ++r) {
             for (int64_t s = 0; s < tw; s += SA_WIDTH) {
               const int64_t piece = extent({.dim = tw, .at = s, .tile = SA_WIDTH});
               const int64_t at = x_off + r * a.S_H * x_row + s * a.S_W * a.I_C;
               const Desc pixels{.ptr = 0, .type = f32, .offset = at, .dims = {1, 1, piece, tk}, .strides = x_strides};
-              load(w, {.from = pixels, .to = X_TILE, .batch = x});
+              load(w, {.from = pixels, .to = X_TILE, .sem = x});
             }
           }
-          wait(w, {.batch = wb});
-          wait(w, {.batch = x});
+          wait(w, {.sem = wb});
+          wait(w, {.sem = x});
           const int64_t variant = out | short_axis({.axis = AXIS_I_C, .extent = tk, .tile = TILE_IC});
           compute(w, {.node = MATMUL, .variant = variant, .reads = {ACC, W_TILE, X_TILE}, .writes = {ACC}});
         }

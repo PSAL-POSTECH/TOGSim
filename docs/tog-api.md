@@ -59,16 +59,16 @@ only by their buffers ([how a TOG is replayed](tog-abi.md#how-a-tog-is-replayed)
 | `Buf` | `.id`, `.bytes` | A spad buffer: its id, below 1024, and its size. 0 bytes is a dependency edge only. A list of buffers is written `{A, B}`. |
 | `Desc` | `.ptr`, `.type`, `.offset`, `.dims`, `.strides`, `.indirect` | The DMA descriptor: kernel argument `ptr` (its line of `tog_tensors.txt`), elements of `type`, `dims` (1 to 4) elements `strides` apart, from `offset` elements in. `indirect` (default false) makes it a gather or scatter. |
 | `Node` | `.id`, `.count` | A compute node: node `id` of the kernel's `count`. |
-| `Batch` | | An async batch, owned by the `Item` that made it. |
+| `Semaphore` | | A semaphore that async loads signal, owned by the `Item` that made it. `Semaphore()` is none. |
 
 ## Calls
 
 | Call | Lowers to | What it does |
 |---|---|---|
-| `load(w, {.from, .to, .batch, .after})` | `togsim_dma` | DRAM to spad: `from` into buffer `to`. With `.batch` it joins that batch. `.after` lists buffers it reads too (an indirect load's index) or must follow. |
-| `Batch b = load_async(w, {.from, .to, .after})` | `togsim_dma` | One async load in a batch of its own. |
-| `Batch b = batch(w)` | | A new, empty batch for several loads to join. |
-| `wait(w, {.batch = b})` | `togsim_memory_barrier` | Waits for every load of `b` and closes it. The header states their element count. |
+| `load(w, {.from, .to, .sem, .after})` | `togsim_dma` | DRAM to spad: `from` into buffer `to`. With `.sem` it is async and signals that semaphore. `.after` lists buffers it reads too (an indirect load's index) or must follow. |
+| `Semaphore s = load_async(w, {.from, .to, .after})` | `togsim_dma` | One async load on a new semaphore of its own. |
+| `Semaphore s = semaphore(w)` | | A new semaphore, ABI sem id 1, 2, ... in the work-item's creation order. |
+| `wait(w, {.sem = s})` | `togsim_memory_barrier` | Waits for every load that signaled `s` since its last wait. The header states their element count. |
 | `compute(w, {.node, .variant, .reads, .writes})` | `togsim_compute` | One compute at row `node.id + node.count * variant` of the cycle and unit tables, `compute_type` 0. |
 | `store(w, {.from, .to, .also})` | `togsim_dma` | Spad to DRAM: buffer `from` into `to`. `.also` lists buffers it reads too (an indirect store's index) or must follow. |
 | `dispatch<&X::f>(k)`, `dispatch<&X::f>(k, Args{...})` | `togsim_dispatch` | One work-item, under the next key: 0, 1, ... |
@@ -89,17 +89,18 @@ compiler uses them for the calls gem5 measured: call `c` of node `t` is row `t +
 
 ## Async loads
 
-`examples/async_barrier/async_barrier_tog.cpp` loads two operands into one batch:
+`examples/async_barrier/async_barrier_tog.cpp` loads two operands on one semaphore:
 
 ```cpp
-    Batch ab = batch(w);
-    load(w, {.from = LHS, .to = A, .batch = ab});
-    load(w, {.from = RHS, .to = B, .batch = ab});
-    wait(w, {.batch = ab});
+    Semaphore ab = semaphore(w);
+    load(w, {.from = LHS, .to = A, .sem = ab});
+    load(w, {.from = RHS, .to = B, .sem = ab});
+    wait(w, {.sem = ab});
 ```
 
-A batch a load joined must be waited before the work-item returns. A batch no load joined may stay
-open, but it cannot be waited. A batch is waited once. Up to 64 batches are open at once.
+A semaphore stays usable after a wait: later loads may signal it again, and a later wait waits for
+those. A wait needs a load that signaled the semaphore since its last wait, and a work-item returns
+only with every such load waited. A work-item makes up to 64 semaphores.
 
 ## Generated code
 
@@ -134,11 +135,11 @@ TOGSim simulates anything; `shape` prints `kernel <name>: ...` instead (see [ker
 | `two TOGs registered in one .so` | Two TOG structs, or a struct and a `register_tog`. |
 | `a spad buffer id outside 0..1023`, `two spad buffers with one id`, `a spad buffer with a negative size` | The buffer list. |
 | `a buffer with a negative id` | A `Buf` with `.id` below 0 in a load, store or compute. |
-| `a work-item returned with an async batch it did not wait` | A load joined a batch that no `wait` closed. |
-| `a wait on a batch that no load joined` | A wait on an empty batch. |
-| `a batch that is not open: waited already, or never made by load_async() or batch()` | A second wait. |
-| `more than 64 async batches open in one work-item` | Too many open batches. |
-| `load_async makes its own batch: give it no .batch` | `load_async` with `.batch`. |
+| `a work-item returned with a semaphore whose loads it did not wait` | A load signaled a semaphore that no `wait` followed. |
+| `a wait on a semaphore no load signaled since its last wait` | A wait with no new load on its semaphore: a first wait before any load, or a second with none between. |
+| `a semaphore this work-item did not make with semaphore() or load_async()` | A `Semaphore` from elsewhere. |
+| `more than 64 semaphores in one work-item` | Too many semaphores. |
+| `load_async makes its own semaphore: give it no .sem` | `load_async` with `.sem`. |
 | `a DMA with no dims`, `one to four dims`, `a DMA gives another count of strides than of dims` | The descriptor's `dims` and `strides`. |
 | `a DMA's descriptor has no byte-sized element type` | An `Elem` of fewer than 8 bits. |
 | `a Node whose id is not below its count`, `a negative variant` | The compute's row. |
