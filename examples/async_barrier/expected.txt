@@ -1,5 +1,5 @@
 == async_barrier
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/async_barrier/async_barrier_tog.cpp -o examples/async_barrier/tog.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/async_barrier/async_barrier_tog.cpp -o examples/async_barrier/tog.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/async_barrier/tog.so --cycle_table examples/async_barrier/tog_cycles.tsv --unit_table examples/async_barrier/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=49152 max_dispatch=2
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=true indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
@@ -15,7 +15,7 @@
 [trace] [1655][Core 0][INST_ISSUED    ][INST_ID=4] MOVOUT (addr_name=tag2 dram=0x0000000000008000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
 [trace] [1695][Core 0][INST_FINISHED  ][INST_ID=4] MOVOUT (addr_name=tag2 tile=0)
 [info] Total execution cycles: 2479
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DSYNC examples/async_barrier/async_barrier_tog.cpp -o examples/async_barrier/sync.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DSYNC examples/async_barrier/async_barrier_tog.cpp -o examples/async_barrier/sync.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/async_barrier/sync.so --cycle_table examples/async_barrier/tog_cycles.tsv --unit_table examples/async_barrier/tog_units.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=49152 max_dispatch=2
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
@@ -27,12 +27,12 @@
 [trace] [1655][Core 0][INST_ISSUED    ][INST_ID=3] MOVOUT (addr_name=tag2 dram=0x0000000000008000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
 [trace] [1695][Core 0][INST_FINISHED  ][INST_ID=3] MOVOUT (addr_name=tag2 tile=0)
 [info] Total execution cycles: 2479
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DTWO_STEPS examples/async_barrier/async_barrier_tog.cpp -o examples/async_barrier/two_steps.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DTWO_STEPS examples/async_barrier/async_barrier_tog.cpp -o examples/async_barrier/two_steps.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/async_barrier/two_steps.so --cycle_table examples/async_barrier/tog_cycles.tsv --unit_table examples/async_barrier/tog_units.tsv --log_level trace
 [trace] [1054][Core 0][INST_ISSUED    ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1655][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [info] Total execution cycles: 3080
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DTWO_STEPS -DSYNC examples/async_barrier/async_barrier_tog.cpp -o examples/async_barrier/two_steps_sync.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DTWO_STEPS -DSYNC examples/async_barrier/async_barrier_tog.cpp -o examples/async_barrier/two_steps_sync.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/async_barrier/two_steps_sync.so --cycle_table examples/async_barrier/tog_cycles.tsv --unit_table examples/async_barrier/tog_units.tsv --log_level trace
 [trace] [1012][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1613][Core 0][INST_ISSUED    ][INST_ID=3] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)

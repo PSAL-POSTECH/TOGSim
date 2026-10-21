@@ -46,18 +46,6 @@ typedef enum {
 // run: dump indirect_index_<key>_<n>.raw, key = the work-item's togsim_dispatch key,
 // n = this dma's rank among the work-item's indirect dmas.
 
-// --- BEGIN TOG call formats (copied verbatim into generated tog.cpp) ---
-// Each togsim_* call below lowers 1:1 to one of these free functions. Arg formats:
-//   togsim_dma(ctx, dir, arg_id, offset, ndim, dims[], strides[], elem_bits,
-//              is_async, sem, read_bufs[], n_read, write_bufs[], n_write, indirect)
-//              dir: 0=load (MOVIN), 1=store (MOVOUT); indirect: 0 or 1
-//   togsim_compute(ctx, tile_id, compute_type, ndim, dims[], read_bufs[], n_read,
-//                  write_bufs[], n_write)   compute_type: 0=vector, 1=matmul, 2=preload,
-//                                          3=cross-lane (1-3 DEPRECATED: typed grouping)
-//   togsim_memory_barrier(ctx, sem, expected)   // expected = elements signaled on sem
-//   togsim_dispatch(ctx, tile_fn, iv[], n_iv, key)   // run one work-item
-//   togsim_kernel(ctx, shape_args[], n_shape_args)   // TOG entry point
-// --- END TOG call formats ---
 void togsim_dma(EmitCtx* ctx, int32_t dir, int32_t arg_id,
                 uint64_t offset, int32_t ndim, const int64_t* dims,
                 const int64_t* strides, int32_t elem_bits,

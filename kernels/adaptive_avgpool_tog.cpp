@@ -1,87 +1,54 @@
-// Average pooling over a 2 x 2 window with stride 2, into a ROWS x COLS output, one TROW x TCOL tile per work-item:
-// the four window taps are four strided loads of the 2 COLS-wide input; a short last tile has its own tile id.
-// shape_args: ROWS COLS (example 1024 16). The tile is compile-time (-DTROW= -DTCOL=): the spad sizes state it.
-#include "togsim_runtime.h"
+// Average pooling over a 2 x 2 window with stride 2 into a ROWS x COLS output (arguments 0 x, 1 out), one TROW x TCOL
+// tile per work-item: four strided loads of the 2 COLS-wide input, one per tap; a short tile has its own variant.
+// shape_args: ROWS COLS (example 1024 16). Build options: -DTROW= -DTCOL= (default 256 16).
+#include "togsim.hpp"
+using namespace togsim;
 
-#include "kernel_shape.h"
-
-#ifndef TROW
-#define TROW 256
+struct AdaptiveAvgpool : Tog<AdaptiveAvgpool> {
+#ifdef TROW
+  static constexpr int64_t TILE_ROWS = TROW;
+#else
+  static constexpr int64_t TILE_ROWS = 256;
 #endif
-#ifndef TCOL
-#define TCOL 16
+#ifdef TCOL
+  static constexpr int64_t TILE_COLS = TCOL;
+#else
+  static constexpr int64_t TILE_COLS = 16;
 #endif
+  static constexpr int64_t TILE = f32(TILE_ROWS, TILE_COLS);
+  static constexpr Buf TAP3{.id = 0, .bytes = TILE}, TAP0{.id = 1, .bytes = TILE}, TAP1{.id = 2, .bytes = TILE},
+                       TAP2{.id = 3, .bytes = TILE}, OUT{.id = 4, .bytes = TILE};
+  static constexpr std::array buffers{TAP3, TAP0, TAP1, TAP2, OUT};
+  static constexpr Node AVG{.id = 0, .count = 1};
+  static constexpr int32_t AXIS_ROWS = 0, AXIS_COLS = 1;
 
-static const int32_t ELEM_BITS = KERNEL_ELEM_BITS;
+  struct TileArgs {
+    int64_t r0, c0, ROWS, COLS;
+  };
 
-static const int32_t ARG_X   = 0;
-static const int32_t ARG_OUT = 1;
-
-static const int64_t BUF_W3[1]  = {0};
-static const int64_t BUF_W0[1]  = {1};
-static const int64_t BUF_W1[1]  = {2};
-static const int64_t BUF_W2[1]  = {3};
-static const int64_t BUF_OUT[1] = {4};
-
-static const int64_t VEC_READ[4] = {0, 1, 2, 3};
-
-static const int32_t SYNC = 0;
-static const int32_t DENSE = 0;
-
-static const uint64_t SEM_NONE = 0;
-
-static const int32_t CT_VECTOR = 0;
-
-static const int64_t  NODES = 1;
-static const uint64_t TID_AVG = 0;
-
-static const int32_t AXIS_ROWS = 0;
-static const int32_t AXIS_COLS = 1;
-
-#define TILE_BYTES (TROW * TCOL * KERNEL_ELEM_BYTES)
-extern "C" const int32_t togsim_spad_buffer_count = 5;
-extern "C" const int64_t togsim_spad_buffer_bytes[5] = {TILE_BYTES, TILE_BYTES, TILE_BYTES, TILE_BYTES, TILE_BYTES};
-
-static void avgpool_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
-  (void)n_iv;
-  const int64_t r0 = iv[0], c0 = iv[1], ROWS = iv[2], COLS = iv[3];
-  const int64_t trow = kernel_extent(ROWS, r0, TROW), tcol = kernel_extent(COLS, c0, TCOL);
-  const int64_t variant = kernel_short(trow, TROW, AXIS_ROWS) | kernel_short(tcol, TCOL, AXIS_COLS);
-  const int64_t TILE[2] = {trow, tcol};
-  const int64_t IN_W = 2 * COLS, IN_ROW_STRIDE = 2 * IN_W;
-  const int64_t STRIDE_IN[2]  = {IN_ROW_STRIDE, 2};
-  const int64_t STRIDE_OUT[2] = {COLS, 1};
-  const int64_t base = r0 * IN_ROW_STRIDE + c0 * 2;
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X, (uint64_t)base,
-             2, TILE, STRIDE_IN, ELEM_BITS,
-             SYNC, SEM_NONE, nullptr, 0, BUF_W0, 1, DENSE);
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X, (uint64_t)(base + 1),
-             2, TILE, STRIDE_IN, ELEM_BITS,
-             SYNC, SEM_NONE, nullptr, 0, BUF_W1, 1, DENSE);
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X, (uint64_t)(base + IN_W),
-             2, TILE, STRIDE_IN, ELEM_BITS,
-             SYNC, SEM_NONE, nullptr, 0, BUF_W2, 1, DENSE);
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X, (uint64_t)(base + IN_W + 1),
-             2, TILE, STRIDE_IN, ELEM_BITS,
-             SYNC, SEM_NONE, nullptr, 0, BUF_W3, 1, DENSE);
-  togsim_compute(ctx, kernel_tile_id(variant, NODES, TID_AVG), CT_VECTOR, 0, nullptr,
-                 VEC_READ, 4, BUF_OUT, 1);
-  togsim_dma(ctx, TOGSIM_DMA_STORE, ARG_OUT, (uint64_t)(r0 * COLS + c0),
-             2, TILE, STRIDE_OUT, ELEM_BITS,
-             SYNC, SEM_NONE, BUF_OUT, 1, nullptr, 0, DENSE);
-}
-
-// One work-item per output tile, in row-major order.
-extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n) {
-  static const int64_t EXAMPLE[2] = {1024, 16};
-  int64_t shape[2];
-  kernel_shape("adaptive_avgpool", "ROWS COLS", 2, EXAMPLE, shape_args, n, shape);
-  const int64_t ROWS = shape[0], COLS = shape[1];
-  int64_t key = 0;
-  for (int64_t r0 = 0; r0 < ROWS; r0 += TROW) {
-    for (int64_t c0 = 0; c0 < COLS; c0 += TCOL) {
-      int64_t iv[4] = {r0, c0, ROWS, COLS};
-      togsim_dispatch(ctx, avgpool_tile, iv, 4, key++);
-    }
+  // One work-item per output tile, in row-major order.
+  void entry(Kernel& k) const {
+    const auto [ROWS, COLS] = shape<2>(k, {.kernel = "adaptive_avgpool", .names = "ROWS COLS", .example = {1024, 16}});
+    for (int64_t r0 = 0; r0 < ROWS; r0 += TILE_ROWS)
+      for (int64_t c0 = 0; c0 < COLS; c0 += TILE_COLS)
+        dispatch<&AdaptiveAvgpool::tile>(k, TileArgs{.r0 = r0, .c0 = c0, .ROWS = ROWS, .COLS = COLS});
   }
-}
+
+  void tile(Item& w, const TileArgs& a) const {
+    const int64_t trow = extent({.dim = a.ROWS, .at = a.r0, .tile = TILE_ROWS});
+    const int64_t tcol = extent({.dim = a.COLS, .at = a.c0, .tile = TILE_COLS});
+    const int64_t variant = short_axis({.axis = AXIS_ROWS, .extent = trow, .tile = TILE_ROWS}) |
+                            short_axis({.axis = AXIS_COLS, .extent = tcol, .tile = TILE_COLS});
+    const int64_t in_w = 2 * a.COLS, base = a.r0 * 2 * in_w + a.c0 * 2;
+    const auto tap = [&](int64_t at) {
+      return Desc{.ptr = 0, .type = f32, .offset = at, .dims = {trow, tcol}, .strides = {2 * in_w, 2}};
+    };
+    load(w, {.from = tap(base), .to = TAP0});
+    load(w, {.from = tap(base + 1), .to = TAP1});
+    load(w, {.from = tap(base + in_w), .to = TAP2});
+    load(w, {.from = tap(base + in_w + 1), .to = TAP3});
+    compute(w, {.node = AVG, .variant = variant, .reads = {TAP3, TAP0, TAP1, TAP2}, .writes = {OUT}});
+    const Desc out{.ptr = 1, .type = f32, .offset = a.r0 * a.COLS + a.c0, .dims = {trow, tcol}, .strides = {a.COLS, 1}};
+    store(w, {.from = OUT, .to = out});
+  }
+};

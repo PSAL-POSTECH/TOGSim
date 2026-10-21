@@ -54,7 +54,7 @@ The build has succeeded when `build/bin/Simulator` exists. Now compile a TOG wit
 replay it:
 
 ```bash
-g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/hello/hello_tog.cpp -o examples/hello/tog.so
+g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/hello/hello_tog.cpp -o examples/hello/tog.so
 build/bin/Simulator --config configs/tpuv6e.yml \
   --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv \
   --unit_table examples/hello/tog_units.tsv | tail -n 1
@@ -71,41 +71,36 @@ The kernel took 2437 cycles of the core clock on that machine.
 `examples/hello/hello_tog.cpp`, the TOG of the Quick start:
 
 ```cpp
-// The smallest TOG: one work-item loads a 64x64 tile of 32-bit elements from tensor 0 into spad buffer 1,
-// computes buffer 2 from it (tile 0 of the cycle table), and stores buffer 2 to tensor 1.
-#include "togsim_runtime.h"
+// The smallest TOG: one work-item loads a 64x64 f32 tile of tensor 0 into IN, computes OUT from it (tile 0 of the
+// cycle table), and stores OUT to tensor 1. Each call is one modeled instruction; the buffers order them.
+#include "togsim.hpp"
+using namespace togsim;
 
-#define ROWS 64
-#define COLS 64
+struct Hello : Tog<Hello> {
+  static constexpr Buf IN{.id = 1, .bytes = f32(64, 64)}, OUT{.id = 2, .bytes = f32(64, 64)};
+  static constexpr std::array buffers{IN, OUT};
+  static constexpr Node STEP{.id = 0, .count = 1};
+  static constexpr Desc SRC{.ptr = 0, .type = f32, .offset = 0, .dims = {64, 64}, .strides = {64, 1}};
+  static constexpr Desc DST{.ptr = 1, .type = f32, .offset = 0, .dims = {64, 64}, .strides = {64, 1}};
 
-// The body of the work-item: each call is one modeled instruction, and the buffer ids order them.
-static void body(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
-  (void)iv; (void)n_iv;
-  const int64_t dims[2] = {ROWS, COLS}, strides[2] = {COLS, 1};
-  const int64_t in[1] = {1}, out[1] = {2};
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, 0, 0, 2, dims, strides, 32, 0, 0, nullptr, 0, in, 1, 0);
-  togsim_compute(ctx, 0, 0, 0, nullptr, in, 1, out, 1);
-  togsim_dma(ctx, TOGSIM_DMA_STORE, 1, 0, 2, dims, strides, 32, 0, 0, out, 1, nullptr, 0, 0);
-}
+  void entry(Kernel& k) const { dispatch<&Hello::body>(k); }
 
-// The entry point, called once when the TOG is loaded: it registers the one work-item.
-extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape_args) {
-  (void)shape_args; (void)n_shape_args;
-  togsim_dispatch(ctx, body, nullptr, 0, 0);
-}
-
-// The byte size of each spad buffer id named above; id 0 is not a buffer.
-extern "C" const int32_t togsim_spad_buffer_count = 3;
-extern "C" const int64_t togsim_spad_buffer_bytes[3] = {0, ROWS * COLS * 4, ROWS * COLS * 4};
+  void body(Item& w) const {
+    load(w, {.from = SRC, .to = IN});
+    compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
+    store(w, {.from = OUT, .to = DST});
+  }
+};
 ```
 
-- **`togsim_kernel`** is the entry point. It runs once and calls `togsim_dispatch` once per
-  work-item, the unit of parallelism: a body function bound to one core.
+- **`buffers`** lists the spad buffers, each with its id and byte size.
+- **`entry`** runs once and dispatches each work-item, the unit of parallelism: a body function
+  bound to one core.
 - **`body`** holds the instructions of the work-item: a load of tensor argument 0 into buffer 1, a
   compute that reads buffer 1 and writes buffer 2, and a store of buffer 2 to tensor argument 1.
-- **The buffer ids order the instructions.** An instruction waits for the earlier instruction that
+  The compute takes row 0 of the cycle table (`STEP`, node 0 of 1).
+- **The buffers order the instructions.** An instruction waits for the earlier instruction that
   wrote a buffer it reads, and for nothing else.
-- **The buffer table** at the bottom gives the byte size of each buffer id.
 
 Three files go with it:
 
@@ -118,29 +113,25 @@ Three files go with it:
 [docs/tutorial.md](docs/tutorial.md) reads this TOG and its trace line by line, then builds up to
 asynchronous loads, many work-items, the array split and sessions.
 
-## The TOG ABI
+## Writing a TOG
 
-The ABI is one header, `include/togsim_runtime.h`, at version 16. A TOG includes it, defines
-`togsim_kernel` and the buffer table, and calls four functions that TOGSim provides when it loads
-the TOG:
+A TOG is written against **TOGSim API v1.0.0**, the one header `include/togsim.hpp` (C++20), by
+hand or by a compiler. Every call takes one struct of named arguments:
 
 | Call | What it models |
 |---|---|
-| `togsim_dispatch(ctx, fn, iv, n_iv, key)` | Registers one work-item. Called from `togsim_kernel`. |
-| `togsim_dma(ctx, ...)` | One load or store between DRAM and the scratchpad, synchronous or asynchronous. |
-| `togsim_compute(ctx, tile_id, ...)` | One compute. Its cycles are the row `tile_id` of the cycle table. |
-| `togsim_memory_barrier(ctx, sem, expected)` | A wait for the asynchronous loads signaled on `sem`. |
+| `dispatch<&X::f>(k, ...)` | One work-item, from the kernel's `entry`. |
+| `load(w, {.from, .to, ...})`, `store(w, {.from, .to, ...})` | One DMA between DRAM and the scratchpad. |
+| `load_async`, `batch`, `wait(w, {.batch})` | Asynchronous loads and the wait for them. |
+| `compute(w, {.node, .variant, .reads, .writes})` | One compute. Its cycles are a row of the cycle table. |
 
-Three rules that nothing checks for you:
+The header lowers each call to the C ABI 16 of `include/togsim_runtime.h`, which is what TOGSim
+loads. A body is called three times, so it must make the same calls every time, and it must call
+the producer of a buffer before its consumer.
 
-- A body is called three times, so it must make the same calls every time: no counters, no I/O.
-- Call the producer of a buffer before its consumer. Instructions that share no buffer are not
-  ordered.
-- Make body functions `static`.
-
-[docs/tog-abi.md](docs/tog-abi.md) is the reference: every argument of every call, the buffer and
-scratchpad rules, the files and the two tables, every refusal with its cause and fix, and a
-checklist for a TOG generator.
+[docs/tog-api.md](docs/tog-api.md) is the API reference. [docs/tog-abi.md](docs/tog-abi.md) is
+the C ABI under it: what each call models, the buffer and scratchpad rules, the files and the two
+tables, and every refusal with its cause and fix.
 
 ## Examples
 
@@ -177,7 +168,8 @@ The machine is the YAML file given to `--config`. `configs/` ships 7 of them, an
 | Page | What it holds |
 |---|---|
 | [docs/tutorial.md](docs/tutorial.md) | The model, and the six examples step by step. |
-| [docs/tog-abi.md](docs/tog-abi.md) | The TOG ABI reference. |
+| [docs/tog-api.md](docs/tog-api.md) | TOGSim API v1.0.0: the header every TOG is written against. |
+| [docs/tog-abi.md](docs/tog-abi.md) | The C ABI under it: what each call models, the files, the tables and the refusals. |
 | [docs/running.md](docs/running.md) | The command line, the command stream, how to read the output, troubleshooting and known limitations. |
 | [docs/machine.md](docs/machine.md), [docs/config-keys.md](docs/config-keys.md) | The knobs of a machine config, and how to change and sweep them. Every machine config key. |
 | [docs/output-lines.md](docs/output-lines.md) | A whole log line by line, and the lines a script may rely on. |

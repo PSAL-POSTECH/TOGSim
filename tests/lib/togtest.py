@@ -86,8 +86,8 @@ def read_table(path):
 
 
 def _compile(source, defines, cache_dir):
-    """`source` compiled against include/togsim_runtime.h with -D<define> each, once per run of the suite:
-    the .so, or the Failure that carries what g++ said."""
+    """`source` compiled as C++20 against include/ (togsim.hpp or the raw togsim_runtime.h) with -D<define> each, once
+    per run of the suite: the .so, or the Failure that carries what g++ said."""
     key = (str(source), tuple(sorted(defines)))
     with _guard:
         lock = _locks.setdefault(key, threading.Lock())
@@ -96,7 +96,7 @@ def _compile(source, defines, cache_dir):
             tag = hashlib.sha1(repr(key).encode()).hexdigest()[:10]
             out = cache_dir / f"{source.stem}-{tag}.so"
             cache_dir.mkdir(parents=True, exist_ok=True)
-            cmd = [os.environ.get("CXX", "g++"), "-std=c++17", "-shared", "-fPIC", "-O1", f"-I{REPO / 'include'}",
+            cmd = [os.environ.get("CXX", "g++"), "-std=c++20", "-shared", "-fPIC", "-O1", f"-I{REPO / 'include'}",
                    *[f"-D{d}" for d in sorted(defines)], str(source), "-o", str(out)]
             done = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             _built[key] = out if done.returncode == 0 else Failure(

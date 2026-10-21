@@ -3,17 +3,17 @@
 | Term | Meaning |
 |---|---|
 | tile-operation-graph (TOG) | A shared object (`tog.so`) whose calls are one kernel's DMAs, computes and barriers. It holds control flow only. |
-| kernel | One operation to simulate: one TOG with one entry point, `togsim_kernel`. |
+| kernel | One operation to simulate: one TOG with one entry point, its `entry` (`togsim_kernel` in the C ABI). |
 | replay | TOGSim running a TOG's calls on the modeled machine. |
-| work-item | One `togsim_dispatch` call: a body function plus its loop indices, bound to one core. The unit of parallelism. The log calls it a tile. |
+| work-item | One `dispatch` (`togsim_dispatch`): a body function plus its arguments, bound to one core. The unit of parallelism. The log calls it a tile. |
 | body | The function of a work-item; its calls are the work-item's instructions. |
-| instruction | One `togsim_dma`, `togsim_compute` or `togsim_memory_barrier` call of a body. |
-| compute tile, `tile_id` | A kind of compute: a row of the cycle table and the key of its unit-table rows. |
+| instruction | One `load` or `store` (`togsim_dma`), `compute` (`togsim_compute`) or `wait` (`togsim_memory_barrier`) of a body. |
+| compute tile, `tile_id` | A kind of compute: a row of the cycle table and the key of its unit-table rows. A compute names it as `node.id + node.count * variant`. |
 | data tile | The block of a tensor that one DMA moves, given by `offset`, `dims` and `strides`. |
-| tensor argument | An array of the kernel that lives in DRAM. A TOG names it by `arg_id`; `tog_tensors.txt` gives its size. |
+| tensor argument | An array of the kernel that lives in DRAM. A TOG names it by `Desc.ptr` (`arg_id` in the C ABI); `tog_tensors.txt` gives its size. |
 | DMA | A transfer between DRAM and a core's scratchpad: a load (`MOVIN` in the log) or a store (`MOVOUT`). |
 | scratchpad (spad), buffer | The memory of a core that DMAs fill and drain. A TOG names its regions, the buffers, by small integer ids. |
-| semaphore, barrier | An asynchronous load signals a semaphore; a barrier (`MEMORY_BAR`) waits for the data of the loads signaled on it. |
+| batch, semaphore, barrier | Asynchronous loads join a batch (a semaphore in the C ABI); a `wait`, a barrier (`MEMORY_BAR`) in the log, waits for the data of its loads. |
 | cycle table | `tile_id` to cycles: what each compute tile costs. You supply it. |
 | unit table | What each hardware unit (the systolic array, the vector unit, ...) took in during one run of each compute tile. You supply it. |
 | unit, unit of work, admitted | A hardware unit named in the unit table; what it counts (rows, cycles); how many of those it took in. |

@@ -15,7 +15,7 @@ DOCUMENTS = [p for p in [REPO / "README.md", *sorted((REPO / "docs").glob("*.md"
 FENCED = re.compile(r"^```(\w*)\n(.*?)^```$", re.M | re.S)
 TIMESTAMP = re.compile(r"^\[\d{4}-\d\d-\d\d [\d:.]+\] ")
 RUN_SH_LINE = re.compile(r"\[(trace|info|warning|error)\] |togsim: |\+ |# examples/|exit \d+$| *what\(\):|Config file ")
-REFUSAL_ROW = re.compile(r"^\| `((?:togsim: |\[TOGSim\] |\[Simulator\] |Config file |what\(\):)[^`]*)` "
+REFUSAL_ROW = re.compile(r"^\| `((?:togsim: |togsim\.hpp: |\[TOGSim\] |\[Simulator\] |Config file |what\(\):)[^`]*)` "
                          r"\| (\d+) \|", re.M)
 PLACEHOLDER = re.compile(r"<\w+>|\\\(\\\.\\\.\\\.\\\)")
 

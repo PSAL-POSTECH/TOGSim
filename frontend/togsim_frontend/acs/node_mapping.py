@@ -182,8 +182,8 @@ def variants_of(desc: KernelDesc, node: NodeDesc, values: dict[str, int]) -> lis
 
 
 def tile_ids(desc: KernelDesc, values: dict[str, int]) -> list[int]:
-    """The tile ids the kernel's computes name at `values`, as kernel_tile_id of kernels/kernel_shape.h numbers
-    them: node + nodes * variant."""
+    """The tile ids the kernel's computes name at `values`, as togsim.hpp's compute numbers the row of a Node:
+    node + nodes * variant."""
     return sorted(index + len(desc.nodes) * variant
                   for index, node in enumerate(desc.nodes) for variant in variants_of(desc, node, values))
 

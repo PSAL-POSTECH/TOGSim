@@ -1,42 +1,30 @@
 == mistakes
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/mistakes/refused_tog.cpp -o examples/mistakes/valid.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/mistakes/refused_tog.cpp -o examples/mistakes/valid.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
 [info] Core [0] : TPUV6E_MXU utilization(%): 5.25, active_cycles: 128, idle_cycles: 2309
 [info] Core [0] : Vpu utilization(%): 4.10, active_cycles: 100, idle_cycles: 2337
 [info] Total execution cycles: 2437
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DOTHER_ABI examples/mistakes/refused_tog.cpp -o examples/mistakes/OTHER_ABI.so
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/OTHER_ABI.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-togsim: refusing TOG examples/mistakes/OTHER_ABI.so: it was built against TOG ABI 15, TOGSim expects ABI 16; rebuild the TOG
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DNOT_A_TOG examples/mistakes/refused_tog.cpp -o examples/mistakes/NOT_A_TOG.so
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/NOT_A_TOG.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+togsim.hpp: no TOG registered: derive the TOG's struct from togsim::Tog<itself>
 exit 1
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DNO_VERSION examples/mistakes/refused_tog.cpp -o examples/mistakes/NO_VERSION.so
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/NO_VERSION.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-togsim: refusing TOG examples/mistakes/NO_VERSION.so: it embeds no togsim_abi_version (built without togsim_runtime.h); TOGSim expects ABI 16
-exit 1
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DNO_KERNEL examples/mistakes/refused_tog.cpp -o examples/mistakes/NO_KERNEL.so
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/NO_KERNEL.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-togsim: dlsym togsim_kernel failed: examples/mistakes/NO_KERNEL.so: undefined symbol: togsim_kernel
-exit 1
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DNO_BUFFER_TABLE examples/mistakes/refused_tog.cpp -o examples/mistakes/NO_BUFFER_TABLE.so
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/NO_BUFFER_TABLE.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-togsim: refusing TOG examples/mistakes/NO_BUFFER_TABLE.so: it states no spad buffer sizes (togsim_spad_buffer_count / togsim_spad_buffer_bytes)
-exit 1
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DUNSIZED_BUFFER examples/mistakes/refused_tog.cpp -o examples/mistakes/UNSIZED_BUFFER.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DUNSIZED_BUFFER examples/mistakes/refused_tog.cpp -o examples/mistakes/UNSIZED_BUFFER.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/UNSIZED_BUFFER.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
 [error] [TOGSim] spad buffer 2 is DMA'd but the TOG states no size for it (togsim_spad_buffer_bytes has 2 entries)
 exit 1
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DWRONG_COUNT examples/mistakes/refused_tog.cpp -o examples/mistakes/WRONG_COUNT.so
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/WRONG_COUNT.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-[error] [TOGSim] wait expects another element count: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects 2048
-exit 1
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DUNSIGNALED_SEM examples/mistakes/refused_tog.cpp -o examples/mistakes/UNSIGNALED_SEM.so
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/UNSIGNALED_SEM.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-[error] [TOGSim] wait on a semaphore never signaled: work-item 0 (key 0) sem 8 signaled 0 elements, wait expects 4096
-exit 1
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DNO_WAIT examples/mistakes/refused_tog.cpp -o examples/mistakes/NO_WAIT.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DNO_WAIT examples/mistakes/refused_tog.cpp -o examples/mistakes/NO_WAIT.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/NO_WAIT.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-[error] [TOGSim] unwaited load batch: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects none
+togsim.hpp: a work-item returned with an async batch it did not wait
 exit 1
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DTILE_PAST_TABLE examples/mistakes/refused_tog.cpp -o examples/mistakes/TILE_PAST_TABLE.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DEMPTY_WAIT examples/mistakes/refused_tog.cpp -o examples/mistakes/EMPTY_WAIT.so
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/EMPTY_WAIT.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+togsim.hpp: a wait on a batch that no load joined
+exit 1
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DTWO_WAITS examples/mistakes/refused_tog.cpp -o examples/mistakes/TWO_WAITS.so
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TWO_WAITS.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
+togsim.hpp: a batch that is not open: waited already, or never made by load_async() or batch()
+exit 1
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DTILE_PAST_TABLE examples/mistakes/refused_tog.cpp -o examples/mistakes/TILE_PAST_TABLE.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TILE_PAST_TABLE.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
 [error] [TOGSim] TOG examples/mistakes/TILE_PAST_TABLE.so: work-item 0 (key 0) computes tile id 1, which the cycle table does not hold (it has 1 tile ids, 0 to 0)
 exit 1
@@ -78,7 +66,7 @@ exit 255
 + build/bin/Simulator --config examples/mistakes/no_num_cores.gen.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_cycles.tsv
   what():  Config key num_cores not found
 exit 134
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/mistakes/silent_tog.cpp -o examples/mistakes/silent_valid.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/mistakes/silent_tog.cpp -o examples/mistakes/silent_valid.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/silent_valid.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
 [trace] [1012][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
@@ -90,7 +78,7 @@ exit 134
 [info] Core [0] : TPUV6E_MXU utilization(%): 0.00, active_cycles: 0, idle_cycles: 2437
 [info] Core [0] : Vpu utilization(%): 0.00, active_cycles: 0, idle_cycles: 2437
 [info] Total execution cycles: 2437
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DTENSOR_PAST_LIST examples/mistakes/silent_tog.cpp -o examples/mistakes/TENSOR_PAST_LIST.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DTENSOR_PAST_LIST examples/mistakes/silent_tog.cpp -o examples/mistakes/TENSOR_PAST_LIST.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TENSOR_PAST_LIST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
 [warning] [TOGSim] TOG examples/mistakes/TENSOR_PAST_LIST.so: its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
@@ -98,14 +86,7 @@ exit 134
 [trace] [1613][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000000000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
 [info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 2405, DRAM BW: 23.000 GB/s (1024 responses)
 [info] Total execution cycles: 2437
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DNULL_STRIDES examples/mistakes/silent_tog.cpp -o examples/mistakes/NULL_STRIDES.so
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/NULL_STRIDES.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
-[trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
-[trace] [957][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
-[trace] [1558][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
-[info] Core [0] : DMA active_cycles: 17, DMA idle_cycles: 2365, DRAM BW: 12.000 GB/s (513 responses)
-[info] Total execution cycles: 2382
-+ g++ -std=c++17 -shared -fPIC -O1 -Iinclude -DCONSUMER_FIRST examples/mistakes/silent_tog.cpp -o examples/mistakes/CONSUMER_FIRST.so
++ g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DCONSUMER_FIRST examples/mistakes/silent_tog.cpp -o examples/mistakes/CONSUMER_FIRST.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
 [info] [TOGSim] TOG examples/mistakes/CONSUMER_FIRST.so: core 0 holds 16384 bytes for the kernel: buffers 2, which its work-items read without having written them
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])

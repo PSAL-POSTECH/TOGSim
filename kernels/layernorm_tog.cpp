@@ -1,151 +1,87 @@
-// Layer normalization of (x + skip) over the rows of an M x N tensor: a statistics pass, then the normalize pass.
-// shape_args: M N (example 128 256). The tiles are compile-time (-DTM= -DTN= -DTM_STATS=): the spad buffer sizes
-// state them. A last tile short on M (of either pass) or N moves and computes what is left, under its own tile id.
-#include "togsim_runtime.h"
+// Layer normalization of (x + skip) over the rows of an M x N tensor (arguments 0 x, 1 skip, 2 mean, 3 var, 4 w, 5 b,
+// 6 out): a statistics pass, then the normalize pass; a short tile of either has its own variant. shape_args: M N
+// (example 128 256). Build options: -DTM= -DTN= -DTM_STATS= (default 64 64 128).
+#include <algorithm>
 
-#include "kernel_shape.h"
+#include "togsim.hpp"
+using namespace togsim;
 
-#ifndef TM
-#define TM 64
+struct Layernorm : Tog<Layernorm> {
+#ifdef TM
+  static constexpr int64_t TILE_M = TM;
+#else
+  static constexpr int64_t TILE_M = 64;
 #endif
-#ifndef TN
-#define TN 64
+#ifdef TN
+  static constexpr int64_t TILE_N = TN;
+#else
+  static constexpr int64_t TILE_N = 64;
 #endif
-#ifndef TM_STATS
-#define TM_STATS 128
+#ifdef TM_STATS
+  static constexpr int64_t TILE_M_STATS = TM_STATS;
+#else
+  static constexpr int64_t TILE_M_STATS = 128;
 #endif
+  static constexpr int64_t LARGER = f32(std::max(TILE_M, TILE_M_STATS), TILE_N), TILE = f32(TILE_M, TILE_N);
+  static constexpr Buf X{.id = 0, .bytes = LARGER}, WEIGHT{.id = 1, .bytes = TILE}, VAR{.id = 2, .bytes = LARGER},
+                       MEAN{.id = 3, .bytes = LARGER}, SKIP{.id = 4, .bytes = LARGER}, BIAS{.id = 5, .bytes = TILE},
+                       OUT{.id = 6, .bytes = TILE};
+  static constexpr std::array buffers{X, WEIGHT, VAR, MEAN, SKIP, BIAS, OUT};
+  static constexpr Node REDUCE{.id = 0, .count = 4}, WRITE_MEAN{.id = 1, .count = 4}, WRITE_VAR{.id = 2, .count = 4},
+                        NORM{.id = 3, .count = 4};
+  static constexpr int32_t AXIS_M = 0, AXIS_N = 1, AXIS_M_STATS = 2;
 
-static const int32_t ELEM_BITS = KERNEL_ELEM_BITS;
+  struct StatsArgs {
+    int64_t m0, M, N;
+  };
+  struct NormArgs {
+    int64_t m0, n0, M, N;
+  };
 
-static const int32_t ARG_X    = 0;
-static const int32_t ARG_SKIP = 1;
-static const int32_t ARG_MEAN = 2;
-static const int32_t ARG_VAR  = 3;
-static const int32_t ARG_W    = 4;
-static const int32_t ARG_B    = 5;
-static const int32_t ARG_OUT  = 6;
-
-static const int64_t BUF_X[1]    = {0};
-static const int64_t BUF_W[1]    = {1};
-static const int64_t BUF_VAR[1]  = {2};
-static const int64_t BUF_MEAN[1] = {3};
-static const int64_t BUF_SKIP[1] = {4};
-static const int64_t BUF_B[1]    = {5};
-static const int64_t BUF_OUT[1]  = {6};
-
-static const int64_t READ_X_SKIP[2] = {0, 4};
-static const int64_t READ_ALL[6]    = {0, 1, 2, 3, 4, 5};
-
-static const int64_t STRIDE_1D[1]  = {1};
-static const int64_t STRIDE_ROW[2] = {1, 0};
-static const int64_t STRIDE_COL[2] = {0, 1};
-
-static const int32_t SYNC = 0;
-static const int32_t DENSE = 0;
-
-static const uint64_t SEM_NONE = 0;
-
-static const int32_t CT_VECTOR = 0;
-
-static const uint64_t TID_REDUCE     = 0;
-static const uint64_t TID_WRITE_MEAN = 1;
-static const uint64_t TID_WRITE_VAR  = 2;
-static const uint64_t TID_NORM       = 3;
-static const int64_t  NODES          = 4;
-
-static const int32_t AXIS_M       = 0;
-static const int32_t AXIS_N       = 1;
-static const int32_t AXIS_M_STATS = 2;
-
-#define LARGER_TILE_BYTES (KERNEL_MAX(TM, TM_STATS) * TN * KERNEL_ELEM_BYTES)
-extern "C" const int32_t togsim_spad_buffer_count = 7;
-extern "C" const int64_t togsim_spad_buffer_bytes[7] = {
-    LARGER_TILE_BYTES, TM * TN * KERNEL_ELEM_BYTES, LARGER_TILE_BYTES, LARGER_TILE_BYTES,
-    LARGER_TILE_BYTES, TM * TN * KERNEL_ELEM_BYTES, TM * TN * KERNEL_ELEM_BYTES};
-
-static void stats_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
-  (void)n_iv;
-  const int64_t m0 = iv[0], M = iv[1], N = iv[2];
-  const int64_t tm = kernel_extent(M, m0, TM_STATS);
-  const int64_t m_short = kernel_short(tm, TM_STATS, AXIS_M_STATS);
-  const int64_t TILE_ROW[1] = {tm};
-  const int64_t STRIDE_2D[2] = {N, 1};
-
-  for (int64_t n0 = 0; n0 < N; n0 += TN) {
-    const int64_t tn = kernel_extent(N, n0, TN);
-    const int64_t variant = m_short | kernel_short(tn, TN, AXIS_N);
-    const int64_t TILE_STATS[2] = {tm, tn};
-    togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X, (uint64_t)(m0 * N + n0),
-               2, TILE_STATS, STRIDE_2D, ELEM_BITS,
-               SYNC, SEM_NONE, nullptr, 0, BUF_X, 1, DENSE);
-    togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_SKIP, (uint64_t)(m0 * N + n0),
-               2, TILE_STATS, STRIDE_2D, ELEM_BITS,
-               SYNC, SEM_NONE, nullptr, 0, BUF_SKIP, 1, DENSE);
-    togsim_compute(ctx, kernel_tile_id(variant, NODES, TID_REDUCE), CT_VECTOR, 0, nullptr,
-                   READ_X_SKIP, 2, nullptr, 0);
+  // The statistics pass over every TM_STATS-row tile, then one work-item per output tile.
+  void entry(Kernel& k) const {
+    const auto [M, N] = shape<2>(k, {.kernel = "layernorm", .names = "M N", .example = {128, 256}});
+    for (int64_t m0 = 0; m0 < M; m0 += TILE_M_STATS)
+      dispatch<&Layernorm::stats>(k, StatsArgs{.m0 = m0, .M = M, .N = N});
+    for (int64_t m0 = 0; m0 < M; m0 += TILE_M)
+      for (int64_t n0 = 0; n0 < N; n0 += TILE_N)
+        dispatch<&Layernorm::norm>(k, NormArgs{.m0 = m0, .n0 = n0, .M = M, .N = N});
   }
 
-  togsim_compute(ctx, kernel_tile_id(m_short, NODES, TID_WRITE_MEAN), CT_VECTOR, 0, nullptr,
-                 nullptr, 0, BUF_MEAN, 1);
-  togsim_dma(ctx, TOGSIM_DMA_STORE, ARG_MEAN, (uint64_t)m0,
-             1, TILE_ROW, STRIDE_1D, ELEM_BITS,
-             SYNC, SEM_NONE, BUF_MEAN, 1, nullptr, 0, DENSE);
-  togsim_compute(ctx, kernel_tile_id(m_short, NODES, TID_WRITE_VAR), CT_VECTOR, 0, nullptr,
-                 nullptr, 0, BUF_VAR, 1);
-  togsim_dma(ctx, TOGSIM_DMA_STORE, ARG_VAR, (uint64_t)m0,
-             1, TILE_ROW, STRIDE_1D, ELEM_BITS,
-             SYNC, SEM_NONE, BUF_VAR, 1, nullptr, 0, DENSE);
-}
-
-static void norm_tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
-  (void)n_iv;
-  const int64_t m0 = iv[0], n0 = iv[1], M = iv[2], N = iv[3];
-  const int64_t tm = kernel_extent(M, m0, TM), tn = kernel_extent(N, n0, TN);
-  const int64_t variant = kernel_short(tm, TM, AXIS_M) | kernel_short(tn, TN, AXIS_N);
-  const int64_t TILE[2] = {tm, tn};
-  const int64_t STRIDE_2D[2] = {N, 1};
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_X, (uint64_t)(m0 * N + n0),
-             2, TILE, STRIDE_2D, ELEM_BITS,
-             SYNC, SEM_NONE, nullptr, 0, BUF_X, 1, DENSE);
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_SKIP, (uint64_t)(m0 * N + n0),
-             2, TILE, STRIDE_2D, ELEM_BITS,
-             SYNC, SEM_NONE, nullptr, 0, BUF_SKIP, 1, DENSE);
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_MEAN, (uint64_t)m0,
-             2, TILE, STRIDE_ROW, ELEM_BITS,
-             SYNC, SEM_NONE, nullptr, 0, BUF_MEAN, 1, DENSE);
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_VAR, (uint64_t)m0,
-             2, TILE, STRIDE_ROW, ELEM_BITS,
-             SYNC, SEM_NONE, nullptr, 0, BUF_VAR, 1, DENSE);
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_W, (uint64_t)n0,
-             2, TILE, STRIDE_COL, ELEM_BITS,
-             SYNC, SEM_NONE, nullptr, 0, BUF_W, 1, DENSE);
-  togsim_dma(ctx, TOGSIM_DMA_LOAD, ARG_B, (uint64_t)n0,
-             2, TILE, STRIDE_COL, ELEM_BITS,
-             SYNC, SEM_NONE, nullptr, 0, BUF_B, 1, DENSE);
-
-  togsim_compute(ctx, kernel_tile_id(variant, NODES, TID_NORM), CT_VECTOR, 0, nullptr,
-                 READ_ALL, 6, BUF_OUT, 1);
-  togsim_dma(ctx, TOGSIM_DMA_STORE, ARG_OUT, (uint64_t)(m0 * N + n0),
-             2, TILE, STRIDE_2D, ELEM_BITS,
-             SYNC, SEM_NONE, BUF_OUT, 1, nullptr, 0, DENSE);
-}
-
-// The statistics pass over every TM_STATS-row tile, then one work-item per output tile.
-extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n) {
-  static const int64_t EXAMPLE[2] = {128, 256};
-  int64_t shape[2];
-  kernel_shape("layernorm", "M N", 2, EXAMPLE, shape_args, n, shape);
-  const int64_t M = shape[0], N = shape[1];
-  int64_t key = 0;
-
-  for (int64_t m0 = 0; m0 < M; m0 += TM_STATS) {
-    int64_t iv[3] = {m0, M, N};
-    togsim_dispatch(ctx, stats_tile, iv, 3, key++);
-  }
-  for (int64_t m0 = 0; m0 < M; m0 += TM) {
-    for (int64_t n0 = 0; n0 < N; n0 += TN) {
-      int64_t iv[4] = {m0, n0, M, N};
-      togsim_dispatch(ctx, norm_tile, iv, 4, key++);
+  void stats(Item& w, const StatsArgs& a) const {
+    const int64_t tm = extent({.dim = a.M, .at = a.m0, .tile = TILE_M_STATS});
+    const int64_t m_short = short_axis({.axis = AXIS_M_STATS, .extent = tm, .tile = TILE_M_STATS});
+    for (int64_t n0 = 0; n0 < a.N; n0 += TILE_N) {
+      const int64_t tn = extent({.dim = a.N, .at = n0, .tile = TILE_N});
+      const int64_t variant = m_short | short_axis({.axis = AXIS_N, .extent = tn, .tile = TILE_N});
+      const int64_t at = a.m0 * a.N + n0;
+      load(w, {.from = {.ptr = 0, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}, .to = X});
+      load(w, {.from = {.ptr = 1, .type = f32, .offset = at, .dims = {tm, tn}, .strides = {a.N, 1}}, .to = SKIP});
+      compute(w, {.node = REDUCE, .variant = variant, .reads = {X, SKIP}});
     }
+    compute(w, {.node = WRITE_MEAN, .variant = m_short, .writes = {MEAN}});
+    store(w, {.from = MEAN, .to = {.ptr = 2, .type = f32, .offset = a.m0, .dims = {tm}, .strides = {1}}});
+    compute(w, {.node = WRITE_VAR, .variant = m_short, .writes = {VAR}});
+    store(w, {.from = VAR, .to = {.ptr = 3, .type = f32, .offset = a.m0, .dims = {tm}, .strides = {1}}});
   }
-}
+
+  // The row statistics are loaded broadcast along the tile's columns, the weights and bias down its rows.
+  void norm(Item& w, const NormArgs& a) const {
+    const int64_t tm = extent({.dim = a.M, .at = a.m0, .tile = TILE_M});
+    const int64_t tn = extent({.dim = a.N, .at = a.n0, .tile = TILE_N});
+    const int64_t variant = short_axis({.axis = AXIS_M, .extent = tm, .tile = TILE_M}) |
+                            short_axis({.axis = AXIS_N, .extent = tn, .tile = TILE_N});
+    const int64_t at = a.m0 * a.N + a.n0;
+    const auto tile = [&](int32_t ptr, int64_t offset, Dims strides) {
+      return Desc{.ptr = ptr, .type = f32, .offset = offset, .dims = {tm, tn}, .strides = strides};
+    };
+    load(w, {.from = tile(0, at, {a.N, 1}), .to = X});
+    load(w, {.from = tile(1, at, {a.N, 1}), .to = SKIP});
+    load(w, {.from = tile(2, a.m0, {1, 0}), .to = MEAN});
+    load(w, {.from = tile(3, a.m0, {1, 0}), .to = VAR});
+    load(w, {.from = tile(4, a.n0, {0, 1}), .to = WEIGHT});
+    load(w, {.from = tile(5, a.n0, {0, 1}), .to = BIAS});
+    compute(w, {.node = NORM, .variant = variant, .reads = {X, WEIGHT, VAR, MEAN, SKIP, BIAS}, .writes = {OUT}});
+    store(w, {.from = OUT, .to = tile(6, at, {a.N, 1})});
+  }
+};

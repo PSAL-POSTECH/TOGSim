@@ -54,7 +54,7 @@ The shipped configs name their Ramulator2 and BookSim2 files relative to themsel
 while you change a key:
 
 ```bash
-g++ -std=c++17 -shared -fPIC -O1 -Iinclude examples/tiles/tiles_tog.cpp -o examples/tiles/tog.so
+g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/tiles/tiles_tog.cpp -o examples/tiles/tog.so
 sed -e "s#: \.\./configs/#: $PWD/configs/#" -e 's/^num_cores: .*/num_cores: 2/' \
   configs/tpuv6e.yml > build/two_cores.yml
 build/bin/Simulator --config build/two_cores.yml --tog_so examples/tiles/tog.so \

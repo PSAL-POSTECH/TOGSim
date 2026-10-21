@@ -1,41 +1,37 @@
 // One kernel of a session: ITEMS work-items (default two), each a 16 KB load, one compute tile and a 16 KB store.
 // -DNO_CALLS: the work-items make no call. -DNO_COMPUTE: they copy, the store draining what the load filled.
-#include "togsim_runtime.h"
+#include "togsim.hpp"
+using namespace togsim;
 
-#ifndef ITEMS
-#define ITEMS 2
-#endif
-
-#define ROWS 64
-#define COLS 64
-
-static void tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
-  (void)n_iv;
-#if defined(NO_CALLS)
-  (void)ctx; (void)iv;
-#elif defined(NO_COMPUTE)
-  const int64_t d[2] = {ROWS, COLS}, st[2] = {COLS, 1};
-  const int64_t in[1] = {1};
-  const uint64_t at = (uint64_t)iv[0] * ROWS * COLS;
-  togsim_dma(ctx, 0, 0, at, 2, d, st, 32, 0, 0, nullptr, 0, in, 1, 0);
-  togsim_dma(ctx, 1, 1, at, 2, d, st, 32, 0, 0, in, 1, nullptr, 0, 0);
+struct SessionKernel : Tog<SessionKernel> {
+#ifdef ITEMS
+  static constexpr int64_t N = ITEMS;
 #else
-  const int64_t d[2] = {ROWS, COLS}, st[2] = {COLS, 1};
-  const int64_t in[1] = {1}, out[1] = {2};
-  const uint64_t at = (uint64_t)iv[0] * ROWS * COLS;
-  togsim_dma(ctx, 0, 0, at, 2, d, st, 32, 0, 0, nullptr, 0, in, 1, 0);
-  togsim_compute(ctx, 0, 0, 0, nullptr, in, 1, out, 1);
-  togsim_dma(ctx, 1, 1, at, 2, d, st, 32, 0, 0, out, 1, nullptr, 0, 0);
+  static constexpr int64_t N = 2;
 #endif
-}
+  static constexpr int64_t ROWS = 64, COLS = 64;
+  static constexpr Buf IN{.id = 1, .bytes = f32(ROWS, COLS)}, OUT{.id = 2, .bytes = f32(ROWS, COLS)};
+  static constexpr std::array buffers{IN, OUT};
+  static constexpr Node STEP{.id = 0, .count = 1};
 
-extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape_args) {
-  (void)shape_args; (void)n_shape_args;
-  for (int64_t i = 0; i < ITEMS; i++) {
-    int64_t iv[1] = {i};
-    togsim_dispatch(ctx, tile, iv, 1, i);
+  struct At {
+    int64_t i;
+  };
+
+  void entry(Kernel& k) const {
+    for (int64_t i = 0; i < N; i++) dispatch<&SessionKernel::tile>(k, At{.i = i});
   }
-}
 
-extern "C" const int32_t togsim_spad_buffer_count = 3;
-extern "C" const int64_t togsim_spad_buffer_bytes[3] = {0, ROWS * COLS * 4, ROWS * COLS * 4};
+  void tile([[maybe_unused]] Item& w, [[maybe_unused]] const At& a) const {
+#if !defined(NO_CALLS)
+    const int64_t at = a.i * ROWS * COLS;
+    load(w, {.from = {.ptr = 0, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}, .to = IN});
+#if defined(NO_COMPUTE)
+    store(w, {.from = IN, .to = {.ptr = 1, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}});
+#else
+    compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
+    store(w, {.from = OUT, .to = {.ptr = 1, .type = f32, .offset = at, .dims = {ROWS, COLS}, .strides = {COLS, 1}}});
+#endif
+#endif
+  }
+};

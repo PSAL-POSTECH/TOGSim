@@ -1,4 +1,5 @@
-"""A TOG built against another TOG ABI is refused by name and version; the same TOG at this ABI replays."""
+"""A TOG built against another TOG ABI is refused by name and version; the same TOG at this ABI replays. Two raw C
+ABI breaks that togsim.hpp cannot write: no togsim_kernel is refused, a load with no strides replays unstrided."""
 from togtest import Case
 
 ABI = 16
@@ -32,5 +33,22 @@ def refused(define, saying):
     return lambda t: replay(t, define).expect_refused(f"togsim: refusing TOG {t.work_dir}/tog.so: {saying}", exit=1)
 
 
+def no_kernel_refused(t):
+    """A TOG whose entry point has another name is refused when TOGSim looks up togsim_kernel."""
+    tog = t.work_dir / "tog.so"
+    replay(t, "NO_KERNEL").expect_refused(f"togsim: dlsym togsim_kernel failed: {tog}: undefined symbol: togsim_kernel",
+                                          exit=1)
+
+
+def null_strides_replay_unstrided(t):
+    """A load given no strides is not refused and says nothing: it replays with an empty stride list."""
+    run = replay(t, "NULL_STRIDES").expect_ok()
+    strides = [e.fields.get("stride") for e in run.events() if e.opcode == "MOVIN" and e.tag == "INST_ISSUED"]
+    if strides != ["[]"]:
+        run.fail(f"expected one load with stride=[], got {strides}")
+
+
 CASES = [Case("this_version_replays", this_version_replays)] + [
-    Case(name, refused(**how)) for name, how in REFUSED.items()]
+    Case(name, refused(**how)) for name, how in REFUSED.items()] + [
+    Case("refused.no_kernel_symbol", no_kernel_refused),
+    Case("null_strides_replay_unstrided", null_strides_replay_unstrided)]
