@@ -50,14 +50,14 @@ struct Gemm : Tog<Gemm> {
       const int64_t tk = extent({.dim = a.K, .at = k0, .tile = TILE_K});
       const Desc lhs{.ptr = 0, .type = f32, .offset = a.m0 * a.K + k0, .dims = {tm, tk}, .strides = {a.K, 1}};
       const Desc rhs{.ptr = 1, .type = f32, .offset = k0 * a.N + a.n0, .dims = {tk, tn}, .strides = {a.N, 1}};
-      load(w, {.from = lhs, .to = A_TILE, .sem = a_ready});
-      load(w, {.from = rhs, .to = B_TILE, .sem = b_ready});
+      load(w, {.src = lhs, .dst = A_TILE, .sem = a_ready});
+      load(w, {.src = rhs, .dst = B_TILE, .sem = b_ready});
       wait(w, {.sem = b_ready});
       wait(w, {.sem = a_ready});
       const int64_t variant = out | short_axis({.axis = AXIS_K, .extent = tk, .tile = TILE_K});
       compute(w, {.node = MATMUL, .variant = variant, .reads = {ACC, B_TILE, A_TILE}, .writes = {ACC}});
     }
     const Desc dst{.ptr = 2, .type = f32, .offset = a.m0 * a.N + a.n0, .dims = {tm, tn}, .strides = {a.N, 1}};
-    store(w, {.from = ACC, .to = dst});
+    store(w, {.src = ACC, .dst = dst});
   }
 };

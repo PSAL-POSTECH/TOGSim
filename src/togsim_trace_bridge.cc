@@ -35,7 +35,7 @@ void warn_once(const std::string& line) {
 }
 
 // `uniq` is a per-DMA-record Core tag key, unique within its work-item; the barrier
-// that waits the dma's semaphore batch carries it among its wait keys.
+// that waits the dma's semaphore carries it among its wait keys.
 std::shared_ptr<Instruction> make_dma(const togsim::TraceRec& t, int64_t uniq) {
   Opcode op = (t.dir == 1) ? Opcode::MOVOUT : Opcode::MOVIN;
   std::vector<size_t> tile_size(t.dims.begin(), t.dims.end());
@@ -52,18 +52,18 @@ std::shared_ptr<Instruction> make_dma(const togsim::TraceRec& t, int64_t uniq) {
   return inst;
 }
 
-// A MEMORY_BAR waiting the tag keys of every async dma in `batch` -- the Core's tag
+// A MEMORY_BAR waiting the tag keys of every async dma in `dmas` -- the Core's tag
 // table releases it at the LAST of their DATA-ready (resp-complete) events, unlike a
 // raw DONE edge that an async dma releases at issue-complete. Named after the first.
-std::shared_ptr<Instruction> make_mem_bar(const std::vector<std::shared_ptr<Instruction>>& batch) {
+std::shared_ptr<Instruction> make_mem_bar(const std::vector<std::shared_ptr<Instruction>>& dmas) {
   auto bar = std::make_shared<Instruction>(
       Opcode::MEMORY_BAR, 0, 0, 0,
       std::vector<size_t>{}, std::vector<int>{}, 0,
       std::vector<int64_t>{0}, std::vector<int64_t>{1},
       std::vector<int64_t>{});
-  bar->set_addr_name(batch.front()->get_addr_name(), batch.front()->get_addr_id());
+  bar->set_addr_name(dmas.front()->get_addr_name(), dmas.front()->get_addr_id());
   bar->prepare_tag_key();
-  for (const auto& d : batch) bar->add_wait_key(d->get_tag_id());
+  for (const auto& d : dmas) bar->add_wait_key(d->get_tag_id());
   return bar;
 }
 
@@ -116,8 +116,8 @@ struct BuildState {
   std::map<int64_t, BufferWriters> writers;
   // Per work-item semaphore state: the async loads signaled since the last wait, and
   // the element count each semaphore's last wait covered (a re-wait must expect it again).
-  struct SemBatch { std::vector<std::shared_ptr<Instruction>> dmas; std::vector<int64_t> bufs; int64_t moved = 0; };
-  std::map<uint64_t, SemBatch> open_batch;
+  struct Signaled { std::vector<std::shared_ptr<Instruction>> dmas; std::vector<int64_t> bufs; int64_t moved = 0; };
+  std::map<uint64_t, Signaled> signaled;
   std::map<uint64_t, int64_t> waited;
   int64_t next_tag = 0;
   int cur_tile_group = -1;
@@ -281,7 +281,7 @@ struct BuildState {
   }
 
   // A TOG that breaks the semaphore contract: names the work-item and the counts
-  // (`expected` < 0: no wait follows the batch).
+  // (`expected` < 0: no wait follows the semaphore's loads).
   [[noreturn]] void sem_error(const char* what, uint64_t sem, int64_t sum, int64_t expected) const {
     throw std::runtime_error(fmt::format(
         "[TOGSim] {}: work-item {} (key {}) sem {} signaled {} elements, wait expects {}",
@@ -291,8 +291,8 @@ struct BuildState {
 
   // ---- per-tile close -----------------------------------------------------
   void flush() {
-    if (!open_batch.empty())
-      sem_error("unwaited load batch", open_batch.begin()->first, open_batch.begin()->second.moved, -1);
+    if (!signaled.empty())
+      sem_error("unwaited semaphore", signaled.begin()->first, signaled.begin()->second.moved, -1);
     if (sg && tile) {
       tile->set_spad_footprint(cur_tile_footprint);   // distinct-buffer resident set (1- vs 2-dispatch)
       tile->set_spad_versions(tile_first_alloc, next_alloc);
@@ -397,8 +397,8 @@ struct BuildState {
   }
 
   // ---- the record consumer (one record at a time) -------------------------
-  // An async load joins its semaphore's open batch; a barrier waits that whole batch (count
-  // must equal `expected`) and replaces the batch's writers. A re-wait adds no edge: the data
+  // An async load signals its semaphore; a barrier waits every load signaled since the last wait
+  // (count must equal `expected`) and replaces their writers. A re-wait adds no edge: the data
   // already passed that barrier, and whatever wrote the buffers since stays their writer.
   void feed(const togsim::TraceRec& t) {
     using togsim::TraceRec;
@@ -434,10 +434,10 @@ struct BuildState {
       } else {                                           // LOAD
         tile->append_instuction(inst);
         if (t.is_async) {
-          auto& batch = open_batch[t.sem];
-          batch.dmas.push_back(inst);
-          batch.bufs.insert(batch.bufs.end(), t.write_bufs.begin(), t.write_bufs.end());
-          batch.moved += (int64_t)rec_numel(t);
+          auto& sem = signaled[t.sem];
+          sem.dmas.push_back(inst);
+          sem.bufs.insert(sem.bufs.end(), t.write_bufs.begin(), t.write_bufs.end());
+          sem.moved += (int64_t)rec_numel(t);
         }
         // No hard WAR edge: load-buffer reuse is modeled by the SRAM version /
         // capacity machinery (sram_apply), which caps how many versions coexist. A
@@ -446,24 +446,24 @@ struct BuildState {
       }
       sram_apply(t, inst);   // a store frees what it drains; a load occupies the spad
     } else if (t.kind == TraceRec::MEMORY_BAR) {
-      auto ob = open_batch.find(t.sem);
-      if (ob == open_batch.end()) {
+      auto os = signaled.find(t.sem);
+      if (os == signaled.end()) {
         auto w = waited.find(t.sem);
         if (w == waited.end()) sem_error("wait on a semaphore never signaled", t.sem, 0, t.expected);
         if (w->second != t.expected)
           sem_error("re-wait expects another element count", t.sem, w->second, t.expected);
         return;
       }
-      SemBatch& batch = ob->second;
-      if (batch.moved != t.expected)
-        sem_error("wait expects another element count", t.sem, batch.moved, t.expected);
-      auto bar = make_mem_bar(batch.dmas);
+      Signaled& sem = os->second;
+      if (sem.moved != t.expected)
+        sem_error("wait expects another element count", t.sem, sem.moved, t.expected);
+      auto bar = make_mem_bar(sem.dmas);
       bar->set_tile_group(cur_tile_group);
-      for (auto& d : batch.dmas) d->add_dep(bar, DepEvent::DONE);
+      for (auto& d : sem.dmas) d->add_dep(bar, DepEvent::DONE);
       tile->append_instuction(bar);
-      for (int64_t b : batch.bufs) writers[b].replace(bar);
-      waited[t.sem] = batch.moved;
-      open_batch.erase(ob);
+      for (int64_t b : sem.bufs) writers[b].replace(bar);
+      waited[t.sem] = sem.moved;
+      signaled.erase(os);
     } else if (t.kind == TraceRec::COMPUTE) {
       auto inst = make_compute(t);
       inst->set_tile_id(unit_tile_base + (int64_t)t.tile_id);

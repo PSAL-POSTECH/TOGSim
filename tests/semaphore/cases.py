@@ -5,7 +5,7 @@ TOG = "barrier_waits_both_loads_tog.cpp"
 REFUSED = {
     "refused.wait_with_wrong_count": dict(define="WRONG_COUNT", saying="wait expects another element count"),
     "refused.wait_on_unsignaled_semaphore": dict(define="UNSIGNALED_SEM", saying="wait on a semaphore never signaled"),
-    "refused.load_batch_never_waited": dict(define="NO_WAIT", saying="unwaited load batch"),
+    "refused.semaphore_never_waited": dict(define="NO_WAIT", saying="unwaited semaphore"),
 }
 
 

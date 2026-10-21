@@ -13,8 +13,8 @@ struct Hello : Tog<Hello> {
   void entry(Kernel& k) const { dispatch<&Hello::body>(k); }
 
   void body(Item& w) const {
-    load(w, {.from = SRC, .to = IN});
+    load(w, {.src = SRC, .dst = IN});
     compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = DST});
+    store(w, {.src = OUT, .dst = DST});
   }
 };

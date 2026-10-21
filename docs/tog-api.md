@@ -31,9 +31,9 @@ struct Hello : Tog<Hello> {
   void entry(Kernel& k) const { dispatch<&Hello::body>(k); }
 
   void body(Item& w) const {
-    load(w, {.from = SRC, .to = IN});
+    load(w, {.src = SRC, .dst = IN});
     compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = DST});
+    store(w, {.src = OUT, .dst = DST});
   }
 };
 ```
@@ -60,17 +60,19 @@ only by their buffers ([how a TOG is replayed](tog-abi.md#how-a-tog-is-replayed)
 | `Desc` | `.ptr`, `.type`, `.offset`, `.dims`, `.strides`, `.indirect` | The DMA descriptor: kernel argument `ptr` (its line of `tog_tensors.txt`), elements of `type`, `dims` (1 to 4) elements `strides` apart, from `offset` elements in. `indirect` (default false) makes it a gather or scatter. |
 | `Node` | `.id`, `.count` | A compute node: node `id` of the kernel's `count`. |
 | `Semaphore` | | A semaphore that async loads signal, owned by the `Item` that made it. `Semaphore()` is none. |
+| `Kernel` | | The kernel scope that `entry` gets, made when TOGSim calls `togsim_kernel`. It takes `shape<N>` and `dispatch` only. Made only by the header, not copyable. |
+| `Item` | | One replay of one work-item, made anew each time TOGSim runs it (three times per replay). It takes `load`, `load_async`, `semaphore`, `wait`, `compute` and `store`, and at return refuses a semaphore with loads not waited. Made only by the header, not copyable. |
 
 ## Calls
 
 | Call | Lowers to | What it does |
 |---|---|---|
-| `load(w, {.from, .to, .sem, .after})` | `togsim_dma` | DRAM to spad: `from` into buffer `to`. With `.sem` it is async and signals that semaphore. `.after` lists buffers it reads too (an indirect load's index) or must follow. |
-| `Semaphore s = load_async(w, {.from, .to, .after})` | `togsim_dma` | One async load on a new semaphore of its own. |
+| `load(w, {.src, .dst, .sem, .after})` | `togsim_dma` | DRAM to spad: `src` into buffer `dst`. With `.sem` it is async and signals that semaphore. `.after` lists buffers it reads too (an indirect load's index) or must follow. |
+| `Semaphore s = load_async(w, {.src, .dst, .after})` | `togsim_dma` | One async load on a new semaphore of its own. |
 | `Semaphore s = semaphore(w)` | | A new semaphore, ABI sem id 1, 2, ... in the work-item's creation order. |
 | `wait(w, {.sem = s})` | `togsim_memory_barrier` | Waits for every load that signaled `s` since its last wait. The header states their element count. |
 | `compute(w, {.node, .variant, .reads, .writes})` | `togsim_compute` | One compute at row `node.id + node.count * variant` of the cycle and unit tables, `compute_type` 0. |
-| `store(w, {.from, .to, .also})` | `togsim_dma` | Spad to DRAM: buffer `from` into `to`. `.also` lists buffers it reads too (an indirect store's index) or must follow. |
+| `store(w, {.src, .dst, .also})` | `togsim_dma` | Spad to DRAM: buffer `src` into `dst`. `.also` lists buffers it reads too (an indirect store's index) or must follow. |
 | `dispatch<&X::f>(k)`, `dispatch<&X::f>(k, Args{...})` | `togsim_dispatch` | One work-item, under the next key: 0, 1, ... |
 | `dispatch<&X::f>(k, {.key = key, .args = Args{...}})`, `{.key = key}` | `togsim_dispatch` | One work-item under `key`. A kernel uses keyed or counted dispatch, not both. |
 | `shape<N>(k, {.kernel, .names, .example, .extents})` | | The kernel's `N` shape arguments from `tog_shape.txt`, else `example`. |
@@ -93,8 +95,8 @@ compiler uses them for the calls gem5 measured: call `c` of node `t` is row `t +
 
 ```cpp
     Semaphore ab = semaphore(w);
-    load(w, {.from = LHS, .to = A, .sem = ab});
-    load(w, {.from = RHS, .to = B, .sem = ab});
+    load(w, {.src = LHS, .dst = A, .sem = ab});
+    load(w, {.src = RHS, .dst = B, .sem = ab});
     wait(w, {.sem = ab});
 ```
 
@@ -137,7 +139,7 @@ TOGSim simulates anything; `shape` prints `kernel <name>: ...` instead (see [ker
 | `a buffer with a negative id` | A `Buf` with `.id` below 0 in a load, store or compute. |
 | `a work-item returned with a semaphore whose loads it did not wait` | A load signaled a semaphore that no `wait` followed. |
 | `a wait on a semaphore no load signaled since its last wait` | A wait with no new load on its semaphore: a first wait before any load, or a second with none between. |
-| `a semaphore this work-item did not make with semaphore() or load_async()` | A `Semaphore` from elsewhere. |
+| `a semaphore this work-item did not make with semaphore() or load_async()` | `Semaphore()`, or a `Semaphore` another work-item made. |
 | `more than 64 semaphores in one work-item` | Too many semaphores. |
 | `load_async makes its own semaphore: give it no .sem` | `load_async` with `.sem`. |
 | `a DMA with no dims`, `one to four dims`, `a DMA gives another count of strides than of dims` | The descriptor's `dims` and `strides`. |

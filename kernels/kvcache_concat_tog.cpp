@@ -56,10 +56,10 @@ struct KvcacheConcat : Tog<KvcacheConcat> {
         .ptr = 1, .type = f32, .offset = a.t0 * HIDDEN_SIZE, .dims = {ttok, HIDDEN_SIZE}, .strides = {HIDDEN_SIZE, 1}};
     const Desc key{.ptr = 2, .type = f32, .offset = cached, .dims = {ttok, CACHE_DIM}, .strides = {CACHE_DIM, 1}};
     const Desc value{.ptr = 3, .type = f32, .offset = cached, .dims = {ttok, CACHE_DIM}, .strides = {CACHE_DIM, 1}};
-    load(w, {.from = qkv, .to = QKV});
+    load(w, {.src = qkv, .dst = QKV});
     compute(w, {.node = SPLIT, .variant = variant, .reads = {QKV}, .writes = {QUERY, KEY, VALUE}});
-    store(w, {.from = QUERY, .to = query});
-    store(w, {.from = KEY, .to = key});
-    store(w, {.from = VALUE, .to = value});
+    store(w, {.src = QUERY, .dst = query});
+    store(w, {.src = KEY, .dst = key});
+    store(w, {.src = VALUE, .dst = value});
   }
 };

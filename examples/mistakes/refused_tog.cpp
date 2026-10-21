@@ -31,11 +31,11 @@ struct Refused : Tog<Refused> {
     Semaphore none = semaphore(w);
     wait(w, {.sem = none});
 #endif
-    Semaphore in = load_async(w, {.from = SRC, .to = IN});
+    Semaphore in = load_async(w, {.src = SRC, .dst = IN});
 #if !defined(NO_WAIT)
     wait(w, {.sem = in});
 #endif
     compute(w, {.node = STEP, .variant = VARIANT, .reads = {IN}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = DST});
+    store(w, {.src = OUT, .dst = DST});
   }
 };

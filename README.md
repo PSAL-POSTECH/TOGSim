@@ -86,9 +86,9 @@ struct Hello : Tog<Hello> {
   void entry(Kernel& k) const { dispatch<&Hello::body>(k); }
 
   void body(Item& w) const {
-    load(w, {.from = SRC, .to = IN});
+    load(w, {.src = SRC, .dst = IN});
     compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = DST});
+    store(w, {.src = OUT, .dst = DST});
   }
 };
 ```
@@ -121,7 +121,7 @@ hand or by a compiler. Every call takes one struct of named arguments:
 | Call | What it models |
 |---|---|
 | `dispatch<&X::f>(k, ...)` | One work-item, from the kernel's `entry`. |
-| `load(w, {.from, .to, ...})`, `store(w, {.from, .to, ...})` | One DMA between DRAM and the scratchpad. |
+| `load(w, {.src, .dst, ...})`, `store(w, {.src, .dst, ...})` | One DMA between DRAM and the scratchpad. |
 | `load_async`, `semaphore`, `wait(w, {.sem})` | Asynchronous loads and the wait for them. |
 | `compute(w, {.node, .variant, .reads, .writes})` | One compute. Its cycles are a row of the cycle table. |
 

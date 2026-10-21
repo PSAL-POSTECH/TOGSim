@@ -105,6 +105,7 @@ struct ShortAxis {
 constexpr int64_t short_axis(const ShortAxis& s) { return s.extent < s.tile ? (int64_t)1 << s.axis : 0; }
 
 constexpr int32_t SEMAPHORES = 64;
+uint64_t items_ = 0;
 struct Ops_;
 
 // A semaphore made by semaphore(w) or load_async(...): a handle only its Item signals and waits.
@@ -116,12 +117,13 @@ class Semaphore {
  private:
   friend class Item;
   friend struct Ops_;
-  constexpr explicit Semaphore(int32_t slot) : slot_(slot) {}
+  constexpr Semaphore(int32_t slot, uint64_t item) : slot_(slot), item_(item) {}
   int32_t slot_ = -1;
+  uint64_t item_ = 0;
 };
 
-// One replay of a work-item and its semaphores, ABI sem ids 1, 2, ... in creation order. A semaphore a load
-// signaled since its last wait must be waited before the work-item returns.
+// One replay of a work-item, serial 1, 2, ... in construction order, and its semaphores, ABI sem ids 1, 2, ... in
+// creation order. A semaphore a load signaled since its last wait must be waited before the work-item returns.
 class Item {
  public:
   Item(const Item&) = delete;
@@ -129,13 +131,13 @@ class Item {
 
  private:
   friend struct Ops_;
-  explicit Item(EmitCtx* c) : c_(c) {}
+  explicit Item(EmitCtx* c) : c_(c), serial_(++items_) {}
   Semaphore make_() {
     if (made_ == SEMAPHORES) fail_("more than 64 semaphores in one work-item");
-    return Semaphore(made_++);
+    return Semaphore(made_++, serial_);
   }
   void check_(Semaphore s) const {
-    if (s.slot_ < 0 || s.slot_ >= made_)
+    if (s.item_ != serial_)
       fail_("a semaphore this work-item did not make with semaphore() or load_async()");
   }
   void signal_(Semaphore s, int64_t elements) {
@@ -155,6 +157,7 @@ class Item {
     if (signaled_) fail_("a work-item returned with a semaphore whose loads it did not wait");
   }
   EmitCtx* c_;
+  uint64_t serial_;
   int32_t made_ = 0;
   uint64_t signaled_ = 0;
   int64_t sum_[SEMAPHORES]{};
@@ -234,41 +237,41 @@ inline int64_t elements_(const Dims& d) {
 // A new semaphore: load(w, {..., .sem = s}) signals it, wait(w, {.sem = s}) waits for those loads.
 inline Semaphore semaphore(Item& w) { return Ops_::make(w); }
 
-// DRAM -> spad: `from` into `to`. With `sem` it signals that semaphore and is done once its requests are sent, else
+// DRAM -> spad: `src` into `dst`. With `sem` it signals that semaphore and is done once its requests are sent, else
 // once its data has arrived. `after`: buffers it must follow (an index it reads, a buffer it must not overtake).
 struct Load {
-  Desc from;
-  Buf to;
+  Desc src;
+  Buf dst;
   Semaphore sem = Semaphore();
   std::vector<Buf> after = {};
 };
 inline void load(Item& w, const Load& l) {
   if (Ops_::none(l.sem)) {
-    dma_(w, TOGSIM_DMA_LOAD, l.from, 0, 0, l.after, {l.to});
+    dma_(w, TOGSIM_DMA_LOAD, l.src, 0, 0, l.after, {l.dst});
     return;
   }
-  Ops_::signal(w, l.sem, elements_(l.from.dims));
-  dma_(w, TOGSIM_DMA_LOAD, l.from, 1, Ops_::id(l.sem), l.after, {l.to});
+  Ops_::signal(w, l.sem, elements_(l.src.dims));
+  dma_(w, TOGSIM_DMA_LOAD, l.src, 1, Ops_::id(l.sem), l.after, {l.dst});
 }
 
 // One async load on a semaphore of its own, returned.
 inline Semaphore load_async(Item& w, const Load& l) {
   if (!Ops_::none(l.sem)) fail_("load_async makes its own semaphore: give it no .sem");
   Semaphore s = semaphore(w);
-  load(w, Load{l.from, l.to, s, l.after});
+  load(w, Load{l.src, l.dst, s, l.after});
   return s;
 }
 
-// spad -> DRAM: `from` into `to`. `also`: further buffers it reads (an indirect store's index buffer) or follows.
+// spad -> DRAM: `src` into `dst`. `also`: further buffers it reads (an indirect store's index buffer) or follows.
 struct Store {
-  Buf from;
-  Desc to;
+  Buf src;
+  Desc dst;
   std::vector<Buf> also = {};
 };
 inline void store(Item& w, const Store& s) {
-  std::vector<Buf> read{s.from};
+  std::vector<Buf> read{s.src};
   read.insert(read.end(), s.also.begin(), s.also.end());
-  dma_(w, TOGSIM_DMA_STORE, s.to, 0, 0, read, {});
+  dma_(w, TOGSIM_DMA_STORE, s.dst, 0, 0, read, {});
 }
 
 // Waits for every load that signaled `sem` since its last wait; later loads may signal it again.

@@ -21,8 +21,8 @@ struct IndirectStore : Tog<IndirectStore> {
   }
 
   void tile(Item& w, const At& a) const {
-    load(w, {.from = {.ptr = 0, .type = i32, .offset = a.i * ROWS, .dims = {ROWS}, .strides = {1}}, .to = IDX});
+    load(w, {.src = {.ptr = 0, .type = i32, .offset = a.i * ROWS, .dims = {ROWS}, .strides = {1}}, .dst = IDX});
     compute(w, {.node = STEP, .reads = {IDX}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = SCATTER, .also = {IDX}});
+    store(w, {.src = OUT, .dst = SCATTER, .also = {IDX}});
   }
 };

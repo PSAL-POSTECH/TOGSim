@@ -18,13 +18,13 @@ struct Silent : Tog<Silent> {
   void entry(Kernel& k) const { dispatch<&Silent::body>(k); }
 
   void body(Item& w) const {
-    load(w, {.from = SRC, .to = IN});
+    load(w, {.src = SRC, .dst = IN});
 #if defined(CONSUMER_FIRST)
-    store(w, {.from = OUT, .to = DST});
+    store(w, {.src = OUT, .dst = DST});
     compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
 #else
     compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = DST});
+    store(w, {.src = OUT, .dst = DST});
 #endif
   }
 };

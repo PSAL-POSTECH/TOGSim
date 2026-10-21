@@ -40,9 +40,9 @@ struct EmbedLayernorm : Tog<EmbedLayernorm> {
     const Desc ids{.ptr = 0, .type = i64, .offset = a.s0, .dims = {tseq, tdim}, .strides = {1, 0}};
     const Desc table{.ptr = 1, .type = f32, .offset = a.d0, .dims = {tseq, tdim}, .strides = {0, 1}};
     const Desc out{.ptr = 2, .type = f32, .offset = a.s0 * a.DIM + a.d0, .dims = {tseq, tdim}, .strides = {a.DIM, 1}};
-    load(w, {.from = ids, .to = IDS});
-    load(w, {.from = table, .to = ROW, .after = {IDS}});
+    load(w, {.src = ids, .dst = IDS});
+    load(w, {.src = table, .dst = ROW, .after = {IDS}});
     compute(w, {.node = GATHER, .variant = variant, .reads = {IDS, ROW}});
-    store(w, {.from = ROW, .to = out});
+    store(w, {.src = ROW, .dst = out});
   }
 };

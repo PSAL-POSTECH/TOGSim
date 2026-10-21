@@ -22,8 +22,8 @@ struct Tiles : Tog<Tiles> {
 
   void body(Item& w, const Cell& c) const {
     const int64_t at = (c.m * c.N + c.n) * 64 * 64;
-    load(w, {.from = {.ptr = 0, .type = f32, .offset = at, .dims = {64, 64}, .strides = {64, 1}}, .to = IN});
+    load(w, {.src = {.ptr = 0, .type = f32, .offset = at, .dims = {64, 64}, .strides = {64, 1}}, .dst = IN});
     compute(w, {.node = STEP, .reads = {IN}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = {.ptr = 1, .type = f32, .offset = at, .dims = {64, 64}, .strides = {64, 1}}});
+    store(w, {.src = OUT, .dst = {.ptr = 1, .type = f32, .offset = at, .dims = {64, 64}, .strides = {64, 1}}});
   }
 };

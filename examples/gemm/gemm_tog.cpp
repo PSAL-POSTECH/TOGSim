@@ -16,11 +16,11 @@ struct Gemm : Tog<Gemm> {
   // chains the MACs one after another.
   void body(Item& w) const {
     for (int64_t k = 0; k < K; k++) {
-      load(w, {.from = {.ptr = 0, .type = f32, .offset = k * T, .dims = {T, T}, .strides = {K * T, 1}}, .to = A});
-      load(w, {.from = {.ptr = 1, .type = f32, .offset = k * T * T, .dims = {T, T}, .strides = {T, 1}}, .to = B});
+      load(w, {.src = {.ptr = 0, .type = f32, .offset = k * T, .dims = {T, T}, .strides = {K * T, 1}}, .dst = A});
+      load(w, {.src = {.ptr = 1, .type = f32, .offset = k * T * T, .dims = {T, T}, .strides = {T, 1}}, .dst = B});
       compute(w, {.node = MAC, .reads = {A, B, ACC}, .writes = {ACC}});
     }
     compute(w, {.node = EPILOGUE, .reads = {ACC}, .writes = {OUT}});
-    store(w, {.from = OUT, .to = {.ptr = 2, .type = f32, .offset = 0, .dims = {T, T}, .strides = {T, 1}}});
+    store(w, {.src = OUT, .dst = {.ptr = 2, .type = f32, .offset = 0, .dims = {T, T}, .strides = {T, 1}}});
   }
 };
