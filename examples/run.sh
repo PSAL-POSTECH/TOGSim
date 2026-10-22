@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and replay the example TOGs against a built tree: examples/run.sh [hello|async_barrier|tiles|gemm|session|mistakes]...
+# Build and run the example TOGs against a built tree: examples/run.sh [hello|async_barrier|tiles|gemm|session|mistakes]...
 # Each command is echoed after "+"; under it come the lines of its log that carry the result, without their
 # timestamp, and "exit N" when the Simulator did not exit 0. Every <name>/expected.txt is this output for <name>.
 set -u
@@ -15,7 +15,7 @@ tog() {
   ${CXX:-g++} -std=c++20 -shared -fPIC -O1 -Iinclude "$@"
 }
 
-# sim <filter> <Simulator arguments>: replay, and print what <filter> (one of the functions below) keeps of the log.
+# sim <filter> <Simulator arguments>: simulate, and print what <filter> (one of the functions below) keeps of the log.
 sim() {
   local filter=$1 status
   shift

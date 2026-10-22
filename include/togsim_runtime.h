@@ -1,6 +1,6 @@
 #pragma once
 // togsim_runtime.h -- the C ABI between a compiled, shape-parametric tile-operation-graph (TOG)
-// (`.so`, MLIR -> EmitC -> C++) and TOGSim, which replays it: each call is one modeled
+// (`.so`, MLIR -> EmitC -> C++) and TOGSim, which simulates it: each call is one modeled
 // instruction, and the TOG carries no timing model.
 
 #include <cstdint>
@@ -28,7 +28,7 @@ extern const int32_t togsim_abi_version = TOGSIM_ABI_VERSION;
 //   const int64_t togsim_spad_buffer_bytes[togsim_spad_buffer_count];
 
 // Opaque per-invocation context owned by TOGSim. Holds the recorded trace of the work-item
-// being replayed and the tile_id->cycle lookup. Never dereferenced by the TOG.
+// being run and the tile_id->cycle lookup. Never dereferenced by the TOG.
 typedef struct EmitCtx EmitCtx;
 
 // Direction for togsim_dma.

@@ -4,8 +4,8 @@
 `<name>_tog.cpp` each: `gemm`, `conv`, `attention`, `softmax`, `layernorm`, `embed_layernorm`,
 `global_avgpool`, `bias_act`, `bias_gelu`, `maxpool`, `adaptive_avgpool`, `concat`,
 `kvcache_concat` and `flatten`. They come from
-[PyTorchSim PR #315](https://github.com/PSAL-POSTECH/PyTorchSim/pull/315) by Lee JaeGyun, ported
-from TOG ABI 12 to 16. `tests/kernels/` replays them, and the [frontend](frontend.md) builds on
+[PyTorchSim PR #315](https://github.com/PSAL-POSTECH/PyTorchSim/pull/315) by Lee JaeGyun.
+`tests/kernels/` runs them, and the [frontend](frontend.md) builds on
 them; neither the simulator nor its build needs them.
 
 - **Shape.** A kernel's dimensions are its shape arguments (`shape<N>`), which TOGSim reads
@@ -27,12 +27,9 @@ them; neither the simulator nor its build needs them.
   reads the buffer sizes before it runs the kernel's `entry`, and they follow from the tile.
 - **Short last tiles.** A dimension the tile does not divide ends in a short tile: its DMAs move
   what is left of the dimension and no DMA leaves its tensor (conv clips its `SA`-wide loads the
-  same way, so 3 input channels are loaded as 3). A short tile costs something else than a whole
-  one, so it computes under tile ids of its own: a compute's `Node{.id, .count}` and `variant` name
-  the row `id + count * variant`, where `id` is the compute's node in the whole tile, `count` the
-  kernel's count of them, and bit `i` of `variant` is set when the tile is short on the kernel's
-  axis `i` (`short_axis`). Variant 0 is the whole tile and keeps the ids the kernel always had,
-  so a shape every tile divides names the same ids as before. A compute outside an inner loop
+  same way, so 3 input channels are loaded as 3). A short tile costs something else, so it computes
+  under its own [variant](tog-api.md#rows-node-and-variant): bit `i` is set when the tile is short
+  on the kernel's axis `i` (`short_axis`); variant 0 is the whole tile. A compute outside an inner loop
   carries only the axes of the loops around it. The axes, in bit order:
 
   | Kernel | Nodes | Axes (bit 0 first) |
@@ -51,12 +48,12 @@ them; neither the simulator nor its build needs them.
 
   A gemm of `M K N = 100 200 300` in the default tile computes acc_init as ids 0, 2, 4, 6 and a
   block as the odd ids 1 to 15; a cycle table for it has 16 lines.
-- **Compute.** Every `compute` lowers to `compute_type` `0`. `gemm`, `conv` and `attention` issue
+- **Compute.** `gemm`, `conv` and `attention` issue
   one compute per block of systolic work (a `TM x TK x TN` block of gemm's K loop) instead of one
   per preload and matmul; what a block costs and how many array-unit rows it holds is the cycle
   table's and the unit table's to say.
 
-## Replaying a kernel by hand
+## Running a kernel by hand
 
 Compile it, put `tog_tensors.txt` beside it (one byte size per tensor
 argument) and give the simulator a cycle table and a unit table with a row per tile id it computes

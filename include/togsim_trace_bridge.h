@@ -16,7 +16,7 @@
 // dependency-closed; SRAM buffer VERSIONS do cross tiles though.
 //
 // `indirect_dir` holds the functional run's index dumps an indirect dma reads (see
-// togsim_runtime.h). `name` labels the graph. nullptr if the TOG fails to load or replay.
+// togsim_runtime.h). `name` labels the graph. nullptr if the TOG fails to load or run.
 // `units` is the run's unit table (nullptr: none): tile ids it has no rows for are warned about, once.
 // `spad_bytes` is what one core's spad holds (0: no limit): a TOG a work-item of which needs more at once throws.
 std::unique_ptr<TileGraph> tog_to_tilegraph(

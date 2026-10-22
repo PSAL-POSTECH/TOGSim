@@ -5,9 +5,8 @@ Each step below is a directory under `examples/` with a TOG source, the files it
 ([Quick start](../README.md#quick-start)). Every run uses
 `configs/tpuv6e.yml`, called **tpuv6e** in these pages.
 
-The tests replay every example against its `expected.txt`, and check that each log line and source
-line quoted in a fenced block of these pages is still a line of those files. The numbers in the
-other tables and in prose were copied from those files by hand.
+The tests run every example against its `expected.txt` and check that each line quoted in a fenced
+block here is still in those files; numbers in tables and prose were copied by hand.
 
 ## The model
 
@@ -57,7 +56,7 @@ Six terms carry the rest of these pages; the [glossary](glossary.md#glossary) ha
 | work-item | One `dispatch`: the unit of parallelism. The log calls it a tile: `TILE_SCHEDULED`, `tile=N`. |
 | DMA, data tile | A DMA is a transfer between DRAM and a core's scratchpad: a load (`MOVIN` in the log) or a store (`MOVOUT`). The block of a tensor it moves is a data tile. |
 | buffer | A region of the scratchpad, named by a small integer id. Buffers are what DMAs fill and drain, and what orders instructions. |
-| compute tile, `tile_id` | A kind of compute: a row of the cycle table. Every `compute` names one, `node.id + node.count * variant`, and many calls can name the same one. |
+| compute tile, `tile_id` | A kind of compute: a row of the cycle table. Many `compute` calls can name the same one. |
 | cycle table, unit table | Per `tile_id`: how many cycles the compute takes, and what each hardware unit did during it. You supply both. |
 
 ## 1. Load, compute, store
@@ -87,20 +86,15 @@ struct Hello : Tog<Hello> {
 
 Read it from the top down:
 
-- **`buffers`.** The TOG uses spad buffers 1 and 2, each 64 x 64 elements of 4 bytes. Every
-  buffer a call names must be in this list.
-- **`STEP`** is the compute node: node 0 of the kernel's 1. A compute takes row
-  `id + count * variant` of the cycle table; with the default variant 0 that is row 0.
-- **`SRC` and `DST`** are DMA descriptors: tensor argument `ptr` (0 is the first line of
-  `tog_tensors.txt`), elements of `f32`, from element `offset`, `dims` 64 x 64 with rows `strides`
-  64 elements apart, so one contiguous block.
-- **`entry`** runs once and dispatches each work-item; this TOG has one.
-- **`body`** is the body of that work-item. Its three calls are three instructions: a load into
-  buffer 1, a compute that reads buffer 1 and writes buffer 2, and a store of buffer 2.
+- **`buffers`** lists every spad buffer a call names: 1 and 2, each 64 x 64 elements of 4 bytes.
+- **`STEP`** is compute node 0 of 1. A compute takes row `id + count * variant` of the cycle
+  table; with the default variant 0, row 0.
+- **`SRC`, `DST`** are DMA descriptors: tensor argument `ptr` (its line of `tog_tensors.txt`),
+  64 x 64 `f32` elements from element 0, rows 64 apart: one contiguous block.
+- **`entry`** runs once and dispatches the one work-item, **`body`**: three instructions, a load
+  into buffer 1, a compute from 1 into 2, a store of 2.
 
-Every call takes one struct of named arguments. A load is synchronous unless it names a semaphore
-(step 2). [The TOGSim API](tog-api.md#togsim-api-v100) lists every call and field, and
-[the TOG ABI](tog-abi.md#the-tog-abi) the C call each one lowers to.
+[The TOGSim API](tog-api.md#togsim-api-v100) lists every call and field.
 
 Three small files stand beside the source:
 
@@ -111,15 +105,13 @@ Three small files stand beside the source:
 | `tog_units.tsv` | `0<TAB>TPUV6E_MXU<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | During one run of compute tile 0 the `TPUV6E_MXU` unit, the systolic array, took in 128 rows at 1 row per cycle, and the `Vpu` unit was busy for 100 cycles. |
 
 `tog_tensors.txt` must be in the directory of `tog.so` under that name. The two tables are named on
-the command line: `--cycle_table` is always required, `--unit_table` on every shipped config. The
-TOG links against nothing: togsim.hpp lowers each call to one of four C functions that TOGSim
-provides when it loads the TOG.
+the command line: `--cycle_table` is always required, `--unit_table` on every shipped config.
 
 ```bash
 examples/run.sh hello
 ```
 
-The script echoes each command after `+`. Its first run is the replay of the Quick start with
+The script echoes each command after `+`. Its first run is the Quick start's run with
 `--log_level trace`, filtered to the instructions (the dots are cuts made here):
 
 ```text
@@ -179,11 +171,10 @@ Change the 600 in `tog_cycles.tsv` to 1000 and the total becomes 2837.
 
 A load can be synchronous or asynchronous.
 
-- A **synchronous** load is finished when its data has arrived (on tpuv6e, 842 cycles after
-  that). Whatever reads its buffer simply waits for it.
-- An **asynchronous** load signals a semaphore (`.sem`). It counts as finished once its last request
-  has been sent, without waiting for the data. The TOG must then `wait` on the semaphore before it
-  uses the data.
+- A **synchronous** load finishes when its data has arrived (on tpuv6e, 842 cycles after that);
+  its readers wait for it.
+- An **asynchronous** load (`.sem`) finishes once its last request is sent, without waiting for the
+  data; the TOG `wait`s on its semaphore before using the data.
 
 `examples/async_barrier/async_barrier_tog.cpp` loads two operands the second way:
 
@@ -194,9 +185,8 @@ A load can be synchronous or asynchronous.
     wait(w, {.sem = ab});
 ```
 
-`wait` waits for every load that signaled the semaphore since its last wait; in the log it is a barrier,
-`MEMORY_BAR`. The semaphore stays usable for later loads.
-After it, a compute that reads buffer 1 or 2 waits for the barrier, not for the loads.
+In the log the `wait` is a barrier, `MEMORY_BAR`; a compute that reads buffer 1 or 2 waits for it,
+not for the loads.
 
 ```bash
 examples/run.sh async_barrier
@@ -234,12 +224,9 @@ synchronous, no barrier) and with `-DTWO_STEPS` (a first compute that reads only
 | one compute reads both operands | 2479 | 2479 |
 | `-DTWO_STEPS`: a first compute reads only A | 3080, first compute at 1054 | 3038, first compute at 1012 |
 
-A barrier holds every reader of its loads' buffers until all of them have completed. A
-synchronous load releases its readers when it completes, without waiting for the other load,
-which is cycle 1011 for A. In these runs the asynchronous form is never the faster one. Use it to replay a kernel that
-really issues several loads and then waits for all of them; in a hand-written TOG, synchronous
-loads are simpler. A work-item that returns without waiting for a semaphore a load signaled is refused
-(step 6).
+A barrier holds every reader of its loads' buffers until all of them have completed; a synchronous
+load releases its readers as soon as it completes (cycle 1011 for A). The asynchronous form is never
+faster here: use it only to model a kernel that really issues several loads and then waits for all.
 
 ## 3. Many work-items, on one core, two and four
 
@@ -259,12 +246,10 @@ Three things are new:
 - **Shape arguments.** `shape<2>` reads the two integers of `tog_shape.txt`, a file beside
   `tog.so`. Here it contains `2 4`, so the kernel dispatches eight work-items. The same `tog.so`
   serves another grid when the file changes. Without the file the shape is `.example`.
-- **Arguments.** `dispatch` copies the `Cell`, a struct of `int64_t` fields, and hands the copy to
-  the body later. It is the only way to tell a body which work-item it is: the body here uses it to
-  compute the element offset of its own data tile.
-- **Cores.** The TOG never names a core. TOGSim binds work-items to the cores round-robin, in
-  dispatch order. Each dispatch also gets a key, 0, 1, ..., that names the work-item in messages;
-  it does not choose a core.
+- **Arguments.** `dispatch` copies the `Cell` (`int64_t` fields) for the body: the only way a body
+  knows which work-item it is, here to find its data tile's offset.
+- **Cores.** The TOG never names a core: TOGSim binds work-items to cores round-robin, in dispatch
+  order.
 
 All eight work-items run compute tile 0, so the cycle table still has one row. They also all use
 buffer ids 1 and 2: buffer ids are local to a work-item, so these are sixteen separate buffers.
@@ -273,7 +258,7 @@ buffer ids 1 and 2: buffer ids are local to a work-item, so these are sixteen se
 examples/run.sh tiles
 ```
 
-The script replays the kernel on tpuv6e as shipped, which has one core, and on copies of it with
+The script runs the kernel on tpuv6e as shipped, which has one core, and on copies of it with
 one key changed. The first three:
 
 | Machine | `Total execution cycles` | What the trace shows |
@@ -381,7 +366,7 @@ array of 128 lanes, so nothing is spread and the compute keeps its 600 cycles; o
 
 ## 5. Several kernels: session mode
 
-`--models_list <file>` replays a command stream instead of one TOG. Each `LAUNCH_KERNEL` line
+`--models_list <file>` runs a command stream instead of one TOG. Each `LAUNCH_KERNEL` line
 names the `tog.so` of a kernel, and TOGSim reads the kernel's other files from the same directory
 under fixed names: `tog_tensors.txt`, `tog_cycles.tsv` and `tog_units.tsv`. `examples/session/`
 has two kernel directories, `k0/` and `k1/`, both built from the hello TOG but with different
@@ -438,17 +423,15 @@ In a session the total is followed by one more line, `Wall-clock time for simula
 
 ## 6. Mistakes: what TOGSim refuses, and what it does not
 
-`examples/mistakes/` holds two valid TOGs that a `-D<NAME>` flag breaks in one way each, in ways
-togsim.hpp still lets a TOG be written, and the script also feeds a valid TOG wrong inputs and wrong
-machines.
+`examples/mistakes/` holds two valid TOGs that a `-D<NAME>` flag breaks one way each; the script
+also feeds a valid TOG wrong inputs and wrong machines.
 
 ```bash
 examples/run.sh mistakes
 ```
 
 **Refused.** A refused run exits non-zero with a line that names the cause, before anything is
-simulated: a `togsim.hpp:` line for a broken API rule, an `[error] [TOGSim]` line for the rest.
-For example:
+simulated. For example:
 
 ```text
 + g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DTILE_PAST_TABLE examples/mistakes/refused_tog.cpp -o examples/mistakes/TILE_PAST_TABLE.so
@@ -473,10 +456,6 @@ takes 2437 cycles.
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TENSOR_PAST_LIST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
 [warning] [TOGSim] TOG examples/mistakes/TENSOR_PAST_LIST.so: its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0
 ```
-
-**Not said at all.** On the raw C ABI a DMA with null strides runs as one DRAM request, and
-nothing reports it. togsim.hpp refuses a descriptor whose strides do not match its dims, so a TOG
-written against it cannot make that mistake.
 
 **Valid, with another meaning.** `CONSUMER_FIRST` calls the store before the compute that writes
 its buffer, so the store drains [data already on the chip](tog-abi.md#data-that-is-already-on-the-chip).
