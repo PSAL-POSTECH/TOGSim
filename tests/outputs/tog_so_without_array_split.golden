@@ -13,7 +13,7 @@ dma_store_latency_cycles: N
 dma_store_ready_cycles: N
 vpu_num_lanes: N
 vpu_spad_size_kb_per_lane: N
-isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv6e]
+isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv6e, spad-vector-memory]
 vcix: {tpu_mxu_queue_entries: N, tpu_mxu_delay_cycles: N, tpu_xlu_queue_entries: N, tpu_xlu_latency_cycles: N, tpu_xlu_elements_per_cycle: N, tpu_xlu_issue_per_cycle: N, tpu_sfu_latency_cycles: N, tpu_sfu_queue_registers: N}
 address_map: {spad_vaddr: <hex>, spad_paddr: <hex>, dram_base: <hex>, dram_size: N}
 dram_type: ramulator2

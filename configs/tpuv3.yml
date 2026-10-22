@@ -9,7 +9,7 @@ systolic_array_unit: TPUV3_MXU
 vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 128
 
-isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv3]
+isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv3, spad-vector-memory]
 # The MXU's delay line, tpu_mxu_delay_cycles 97 in place of the model's 255 (width + depth - 1): libtpu 0.0.21's cost
 # model puts a v3 vmatmul's first vpop 105 cycles after it (128x128), and on libtpuv3.so at 128 lanes a vpop of 8
 # rows issues the delay + 8 cycles after its vmatmul on gem5. No v3 hardware measurement backs it.

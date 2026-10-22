@@ -24,7 +24,7 @@ dma_store_ready_cycles: 784
 vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 1024
 
-isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv6e]
+isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv6e, spad-vector-memory]
 # The MXU's delay line, tpu_mxu_delay_cycles 187 in place of the model's 511 (width + depth - 1): on one v6e a
 # dependent chain x = dot(x, W), x 8x128 f32, W 128x128, takes 195.8 cycles a step (tpu-perf-archive
 # runs/v6e/mxu_chain/2026-10-19_pallas_mirror, 111.8 ns a step at 1751 MHz). The same chain on libtpuv6e.so, 8 rows
