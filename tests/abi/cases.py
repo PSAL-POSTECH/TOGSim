@@ -1,8 +1,9 @@
-"""A TOG built against another TOG ABI is refused by name and version; the same TOG at this ABI replays. Two raw C
-ABI breaks that togsim.hpp cannot write: no togsim_kernel is refused, a load with no strides replays unstrided."""
+"""A TOG built against another TOG ABI is refused by name and version; the same TOG at this ABI replays. Raw C ABI
+breaks that togsim.hpp cannot write: no togsim_kernel or no runtime attribute table is refused, a load with no
+strides replays unstrided."""
 from togtest import Case
 
-ABI = 16
+ABI = 17
 REFUSED = {
     "refused.previous_version": dict(
         define="PREVIOUS_VERSION", saying=f"it was built against TOG ABI {ABI - 1}, TOGSim expects ABI {ABI}"),
@@ -12,6 +13,9 @@ REFUSED = {
     "refused.no_version_symbol": dict(
         define="NO_SYMBOL", saying=f"it embeds no togsim_abi_version (built without togsim_runtime.h); TOGSim "
                                    f"expects ABI {ABI}"),
+    "refused.no_attribute_table": dict(
+        define="NO_ATTRIBUTE_TABLE", saying="it states no runtime attribute table (togsim_runtime_attribute_count / "
+                                            "togsim_runtime_attribute_rank)"),
 }
 
 

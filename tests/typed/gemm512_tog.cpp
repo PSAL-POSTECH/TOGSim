@@ -7,6 +7,8 @@ using std::size_t;
 #include "togsim_runtime.h"
 extern const int32_t togsim_spad_buffer_count = 4;
 extern const int64_t togsim_spad_buffer_bytes[4] = {1048576, 262144, 262144, 0};
+extern const int32_t togsim_runtime_attribute_count = 0;
+extern const int32_t togsim_runtime_attribute_rank[1] = {0};
 static void togsim_kernel_tile(EmitCtx* v1, int64_t* v2, int32_t v3) {
   int32_t v4 = 512;
   int32_t v5 = 128;
@@ -46,11 +48,11 @@ static void togsim_kernel_tile(EmitCtx* v1, int64_t* v2, int32_t v3) {
     ptrdiff_t v37 = (ptrdiff_t) i36;
     size_t v38 = (size_t) v37;
     size_t v39 = v35 + v38;
-    togsim_dma(v1, 0, 0, v39, 2, (const int64_t[]){128, 512}, (const int64_t[]){1, 512}, 32, 1, v8, nullptr, 0, (const int64_t[]){2}, 1, 0);
+    togsim_dma(v1, 0, 0, v39, 2, (const int64_t[]){128, 512}, (const int64_t[]){1, 512}, 32, 1, v8, nullptr, 0, (const int64_t[]){2}, 1, nullptr, 0);
     togsim_compute(v1, 2, 0, 0, nullptr, nullptr, 0, nullptr, 0);
     size_t v40 = v38 * v7;
     size_t v41 = v40 + v34;
-    togsim_dma(v1, 0, 1, v41, 2, (const int64_t[]){512, 128}, (const int64_t[]){1, 512}, 32, 1, v9, nullptr, 0, (const int64_t[]){1}, 1, 0);
+    togsim_dma(v1, 0, 1, v41, 2, (const int64_t[]){512, 128}, (const int64_t[]){1, 512}, 32, 1, v9, nullptr, 0, (const int64_t[]){1}, 1, nullptr, 0);
     togsim_memory_barrier(v1, v8, 65536);
     togsim_memory_barrier(v1, v9, 65536);
     togsim_compute(v1, 3, 0, 0, nullptr, nullptr, 0, nullptr, 0);
@@ -58,7 +60,7 @@ static void togsim_kernel_tile(EmitCtx* v1, int64_t* v2, int32_t v3) {
     togsim_compute(v1, 5, 1, 0, nullptr, (const int64_t[]){0, 1, 2, 3}, 4, (const int64_t[]){0}, 1);
   }
   size_t v42 = v35 + v34;
-  togsim_dma(v1, 1, 2, v42, 2, (const int64_t[]){512, 512}, (const int64_t[]){1, 512}, 32, 1, v10, (const int64_t[]){0}, 1, nullptr, 0, 0);
+  togsim_dma(v1, 1, 2, v42, 2, (const int64_t[]){512, 512}, (const int64_t[]){1, 512}, 32, 1, v10, (const int64_t[]){0}, 1, nullptr, 0, nullptr, 0);
   return;
 }
 extern "C" void togsim_kernel(EmitCtx* v1, int64_t* v2, int32_t v3) {

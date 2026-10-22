@@ -74,8 +74,7 @@ class Instruction : public std::enable_shared_from_this<Instruction> {
   bool is_dma_write() { return opcode == Opcode::MOVOUT; }
   bool is_dma_instruction() const { return opcode == Opcode::MOVIN || opcode == Opcode::MOVOUT; }
   bool is_async_dma() { return _is_async_dma; }
-  bool is_indirect_mode() { return _is_indirect_mode; }
-  std::string get_indirect_index_path() { return _indirect_index_path; }
+  bool has_element_offsets() const { return !_element_offsets.empty(); }
   bool is_ready() { return ready_counter == 0; }
   void inc_ready_counter() { ready_counter++; }
   void dec_ready_counter() {
@@ -101,11 +100,11 @@ class Instruction : public std::enable_shared_from_this<Instruction> {
   cycle_type get_compute_cycle() { return compute_cycle; }
   void set_compute_cycle(cycle_type cycle) { compute_cycle = cycle; }
   void set_tensor_tiling(std::shared_ptr<const TensorTiling> t) { _tiling = std::move(t); }
-  void set_indirect_index_path(std::string indirect_path) { _is_indirect_mode=true; _indirect_index_path=indirect_path; }
+  // A gather or scatter: element e of the tile (row-major) also moves by offsets[e] elements.
+  void set_element_offsets(std::vector<int64_t> offsets) { _element_offsets = std::move(offsets); }
   void print();
   std::shared_ptr<std::set<addr_type>> get_dram_address(addr_type dram_req_size);
   std::vector<addr_type> get_trace_address() { return _trace_address; }
-  bool load_indirect_index(const std::string& path, std::vector<uint64_t>& indirect_index, const std::vector<uint64_t>& tile_size);
   void set_trace_address(std::vector<addr_type>& trace_address) { _trace_address = trace_address; }
   addr_type get_base_dram_address() { return dram_addr; }
   void* get_owner() { return _owner; }
@@ -204,8 +203,7 @@ class Instruction : public std::enable_shared_from_this<Instruction> {
   int64_t _addr_id = 0;
   int _nr_inner_loop = 0;
   bool _is_async_dma=false;
-  bool _is_indirect_mode=false;
-  std::string _indirect_index_path="";
+  std::vector<int64_t> _element_offsets;   // empty = dense (see set_element_offsets)
   std::shared_ptr<const TensorTiling> _tiling;   // null = row-major (see set_tensor_tiling)
   // SRAM-capacity model (see the setters above).
   int64_t _sram_alloc_id = -1;

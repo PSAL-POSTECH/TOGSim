@@ -11,8 +11,8 @@ extern "C" {
 
 // TOG ABI version. A TOG's TU including this header defines the weak togsim_abi_version it was
 // built against (TOGSim's TUs, TOGSIM_HOST, only declare it); LazyTog::open refuses a TOG that
-// lacks it or differs. 16 renamed the symbol and the sidecar files; the calls are those of 15.
-#define TOGSIM_ABI_VERSION 16
+// lacks it or differs. 17 added the runtime attributes and moved gathers onto them.
+#define TOGSIM_ABI_VERSION 17
 #ifdef TOGSIM_HOST
 extern const int32_t togsim_abi_version;
 #else
@@ -26,6 +26,13 @@ extern const int32_t togsim_abi_version = TOGSIM_ABI_VERSION;
 // 0). A buffer is as large as the compiler allocated it; TOGSim does not infer it from the DMAs.
 //   const int32_t togsim_spad_buffer_count;
 //   const int64_t togsim_spad_buffer_bytes[togsim_spad_buffer_count];
+
+// And the rank of every runtime attribute it reads, by id: ids 0 to togsim_runtime_attribute_count - 1,
+// at most TOGSIM_MAX_RUNTIME_ATTRIBUTES (0: the TOG reads none). Both symbols are required.
+//   const int32_t togsim_runtime_attribute_count;
+//   const int32_t togsim_runtime_attribute_rank[TOGSIM_MAX_RUNTIME_ATTRIBUTES];
+#define TOGSIM_MAX_RUNTIME_ATTRIBUTES 64
+#define TOGSIM_MAX_ATTRIBUTE_RANK 8
 
 // Opaque per-invocation context owned by TOGSim. Holds the recorded trace of the work-item
 // being run and the tile_id->cycle lookup. Never dereferenced by the TOG.
@@ -42,9 +49,9 @@ typedef enum {
 // `sem` with its element count; the barrier on `sem` gates consumers. `read_bufs`/
 // `write_bufs` name the spad buffers it depends on and fills: a store drains read_bufs[0], and
 // an indirect store's index buffer, read for addresses only, follows it. A store's `sem` is ignored (its waits are not lowered).
-// `indirect` => each element also moves by what its index added in the functional
-// run: dump indirect_index_<key>_<n>.raw, key = the work-item's togsim_dispatch key,
-// n = this dma's rank among the work-item's indirect dmas.
+// `element_offsets` (a gather or scatter): one ELEMENT offset per element of the tile, row-major
+// over `dims`, added to that element's address; `n_offsets` is the tile's element count. Null
+// and 0: a dense tile.
 
 void togsim_dma(EmitCtx* ctx, int32_t dir, int32_t arg_id,
                 uint64_t offset, int32_t ndim, const int64_t* dims,
@@ -52,7 +59,12 @@ void togsim_dma(EmitCtx* ctx, int32_t dir, int32_t arg_id,
                 int32_t is_async, uint64_t sem,
                 const int64_t* read_bufs, int32_t n_read,
                 const int64_t* write_bufs, int32_t n_write,
-                int32_t indirect);
+                const int64_t* element_offsets, int64_t n_offsets);
+
+// The record of runtime attribute `id` for the work-item being run, as the functional run left
+// it under the work-item's dispatch key: returns its values (row-major), sets *rank and points
+// *extents at its rank extents. TOGSim refuses the TOG when it has no such record; it never returns null.
+const int64_t* togsim_runtime_attribute(EmitCtx* ctx, int32_t id, int32_t* rank, const int64_t** extents);
 
 // Emit a fixed-size tile compute. Cost comes from the tile_id->cycle table, not from `dims`.
 // `compute_type` 0 holds the core for its cycles. DEPRECATED, the typed grouping: 1 matmul and
@@ -75,7 +87,7 @@ typedef void (*togsim_tile_fn)(EmitCtx* ctx, int64_t* iv, int32_t n_iv);
 // Dispatch one work-item: round-robin a core, bracket `fn` with
 // TILE_BEGIN/TILE_END, and invoke it -- so the work-item scope IS the call. Core
 // choice is runtime-owned; the TOG never names num_cores or a core. `key` is
-// the work-item's dma_index_key in the functional run, naming its index dumps.
+// the work-item's program key in the functional run, under which its runtime attributes are recorded.
 void togsim_dispatch(EmitCtx* ctx, togsim_tile_fn fn,
                      int64_t* iv, int32_t n_iv, int64_t key);
 

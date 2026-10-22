@@ -46,7 +46,6 @@ icnt_injection_ports_per_core: N
 [info] [DRAM] all N channels combined | N.N GB/s aggregate, N.N% of utilization (avg. per channel) | N reads, N writes (interval N cycles)
 [info] [Scheduler N] Kernel N execution summary - Started at: N cycles, Total compute time: N cycles
 [info] [Scheduler N] Kernel N has completed - TOG path: kernel operation: kernel finished at cycle N
-[info] [TOGSim] indirect dmas: N with their index dump, N without
 [trace] [DRAM] channel N | N.N GB/s avg., N.N% of utilization | N reads, N writes (interval N cycles)
 [trace] [N][Core N] TOG async DMA response (table notify): tag_addr=<hex> global_inst_id=N subgraph_id=N
 [trace] [N][Core N][ASYNC_DMA_ISSUE][INST_ID=N] MOVIN (ASYNC subgraph_id=N addr_name=tagN tag_id=[<hex>,<hex>] tag_idx=[N] tag_stride=[N] tile=N)
@@ -67,13 +66,13 @@ icnt_injection_ports_per_core: N
 [trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MOVIN (addr_name=tagN dram=<hex> rank=N size=[N,N] stride=[N,N] elem_bits=N async=true indirect=false tag_id=[<hex>,<hex>])
 [trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MOVIN (addr_name=tagN dram=<hex> rank=N size=[N] stride=[N] elem_bits=N async=false indirect=false tag_id=[<hex>,<hex>])
 [trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MOVOUT (addr_name=tagN dram=<hex> rank=N elem_bits=N async=false indirect=false tag=<hex> stride=[N,N] size=[N,N] tag_idx=[N] tile=N)
+[trace] [N][Core N][INST_ISSUED    ][INST_ID=N] MOVOUT (addr_name=tagN dram=<hex> rank=N elem_bits=N async=false indirect=true tag=<hex> stride=[N,N] size=[N,N] tag_idx=[N] tile=N)
 [trace] [N][Core N][L2CACHE_STAT   ][INST_ID=N] dram=<hex> cacheable=false
 [trace] [N][Core N][REQ_TO_DRAM    ] MOVIN dram=<hex> channel=N
 [trace] [N][Core N][REQ_TO_DRAM    ] MOVOUT dram=<hex> channel=N
 [trace] [N][Core N][REQ_TO_MEM     ] MOVIN dram=<hex> channel=N
 [trace] [N][Core N][REQ_TO_MEM     ] MOVOUT dram=<hex> channel=N
 [trace] [N][Core N][TILE_SCHEDULED ] spad_footprint=N max_dispatch=N
-[warning] [TOGSim] indirect dma without its index dump (<path>: absent); modeled as a dense tile
 # after the run, in order
 [info] [TOGSim] Total cycles: N
 [info] Simulation finished

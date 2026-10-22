@@ -45,8 +45,6 @@ icnt_injection_ports_per_core: N
 [info] [DRAM] all N channels combined | N.N GB/s aggregate, N.N% of utilization (avg. per channel) | N reads, N writes (interval N cycles)
 [info] [Scheduler N] Kernel N execution summary - Started at: N cycles, Total compute time: N cycles
 [info] [Scheduler N] Kernel N has completed - TOG path: kernel operation: kernel finished at cycle N
-[info] [TOGSim] indirect dmas: N with their index dump, N without
-[warning] [TOGSim] indirect dma without its index dump (<path>: absent); modeled as a dense tile
 # after the run, in order
 [info] [TOGSim] Total cycles: N
 [info] Simulation finished

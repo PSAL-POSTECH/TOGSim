@@ -2,7 +2,6 @@
 #include "togsim_trace_bridge.h"
 
 #include <algorithm>
-#include <filesystem>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -47,6 +46,7 @@ std::shared_ptr<Instruction> make_dma(const togsim::TraceRec& t, int64_t uniq) {
       tile_size, tile_stride, (size_t)t.elem_bits, tag_idx, tag_stride,
       /*accum_tag_idx_list=*/std::vector<int64_t>{});
   inst->set_is_async(t.is_async != 0);
+  inst->set_element_offsets(t.element_offsets);
   inst->set_addr_name("tag" + std::to_string(uniq), uniq);
   inst->prepare_tag_key();
   return inst;
@@ -121,8 +121,7 @@ struct BuildState {
   std::map<uint64_t, int64_t> waited;
   int64_t next_tag = 0;
   int cur_tile_group = -1;
-  std::string indirect_dir;               // where the functional run left its index dumps
-  size_t indirect_found = 0, indirect_missing = 0;
+  std::string attribute_path;             // the functional run's runtime attribute records
   std::vector<std::shared_ptr<const TensorTiling>> tilings;   // per arg_id; empty = row-major
   std::set<int64_t> cur_tile_bufs;
   size_t cur_tile_footprint = 0;
@@ -136,7 +135,6 @@ struct BuildState {
   std::map<int64_t, int64_t> cur_alloc;   // buf -> current version id
   std::map<int64_t, bool> open_ver;       // buf -> version still accepting writes
   size_t item = 0;
-  bool measuring = false;                  // refuse_overflow's replay, which attaches no index dump
 
   static size_t rec_numel(const togsim::TraceRec& t) {
     size_t numel = 1;
@@ -162,25 +160,6 @@ struct BuildState {
       if (touched.insert(b).second) held.insert(b);
   }
 
-  // Point an indirect dma at its index dump, indirect_index_<key>_<seq>.raw (the vcix
-  // tpu model's dma_index_key naming): one uint64 element offset per tile element.
-  // A dump that is absent or of another size leaves the dma dense, and is counted.
-  void attach_indices(const togsim::TraceRec& t, Instruction& inst) {
-    const std::string path = indirect_dir + "/indirect_index_" + std::to_string((uint64_t)t.index_key) +
-                             "_" + std::to_string(t.index_seq) + ".raw";
-    std::error_code ec;
-    const auto bytes = std::filesystem::file_size(path, ec);
-    if (!ec && bytes == rec_numel(t) * sizeof(uint64_t)) {
-      inst.set_indirect_index_path(path);
-      indirect_found++;
-      return;
-    }
-    if (!indirect_missing++)
-      spdlog::warn("[TOGSim] indirect dma without its index dump ({}: {}); modeled as a dense tile",
-                   path, ec ? "absent" : std::to_string(bytes) + " bytes for " +
-                                             std::to_string(rec_numel(t)) + " elements");
-  }
-
   // ---- index + footprint --------------------------------------------------
   // Replay every work-item once. Refused: a buffer the TOG DMAs and does not size, a compute whose tile id the cycle
   // table does not hold, or whose unit table rows exceed what a unit takes in the tile's cycles. Named and still run:
@@ -191,7 +170,7 @@ struct BuildState {
              const int32_t* partition_cores, int32_t n_partition_cores) {
     using togsim::TraceRec;
     if (!tog.open(so_path, shape_args, n_shape, tensor_base, n_tensors,
-                   cyc, ovl, n_tiles, partition_cores, n_partition_cores))
+                   cyc, ovl, n_tiles, partition_cores, n_partition_cores, attribute_path))
       return false;
     const std::vector<int64_t>& stated = tog.spad_buffer_bytes();
     std::set<uint64_t> unitless, fitted;
@@ -424,7 +403,6 @@ struct BuildState {
       int64_t uniq = next_tag++;                         // fresh Core tag key per dma record
       auto inst = make_dma(t, uniq);
       inst->set_tile_group(cur_tile_group);
-      if (t.indirect && !measuring) attach_indices(t, *inst);
       if (t.arg_id >= 0 && (size_t)t.arg_id < tilings.size()) inst->set_tensor_tiling(tilings[t.arg_id]);
       tile->inc_required_sram_size(rec_bytes(t));         // SRAM footprint (ready-tile ordering)
       note_bufs(t.read_bufs); note_bufs(t.write_bufs);   // distinct-buffer footprint for 1- vs 2-dispatch
@@ -478,13 +456,7 @@ struct BuildState {
   // Returns the work-item `next`'s subgraph; nullptr once the TOG is
   // exhausted. Called from the TileGraph's tile source, on demand.
   std::shared_ptr<TileSubGraph> build_one_tile() {
-    if (next >= tog.num_items()) {
-      if (indirect_found + indirect_missing)
-        spdlog::info("[TOGSim] indirect dmas: {} with their index dump, {} without",
-                     indirect_found, indirect_missing);
-      indirect_found = indirect_missing = 0;
-      return nullptr;
-    }
+    if (next >= tog.num_items()) return nullptr;
     item = next;
     for (const togsim::TraceRec& t : tog.run_item(next++)) feed(t);
     auto out = std::move(sg_out);
@@ -567,7 +539,6 @@ struct BuildState {
     const uint64_t first_inst = Instruction::next_global_inst_id();
     const int first_subgraph = TileSubGraph::next_id();
     const int64_t first_version = next_alloc;
-    measuring = true;
     for (item = 0; item < tog.num_items(); item++) {
       for (const togsim::TraceRec& t : tog.run_item(item)) feed(t);
       const std::shared_ptr<TileSubGraph> built = std::move(sg_out);
@@ -584,7 +555,6 @@ struct BuildState {
           "holds {} (core_spad_size_kb: {})", so_path, item, tog.item_key(item), needed, beside, spad_bytes,
           spad_bytes / 1024));
     }
-    measuring = false;
     next_alloc = tile_first_alloc = first_version;
     cur_tile_group = -1;
     Instruction::rewind_global_inst_id(first_inst);
@@ -599,14 +569,14 @@ std::unique_ptr<TileGraph> tog_to_tilegraph(
     const uint64_t* tensor_base, int32_t n_tensors,
     const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,
     const int32_t* partition_cores, int32_t n_partition_cores,
-    const std::string& indirect_dir, const std::string& name,
+    const std::string& attribute_path, const std::string& name,
     const std::vector<std::shared_ptr<const TensorTiling>>& tilings, int64_t unit_tile_base,
     const UnitTable* units, size_t spad_bytes) {
   using togsim::TraceRec;
   auto S = std::make_shared<BuildState>();
   S->unit_tile_base = unit_tile_base;
   S->units = units;
-  S->indirect_dir = indirect_dir;
+  S->attribute_path = attribute_path;
   S->tilings = tilings;
   S->spad_bytes = spad_bytes;
 
