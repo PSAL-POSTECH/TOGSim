@@ -14,7 +14,7 @@ isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv4, spad-vector-memory]
 # after it (128x128), less the 8 cycles 8 rows take to enter an array of one register an operand and a row a cycle,
 # as on libtpuv3.so. There is no v4 model to check it on, and no v4 hardware measurement backs it.
 vcix: {tpu_mxu_delay_cycles: 75}
-address_map: {spad_vaddr: 0xd0000000, spad_paddr: 0x2000000000, dram_base: 0x80000000, dram_size: 17179869184}
+address_map: {spad_vaddr: 0xd0000000, dram_base: 0x80000000, dram_size: 17179869184}
 
 dram_type: ramulator2
 dram_channels: 16
