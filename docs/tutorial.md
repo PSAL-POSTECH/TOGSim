@@ -15,7 +15,7 @@ Three things nest:
 ```
 kernel       one TOG; its entry runs once
   work-item  one dispatch: a body function and its arguments, bound to one core
-    instruction  one call in the body: load, store, compute or wait
+    instruction  one call in the body: load, store, compute or wait (reading an attribute is none)
 ```
 
 **What a core can do at once.** The simulator enforces each of these limits:
@@ -247,7 +247,9 @@ Three things are new:
   `tog.so`. Here it contains `2 4`, so the kernel dispatches eight work-items. The same `tog.so`
   serves another grid when the file changes. Without the file the shape is `.example`.
 - **Arguments.** `dispatch` copies the `Cell` (`int64_t` fields) for the body: the only way a body
-  knows which work-item it is, here to find its data tile's offset.
+  knows which work-item it is, here to find its data tile's offset. An offset or a trip count that
+  depends on the kernel's data, not on its grid, is not an argument: the functional run records it
+  as a [runtime attribute](tog-api.md#runtime-attributes), which the body reads.
 - **Cores.** The TOG never names a core: TOGSim binds work-items to cores round-robin, in dispatch
   order.
 

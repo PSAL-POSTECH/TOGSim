@@ -6,9 +6,10 @@ What a compiler, a driver or a script may depend on, and how the version numbers
 
 A consumer of TOGSim may depend on these five, and on nothing else in this repository:
 
-1. `include/togsim.hpp` ([API v1.0.0](tog-api.md)) and the [C ABI 16](tog-abi.md) under it;
-2. the files beside `tog.so` and the two tables
-   ([files](tog-abi.md#files-beside-togso), [tables](tog-abi.md#the-cycle-table));
+1. `include/togsim.hpp` ([API v1.1.0](tog-api.md)) and the [C ABI 17](tog-abi.md) under it;
+2. the files beside `tog.so`, the two tables and the runtime attribute records
+   ([files](tog-abi.md#files-beside-togso), [tables](tog-abi.md#the-cycle-table),
+   [records](tog-abi.md#runtime-attributes));
 3. the command line and the exit statuses ([Running TOGSim](running.md#running-togsim));
 4. the output lines listed in [output-lines.md](output-lines.md#lines-a-script-may-rely-on);
 5. the machine config keys listed in [config-keys.md](config-keys.md).
@@ -20,11 +21,16 @@ lines that list 4 does not name can change in any commit.
 
 Tags are `vMAJOR.MINOR.PATCH`.
 
-- **MAJOR** moves when 1 or 2 changes incompatibly. `TOGSIM_ABI_VERSION` (16) moves with an
+- **MAJOR** moves when 1 or 2 changes incompatibly. `TOGSIM_ABI_VERSION` (17) moves with an
   incompatible C ABI: TOGSim compares it with the TOG's `togsim_abi_version` at load and refuses a
   TOG built against another, instead of simulating it wrongly.
 - **MINOR** moves when 3, 4 or 5 changes.
 - **PATCH** changes no contract.
+
+One exception stands: API 1.1.0 removed `Desc.indirect` and ABI 17 replaced the last parameter of
+`togsim_dma`, an incompatible change that by the rule above is 2.0.0. The version was fixed with
+the runtime attributes that replace them ([what changed](tog-api.md#from-100)); a TOG of 1.0.0
+that names no `.indirect` builds unchanged, and one built against ABI 16 is refused at load.
 
 ## Using TOGSim from another repository
 

@@ -3,7 +3,7 @@
 ## Running TOGSim
 
 ```text
-build/bin/Simulator --config <yml> --tog_so <so> --cycle_table <tsv> [--unit_table <tsv>] [--log_level <level>]
+build/bin/Simulator --config <yml> --tog_so <so> --cycle_table <tsv> [--unit_table <tsv>] [--attribute_path <dir>] [--log_level <level>]
 build/bin/Simulator --config <yml> --models_list <file> [--log_level <level>]
 ```
 
@@ -13,6 +13,7 @@ build/bin/Simulator --config <yml> --models_list <file> [--log_level <level>]
 | `--tog_so <so>` | Simulate one TOG, as kernel 0 on partition 0. The path needs a `/` in it. |
 | `--cycle_table <tsv>` | The cycle table of that TOG. Required. |
 | `--unit_table <tsv>` | The unit table of that TOG. Required unless the config sets `systolic_array_split: none`. |
+| `--attribute_path <dir>` | The [runtime attribute records](tog-abi.md#runtime-attributes) of that TOG. Required when the TOG declares attributes; refused with `--models_list`, where each `LAUNCH_KERNEL` names its own. |
 | `--models_list <file>` | Simulate a command stream (a file or a FIFO) instead of one TOG. |
 | `--log_level <level>` | `info` (the default), `debug` or `trace`. Any other value is treated as `info`. |
 | `--help`, `-h` | Print the options. |
@@ -29,7 +30,7 @@ and lines that start with `#` are skipped.
 | `device_index` | Unused; appears in the log. | Unused; appears in the log. |
 | `stream_index` | The partition the kernel runs on. | any number |
 | `tog_path` | A path into the kernel's directory, such as `k0/tog.so`. Only its directory part is used, and it must have one: write `./tog.so`, not `tog.so`. | any text |
-| `attribute_path` | Unused. | any text |
+| `attribute_path` | The directory of the kernel's [runtime attribute records](tog-abi.md#runtime-attributes); `-` for none. Required when its TOG declares attributes. | any text |
 | `timestamp` | The core cycle at which the kernel arrives; 0 means now. | any number |
 
 `LAUNCH_KERNEL` loads `tog.so`, `tog_cycles.tsv` and `tog_units.tsv` from the kernel's directory;
@@ -100,7 +101,7 @@ line. The final statistics of the hello TOG on tpuv6e (the third run of `example
 
 **Warnings.** A `[warning]` line before the simulation starts names something that still runs and
 is probably a mistake: a compute whose `tile_id` has no unit-table rows, a DMA whose `arg_id`
-`tog_tensors.txt` does not list, an indirect DMA without its index dump, a TOG that passes a
+`tog_tensors.txt` does not list, a TOG that passes a
 deprecated `compute_type`. Each is printed once per TOG. Grep a log for `\[warning\]` before you trust its
 total.
 

@@ -1,19 +1,22 @@
 # The TOG ABI
 
-`include/togsim_runtime.h`, C ABI 16 (`TOGSIM_ABI_VERSION`), is what TOGSim loads;
+`include/togsim_runtime.h`, C ABI 17 (`TOGSIM_ABI_VERSION`), is what TOGSim loads;
 [togsim.hpp](tog-api.md) lowers every call to it. This page says what the calls model, the buffer
 and scratchpad rules, the files and tables, and the refusals.
 
-togsim.hpp exports the four symbols TOGSim looks up: `togsim_kernel` (the TOG's `entry`),
+togsim.hpp exports the six symbols TOGSim looks up: `togsim_kernel` (the TOG's `entry`),
 `togsim_spad_buffer_count` and `togsim_spad_buffer_bytes[]` (from `buffers`; 0 for an id that is
-no buffer) and `togsim_abi_version`.
+no buffer), `togsim_runtime_attribute_count` and `togsim_runtime_attribute_rank[]` (from
+`attributes`, by id; a count of 0 when there are none) and `togsim_abi_version`. TOGSim defines
+the calls, `togsim_runtime_attribute` among them.
 
 ## How TOGSim runs a TOG
 
-1. TOGSim opens `tog.so`, checks the ABI version, reads the buffer table and calls `togsim_kernel`
-   **once**. Each `dispatch` only registers a work-item (its function, a copy of its arguments,
-   its key) and binds it to a core: round-robin, in dispatch order, over the cores of the
-   kernel's partition.
+1. TOGSim opens `tog.so`, checks the ABI version, reads the buffer and attribute tables and calls
+   `togsim_kernel` **once**. Each `dispatch` only registers a work-item (its function, a copy of
+   its arguments, its key) and binds it to a core: round-robin, in dispatch order, over the cores
+   of the kernel's partition. Then it loads and checks the
+   [runtime attribute records](#runtime-attributes).
 2. TOGSim then calls each work-item's body to record its instructions. It calls each body **three
    times** over the run: twice up front, to find the buffers and to plan the spad, and once more
    when it builds the work-item's instructions.
@@ -22,8 +25,8 @@ no buffer) and `togsim_abi_version`.
 
 Two rules follow, and nothing checks them:
 
-- **A body must be pure.** It may read only its `Item` and arguments, and must make the same calls
-  every time. A counter, a static variable or I/O in a body happens three times.
+- **A body must be pure.** It may read only its `Item`, its arguments and its runtime attributes,
+  and must make the same calls every time. A counter, a static variable or I/O in a body happens three times.
 - **Call order is not execution order.** An instruction depends only on instructions that were
   called *before* it in the same work-item and wrote a buffer it reads; a load depends on nothing.
   Write the producer before the consumer: otherwise the consumer reads
@@ -114,17 +117,61 @@ TOGSim does not decide that a load can be left out; the emitter of the TOG does.
   runs. A copy node is a TOG of its own that only loads, launched before the kernels that read the
   data as held.
 
-## Indirect DMAs
+## Runtime attributes
 
-`Desc.indirect` marks a gather (load) or scatter (store): each element moves by an extra offset read
-from a file. TOGSim looks for
-`<directory of tog.so>/runtime/indirect_access/indirect_index_<key>_<n>.raw`, where `<key>` is the
-work-item's dispatch key printed as an unsigned 64-bit number and `<n>` counts that work-item's
-indirect DMAs from 0. The file holds one native `uint64` per element of the data tile, each an
-offset in elements. If the file is absent or has another size the DMA is modeled as a dense data
-tile, with one warning (`[TOGSim] indirect dma without its index dump ...`) and a summary line
-(`[TOGSim] indirect dmas: X with their index dump, Y without`).
-`tests/spad_footprint/indirect_store_tog.cpp` is a worked example.
+A runtime attribute is a value the kernel's functional run computed from data and the TOG needs:
+an offset, a trip count, a block table, the index tile of a gather. The functional run records
+each, per program, as a **record** keyed by the work-item key and the attribute's id; the TOG
+declares its attributes (`id`, `rank`) and reads the record of the work-item being run
+([the calls](tog-api.md#runtime-attributes)).
+
+### The files
+
+`--attribute_path <dir>` (with `--tog_so`) or the `attribute_path` of a `LAUNCH_KERNEL` names a
+directory that holds exactly:
+
+| File | Format (native little-endian) |
+|---|---|
+| `programs.bin` | `u32 magic 0x50415354` (`TSAP`), `u32 abi = 17`, `u64 n`, then `n` `u64` keys, ascending: the programs that ran. |
+| `attr_<key>_<id>.bin` | `u32 magic 0x41525354` (`TSRA`), `u32 abi = 17`, `i32 id`, `i32 rank`, `u64 key`, `i64 extents[rank]`, then `i64 values[product of extents]`, row-major. `<key>` and `<id>` are decimal, with no sign and no leading zero. |
+
+A record of extent 0 is present and holds no value: 0 trips is not a missing record. A record no
+body reads is allowed (a branch the functional run did not take is not taken in the TOG either).
+`programs.bin` is what tells a program that recorded nothing, which is allowed, from one that did
+not run.
+
+A gather or scatter is a DMA with `Desc.gather`: togsim.hpp passes `togsim_dma` one element offset
+per element of the tile, row-major, read from its attribute's row, and TOGSim adds each, times the
+element's bytes, to that element's address. `tests/spad_footprint/indirect_store_tog.cpp` and
+`tests/runtime_attribute/gather_tog.cpp` are worked examples.
+
+### What TOGSim checks
+
+After `togsim_kernel` has registered the dispatches, before anything is simulated, TOGSim loads
+every file and replays each body once, so a record that is read and missing is refused at load
+too. Each refusal is `[TOGSim] TOG <so>: <message>` and exits 1; in a session it is the error of
+the `LAUNCH_KERNEL`.
+
+| # | Message | Cause |
+|---|---|---|
+| E1 | `it declares <n> runtime attribute(s) and was launched with no attribute_path` | No path, or `-`, for a TOG with attributes. |
+| E2 | `attribute_path <dir> does not open` | The path is no directory. |
+| E3 | `<dir> has no programs.bin: the functional run recorded no program` | |
+| E4 | `<file>: not a runtime attribute file of ABI 17` | Another magic or ABI, or a file shorter than its header. |
+| E5 | `work-item key <k> was dispatched and <dir>/programs.bin does not list it`, `<dir>/programs.bin lists key <k>, which no work-item was dispatched under`, `<dir>/programs.bin lists key <k> out of ascending order or twice` | The keys the run recorded are not the keys the TOG dispatches. |
+| E6 | `<file> holds key <k> id <i>` | Its header names another record than its name. |
+| E7 | `<file> records attribute <i>, which the TOG does not declare` | |
+| E8 | `<file> records attribute <i> at rank <r>, the TOG declares rank <d>` | |
+| E9 | `<file> is <b> bytes, its header says <h>`, `<file> records extent <x> on dim <d>` | Its size is not what its extents make, or an extent is negative. |
+| E10 | `<file> records key <k>, which programs.bin does not list` | A stale record. |
+| E11 | `work-item <n> (key <k>) reads attribute <i>, which <dir> does not record for that key` | |
+| E12 | `it declares no runtime attribute and <dir> holds <n> record(s)` | Records for a TOG that reads none. |
+| E13 | `<dir>/<name> is neither programs.bin nor attr_<key>_<id>.bin` | |
+
+A TOG that declares no attribute needs no path: none, `-`, a directory that is not there and one
+without records are all accepted. The raw C ABI has three more, which togsim.hpp cannot make: `an
+attribute read outside a work-item`, `work-item <n> (key <k>) reads attribute <i>, which the TOG
+does not declare` and `work-item <n> (key <k>) gives a DMA <n> element offsets for <m> elements`.
 
 ## Files beside `tog.so`
 
@@ -135,7 +182,9 @@ TOGSim reads these from the directory of the TOG, by fixed name:
 | `tog_tensors.txt` | always | One byte size per tensor argument, whitespace-separated, in `ptr` order. | `16384`<br>`16384` |
 | `tog_shape.txt` | no | The kernel's shape arguments, read by `shape<N>`. | `2 4` |
 | `tog_tensor_shapes.txt` | only if the config sets `tog_tensor_tile` | `rows cols elem_bytes` per tensor argument. | `256 256 4` |
-| `runtime/indirect_access/*.raw` | no | Index dumps of indirect DMAs. | |
+
+The [runtime attribute records](#runtime-attributes) are not read from beside `tog.so`: their
+directory is always named, by `--attribute_path` or the `LAUNCH_KERNEL`.
 
 Tensors are placed in DRAM back to back from address 0 in `ptr` order, each start rounded up to
 16 KiB. An empty `tog_tensors.txt` is fine for a TOG without DMAs; a missing one is refused. A DMA
@@ -277,7 +326,9 @@ symbol, buffer table, semaphore counts, `ndim`) are ones a TOG built on togsim.h
 
 | Message contains | Cause |
 |---|---|
-| `togsim: refusing TOG <so>: it was built against TOG ABI 15, TOGSim expects ABI 16; rebuild the TOG` | The TOG's `togsim_abi_version` is another number: it was compiled against another version of the header. |
+| `togsim: refusing TOG <so>: it was built against TOG ABI 16, TOGSim expects ABI 17; rebuild the TOG` | The TOG's `togsim_abi_version` is another number: it was compiled against another version of the header. |
+| `togsim: refusing TOG <so>: it states no runtime attribute table (togsim_runtime_attribute_count / togsim_runtime_attribute_rank)` | A raw-ABI TOG that does not define the attribute table (togsim.hpp always does). |
+| `[TOGSim] TOG <so>: ...` of [the runtime attribute checks](#what-togsim-checks) | A record that is missing, malformed, stale or not the TOG's. |
 | `[Simulator] simulation wedged at cycle <n>: work remains but nothing is in flight` | A work-item waits for spad that is never freed, in a way the loader does not see ([known limitations](running.md#known-limitations)). |
 | `--unit_table <file>: cannot open` | The unit table is not there. |
 | `unit <name> disagrees with line <n> on unit_of_work/capacity` | Two rows of one unit differ in `unit_of_work` or `capacity_per_cycle`. |
@@ -291,7 +342,8 @@ symbol, buffer table, semaphore counts, `ndim`) are ones a TOG built on togsim.h
 ## Checklist for a TOG generator
 
 Emit the TOG against togsim.hpp ([generated code](tog-api.md#generated-code)), write
-[the files beside it](#files-beside-togso) and both tables, with a row for every
+[the files beside it](#files-beside-togso) and both tables, have the functional run write the
+[runtime attribute records](#runtime-attributes) when the TOG declares attributes, with a row for every
 `node.id + node.count * variant` a compute names and an array-unit row for each compute that uses
 the array. Run it once with `--log_level trace`: no `[warning]` line, and the computes, addresses
 and issue order as intended.

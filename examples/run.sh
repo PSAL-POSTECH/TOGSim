@@ -9,7 +9,7 @@ V6E=configs/tpuv6e.yml
 EXAMPLES="hello async_barrier tiles gemm session mistakes"
 ulimit -c 0
 
-# tog <g++ arguments>: compile a TOG against include/togsim.hpp (TOGSim API v1.0.0). It links against nothing.
+# tog <g++ arguments>: compile a TOG against include/togsim.hpp (TOGSim API v1.1.0). It links against nothing.
 tog() {
   echo "+ g++ -std=c++20 -shared -fPIC -O1 -Iinclude $*"
   ${CXX:-g++} -std=c++20 -shared -fPIC -O1 -Iinclude "$@"
