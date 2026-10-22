@@ -9,7 +9,7 @@ systolic_array_unit: TPUV3_MXU
 vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 128
 
-isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv3]
+isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv3, spad-vector-memory]
 vcix: {}
 address_map: {spad_vaddr: 0xd0000000, spad_paddr: 0x2000000000, dram_base: 0x80000000, dram_size: 17179869184}
 
