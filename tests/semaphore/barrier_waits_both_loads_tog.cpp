@@ -11,8 +11,8 @@ static void tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   const int64_t big[2] = {ROWS, 16}, small[2] = {1, 16};
   const int64_t big_st[2] = {ROW_STRIDE, 1}, small_st[2] = {16, 1};
   const int64_t buf[1] = {1}, out[1] = {2};
-  togsim_dma(ctx, 0, 0, 0, 2, big, big_st, 32, 1, 7, nullptr, 0, buf, 1, 0);
-  togsim_dma(ctx, 0, 1, 0, 2, small, small_st, 32, 1, 7, nullptr, 0, buf, 1, 0);
+  togsim_dma(ctx, 0, 0, 0, 2, big, big_st, 32, 1, 7, nullptr, 0, buf, 1, nullptr, 0);
+  togsim_dma(ctx, 0, 1, 0, 2, small, small_st, 32, 1, 7, nullptr, 0, buf, 1, nullptr, 0);
 #if defined(WRONG_COUNT)
   togsim_memory_barrier(ctx, 7, 16);
 #elif defined(UNSIGNALED_SEM)
@@ -31,3 +31,5 @@ extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape
 
 extern "C" const int32_t togsim_spad_buffer_count = 3;
 extern "C" const int64_t togsim_spad_buffer_bytes[3] = {0, (ROWS + 1) * 16 * 4, 16 * 4};
+extern "C" const int32_t togsim_runtime_attribute_count = 0;
+extern "C" const int32_t togsim_runtime_attribute_rank[1] = {0};

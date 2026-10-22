@@ -81,11 +81,12 @@ void load_cycle_table(const std::string& path, std::vector<int64_t>& cyc, std::v
 }
 
 // Load a kernel's compiled TOG (.so) and bridge its replay to a TileGraph for `partition_id`, whose cores its
-// work-items round-robin over. The cycle table gives per-tile latency and must open; index dumps are read from
-// runtime/indirect_access beside the TOG.
+// work-items round-robin over. The cycle table gives per-tile latency and must open; the runtime attribute records
+// are read from `attribute_path` (empty or "-": none).
 std::unique_ptr<TileGraph> build_tog_tilegraph(Simulator* simulator,
                                                const std::string& tog_so_path,
                                                const std::string& cycle_table_path,
+                                               const std::string& attribute_path,
                                                int partition_id, int64_t unit_tile_base = 0) {
   const int num_cores = simulator->get_config().num_cores;
   std::vector<int32_t> partition_cores;
@@ -111,8 +112,7 @@ std::unique_ptr<TileGraph> build_tog_tilegraph(Simulator* simulator,
                           bases.data(), (int)bases.size(),
                           cyc.data(), ovl.data(), (int)cyc.size(),
                           partition_cores.data(), (int32_t)partition_cores.size(),
-                          (fs::path(tog_so_path).parent_path() / "runtime" / "indirect_access").string(),
-                          "kernel",
+                          attribute_path, "kernel",
                           std::vector<std::shared_ptr<const TensorTiling>>(tilings.begin(), tilings.end()),
                           unit_tile_base, simulator->unit_table(),
                           (size_t)simulator->get_config().core_spad_size_kb * 1024);
@@ -135,7 +135,7 @@ void launchKernel(Simulator* simulator, unsigned int kernel_id, std::string onnx
                              simulator->get_config().systolic_array_unit + " rows; no tog_units.tsv next to " +
                              onnx_path + " (or set systolic_array_split: none)");
   std::unique_ptr<TileGraph> tile_graph =
-      build_tog_tilegraph(simulator, tog_so, cycle_tsv, partition_id, unit_tile_base);
+      build_tog_tilegraph(simulator, tog_so, cycle_tsv, attribute_path, partition_id, unit_tile_base);
   if (!tile_graph)
     throw std::runtime_error("[TOGSim] tog.so failed to load or simulate for " + tog_so);
   tile_graph->set_arrival_time(request_time ? request_time : simulator->get_core_cycle());
@@ -236,6 +236,9 @@ int main(int argc, char** argv) {
       "unit_table", "Path to a per-tile unit admission table (TSV: tile_id unit unit_of_work "
                     "capacity_per_cycle admitted) for --tog_so; prints each unit's utilization "
                     "in place of the systolic array and cross-lane lines");
+  cmd_parser.add_command_line_option<std::string>(
+      "attribute_path", "Directory of the functional run's runtime attribute records (programs.bin, "
+                        "attr_<key>_<id>.bin) for --tog_so; required when the TOG declares attributes");
   try {
     cmd_parser.parse(argc, argv);
   } catch (const CommandLineParser::ParsingError& e) {
@@ -291,6 +294,8 @@ int main(int argc, char** argv) {
     std::string unit_table_path;
     cmd_parser.set_if_defined("unit_table", &unit_table_path);
     if (!unit_table_path.empty()) simulator->set_unit_table(UnitTable::load(unit_table_path));
+    std::string attribute_path;
+    cmd_parser.set_if_defined("attribute_path", &attribute_path);
     if (simulator->get_config().systolic_array_split && unit_table_path.empty()) {
       spdlog::error("[TOGSim] systolic_array_split (on by default) reads each tile's {} rows; give "
                     "--unit_table, or set systolic_array_split: none", simulator->get_config().systolic_array_unit);
@@ -301,7 +306,7 @@ int main(int argc, char** argv) {
       exit(EXIT_FAILURE);
     }
     try {
-      auto tg = build_tog_tilegraph(simulator, tog_so_path, cycle_table_path, 0);
+      auto tg = build_tog_tilegraph(simulator, tog_so_path, cycle_table_path, attribute_path, 0);
       if (!tg) { spdlog::error("[TOGSim] the TOG failed to load or simulate"); exit(1); }
       tg->set_arrival_time(simulator->get_core_cycle());
       tg->set_kernel_id(0);
@@ -324,6 +329,13 @@ int main(int argc, char** argv) {
   if (!unit_table_path.empty()) {
     spdlog::error("[TOGSim] --unit_table is keyed by one TOG's tile_ids; use it with --tog_so "
                   "(a launched kernel brings its own tog_units.tsv)");
+    exit(1);
+  }
+  std::string attribute_path;
+  cmd_parser.set_if_defined("attribute_path", &attribute_path);
+  if (!attribute_path.empty()) {
+    spdlog::error("[TOGSim] --attribute_path belongs to one TOG; use it with --tog_so "
+                  "(a launched kernel names its own, the attribute_path of its LAUNCH_KERNEL)");
     exit(1);
   }
 

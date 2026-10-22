@@ -4,9 +4,17 @@
 
 #include "togsim_loader.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <dlfcn.h>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <set>
+#include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -24,9 +32,14 @@ struct EmitCtx {
   int32_t  rr = 0;            // round-robin cursor into `cores`
   int32_t  cur_core = -1;     // core of the work-item being replayed
   int64_t  cur_key = 0;       // key of the work-item being replayed
-  int64_t  indirect_seq = 0;  // indirect dmas it has emitted so far
+  size_t   cur_item = 0;      // its index in `items`
+  bool     in_item = false;   // a work-item body is running
   std::vector<togsim::WorkItem> items;   // every dispatch, recorded by togsim_kernel
   std::vector<togsim::TraceRec> trace;   // records of the work-item being replayed
+  // the runtime attributes: the TOG's declared count, the records loaded at open, and what messages name
+  int32_t  n_attributes = 0;
+  togsim::AttributeRecords attributes;
+  std::string so_path, attribute_dir;
 };
 
 namespace {
@@ -39,6 +52,16 @@ inline togsim::TraceRec blank(togsim::TraceRec::Kind k, int32_t core) {
 }
 inline void emit_rec(EmitCtx* ctx, const togsim::TraceRec& r) {
   ctx->trace.push_back(r);
+}
+
+// Refuse the TOG of `ctx`: what every runtime attribute check throws, a launch error in a session.
+[[noreturn]] void refuse(const std::string& so_path, const std::string& what) {
+  throw std::runtime_error("[TOGSim] TOG " + so_path + ": " + what);
+}
+
+// "work-item <n> (key <k>)" of the work-item `ctx` runs.
+std::string item_name(const EmitCtx* ctx) {
+  return "work-item " + std::to_string(ctx->cur_item) + " (key " + std::to_string((uint64_t)ctx->cur_key) + ")";
 }
 }  // namespace
 
@@ -65,15 +88,19 @@ void togsim_dma(EmitCtx* ctx, int32_t dir, int32_t arg_id,
                 int32_t is_async, uint64_t sem,
                 const int64_t* read_bufs, int32_t n_read,
                 const int64_t* write_bufs, int32_t n_write,
-                int32_t indirect) {
+                const int64_t* element_offsets, int64_t n_offsets) {
   uint64_t base = (arg_id >= 0 && arg_id < ctx->n_tensors)
                       ? ctx->tensor_base[arg_id] : 0;
   uint64_t addr = base + offset * (uint64_t)(elem_bits / 8);
+  int64_t elements = 1;
+  for (int32_t i = 0; dims && i < ndim; ++i) elements *= dims[i];
+  if ((element_offsets || n_offsets) && n_offsets != elements)
+    refuse(ctx->so_path, item_name(ctx) + " gives a DMA " + std::to_string(n_offsets) + " element offsets for " +
+                             std::to_string(elements) + " elements");
   togsim::TraceRec r = blank(togsim::TraceRec::DMA, ctx->cur_core);
   r.dir = dir; r.arg_id = arg_id; r.elem_bits = elem_bits;
   r.is_async = is_async; r.addr = addr; r.sem = sem;
-  r.indirect = indirect != 0;
-  if (r.indirect) { r.index_key = ctx->cur_key; r.index_seq = ctx->indirect_seq++; }
+  if (element_offsets) r.element_offsets.assign(element_offsets, element_offsets + n_offsets);
   if (dims) r.dims.reserve(ndim);
   if (strides) r.strides.reserve(ndim);
   r.read_bufs.reserve(n_read);
@@ -113,11 +140,173 @@ void togsim_memory_barrier(EmitCtx* ctx, uint64_t sem, int64_t expected) {
   emit_rec(ctx, r);
 }
 
+// The record of `id` under the running work-item's key, loaded at open; a read with none refuses the TOG.
+const int64_t* togsim_runtime_attribute(EmitCtx* ctx, int32_t id, int32_t* rank, const int64_t** extents) {
+  static const int64_t none = 0;
+  if (!ctx->in_item) refuse(ctx->so_path, "an attribute read outside a work-item");
+  if (id < 0 || id >= ctx->n_attributes)
+    refuse(ctx->so_path, item_name(ctx) + " reads attribute " + std::to_string(id) + ", which the TOG does not declare");
+  const auto it = ctx->attributes.find({(uint64_t)ctx->cur_key, id});
+  if (it == ctx->attributes.end())
+    refuse(ctx->so_path, item_name(ctx) + " reads attribute " + std::to_string(id) + ", which " + ctx->attribute_dir +
+                             " does not record for that key");
+  const togsim::AttributeRecord& r = it->second;
+  if (rank) *rank = r.rank;
+  if (extents) *extents = r.extents.empty() ? &none : r.extents.data();
+  return r.values.empty() ? &none : r.values.data();
+}
+
 }  // extern "C"
 
 namespace togsim {
 
 namespace {
+namespace fs = std::filesystem;
+constexpr uint32_t PROGRAMS_MAGIC = 0x50415354, RECORD_MAGIC = 0x41525354;   // 'TSAP', 'TSRA' little-endian
+
+template <class T>
+T word(const std::string& bytes, size_t at) {
+  T v;
+  std::memcpy(&v, bytes.data() + at, sizeof v);
+  return v;
+}
+
+std::string bytes_of(const fs::path& file) {
+  std::ifstream in(file, std::ios::binary);
+  return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+// `text` as a decimal number that fits `T` with no sign, no leading zero and nothing else.
+template <class T>
+bool decimal(const std::string& text, T& v) {
+  if (text.empty() || text.size() > 20 || (text.size() > 1 && text[0] == '0')) return false;
+  unsigned long long n = 0;
+  for (char c : text) {
+    if (c < '0' || c > '9' || __builtin_mul_overflow(n, 10ULL, &n) || __builtin_add_overflow(n, (unsigned)(c - '0'), &n))
+      return false;
+  }
+  v = (T)n;
+  return (unsigned long long)v == n;
+}
+
+// attr_<key>_<id>.bin -> key, id.
+bool record_name(const std::string& name, uint64_t& key, int32_t& id) {
+  const std::string head = "attr_", tail = ".bin";
+  if (name.size() <= head.size() + tail.size() || name.compare(0, head.size(), head) ||
+      name.compare(name.size() - tail.size(), tail.size(), tail))
+    return false;
+  const std::string middle = name.substr(head.size(), name.size() - head.size() - tail.size());
+  const size_t cut = middle.find('_');
+  return cut != std::string::npos && decimal(middle.substr(0, cut), key) && decimal(middle.substr(cut + 1), id);
+}
+
+// The keys programs.bin of `dir` lists, ascending, each once.
+std::set<uint64_t> program_keys(const std::string& so, const std::string& dir) {
+  const fs::path file = fs::path(dir) / "programs.bin";
+  std::error_code ec;
+  if (!fs::is_regular_file(file, ec)) refuse(so, dir + " has no programs.bin: the functional run recorded no program");
+  const std::string bytes = bytes_of(file);
+  if (bytes.size() < 16 || word<uint32_t>(bytes, 0) != PROGRAMS_MAGIC ||
+      word<uint32_t>(bytes, 4) != (uint32_t)TOGSIM_ABI_VERSION)
+    refuse(so, file.string() + ": not a runtime attribute file of ABI " + std::to_string(TOGSIM_ABI_VERSION));
+  const uint64_t n = word<uint64_t>(bytes, 8);
+  if (n > (bytes.size() - 16) / 8 || bytes.size() != 16 + 8 * n)
+    refuse(so, file.string() + " is " + std::to_string(bytes.size()) + " bytes, its header says " +
+                   (n > bytes.size() / 8 ? "more" : std::to_string(16 + 8 * n)));
+  std::set<uint64_t> keys;
+  for (uint64_t i = 0; i < n; ++i) {
+    const uint64_t key = word<uint64_t>(bytes, 16 + 8 * i);
+    if (!keys.empty() && key <= *keys.rbegin())
+      refuse(so, file.string() + " lists key " + std::to_string(key) + " out of ascending order or twice");
+    keys.insert(key);
+  }
+  return keys;
+}
+
+// The record in `file`, of the attribute file name's key and id, checked against the TOG's `ranks` and `keys`.
+AttributeRecord read_record(const std::string& so, const fs::path& file, uint64_t key, int32_t id,
+                            const std::vector<int32_t>& ranks, const std::set<uint64_t>& keys) {
+  const std::string bytes = bytes_of(file), name = file.string();
+  if (bytes.size() < 24 || word<uint32_t>(bytes, 0) != RECORD_MAGIC ||
+      word<uint32_t>(bytes, 4) != (uint32_t)TOGSIM_ABI_VERSION)
+    refuse(so, name + ": not a runtime attribute file of ABI " + std::to_string(TOGSIM_ABI_VERSION));
+  AttributeRecord r;
+  const int32_t held_id = word<int32_t>(bytes, 8);
+  r.rank = word<int32_t>(bytes, 12);
+  const uint64_t held_key = word<uint64_t>(bytes, 16);
+  if (held_key != key || held_id != id)
+    refuse(so, name + " holds key " + std::to_string(held_key) + " id " + std::to_string(held_id));
+  if (id < 0 || id >= (int32_t)ranks.size())
+    refuse(so, name + " records attribute " + std::to_string(id) + ", which the TOG does not declare");
+  if (r.rank != ranks[id])
+    refuse(so, name + " records attribute " + std::to_string(id) + " at rank " + std::to_string(r.rank) +
+                   ", the TOG declares rank " + std::to_string(ranks[id]));
+  const size_t header = 24 + 8 * (size_t)r.rank;
+  if (bytes.size() < header)
+    refuse(so, name + " is " + std::to_string(bytes.size()) + " bytes, its header says at least " +
+                   std::to_string(header));
+  uint64_t values = 1;
+  for (int32_t d = 0; d < r.rank; ++d) {
+    const int64_t e = word<int64_t>(bytes, 24 + 8 * d);
+    if (e < 0) refuse(so, name + " records extent " + std::to_string(e) + " on dim " + std::to_string(d));
+    r.extents.push_back(e);
+    if (__builtin_mul_overflow(values, (uint64_t)e, &values)) values = UINT64_MAX;
+  }
+  if (values > (bytes.size() - header) / 8 || bytes.size() != header + 8 * values)
+    refuse(so, name + " is " + std::to_string(bytes.size()) + " bytes, its header says " +
+                   (values > bytes.size() / 8 ? "more" : std::to_string(header + 8 * values)));
+  if (!keys.count(key))
+    refuse(so, name + " records key " + std::to_string(key) + ", which programs.bin does not list");
+  r.values.resize(values);
+  if (values) std::memcpy(r.values.data(), bytes.data() + header, 8 * values);
+  return r;
+}
+
+// Load the records of `ctx`'s TOG from `path` (docs/tog-abi.md, Runtime attributes): every file checked, the keys
+// programs.bin lists equal to the keys dispatched. A TOG that declares none needs no path, and refuses records.
+void load_attributes(EmitCtx& ctx, const std::string& path, const std::vector<int32_t>& ranks) {
+  const std::string& so = ctx.so_path;
+  const bool given = !path.empty() && path != "-";
+  std::error_code ec;
+  if (ranks.empty() && (!given || !fs::is_directory(path, ec))) return;
+  if (!given)
+    refuse(so, "it declares " + std::to_string(ranks.size()) +
+                   " runtime attribute(s) and was launched with no attribute_path");
+  if (!fs::is_directory(path, ec)) refuse(so, "attribute_path " + path + " does not open");
+  std::vector<std::string> names;
+  for (const auto& entry : fs::directory_iterator(path, ec)) names.push_back(entry.path().filename().string());
+  if (ec) refuse(so, "attribute_path " + path + " does not open");
+  std::sort(names.begin(), names.end());
+  std::vector<std::pair<std::string, std::pair<uint64_t, int32_t>>> records;
+  for (const std::string& name : names) {
+    uint64_t key;
+    int32_t id;
+    if (name == "programs.bin") continue;
+    if (!record_name(name, key, id) || !fs::is_regular_file(fs::path(path) / name, ec))
+      refuse(so, path + "/" + name + " is neither programs.bin nor attr_<key>_<id>.bin");
+    records.push_back({name, {key, id}});
+  }
+  if (ranks.empty()) {
+    if (!records.empty())
+      refuse(so, "it declares no runtime attribute and " + path + " holds " + std::to_string(records.size()) +
+                     " record(s)");
+    return;
+  }
+  const std::set<uint64_t> keys = program_keys(so, path);
+  std::set<uint64_t> dispatched;
+  for (const WorkItem& w : ctx.items) dispatched.insert((uint64_t)w.key);
+  for (uint64_t k : dispatched)
+    if (!keys.count(k))
+      refuse(so, "work-item key " + std::to_string(k) + " was dispatched and " + path +
+                     "/programs.bin does not list it");
+  for (uint64_t k : keys)
+    if (!dispatched.count(k))
+      refuse(so, path + "/programs.bin lists key " + std::to_string(k) + ", which no work-item was dispatched under");
+  for (const auto& [name, at] : records)
+    ctx.attributes[at] = read_record(so, fs::path(path) / name, at.first, at.second, ranks, keys);
+  ctx.attribute_dir = path;
+}
+
 void init_ctx(EmitCtx& ctx, const uint64_t* tensor_base, int32_t n_tensors,
               const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,
               const int32_t* partition_cores, int32_t n_partition_cores) {
@@ -135,7 +324,8 @@ LazyTog::~LazyTog() {
 bool LazyTog::open(const char* so_path, const int64_t* shape_args, int32_t n_shape,
                         const uint64_t* tensor_base, int32_t n_tensors,
                         const int64_t* cyc, const int64_t* ovl, int32_t n_tiles,
-                        const int32_t* partition_cores, int32_t n_partition_cores) {
+                        const int32_t* partition_cores, int32_t n_partition_cores,
+                        const std::string& attribute_path) {
   // own the tables: the caller's buffers are its locals, and the tile fns are
   // invoked long after it returns.
   if (tensor_base && n_tensors > 0) _bases.assign(tensor_base, tensor_base + n_tensors);
@@ -146,6 +336,7 @@ bool LazyTog::open(const char* so_path, const int64_t* shape_args, int32_t n_sha
   init_ctx(*_ctx, _bases.empty() ? nullptr : _bases.data(), (int32_t)_bases.size(),
            _cyc.empty() ? nullptr : _cyc.data(), _ovl.empty() ? nullptr : _ovl.data(),
            (int32_t)_cyc.size(), partition_cores, n_partition_cores);
+  _ctx->so_path = so_path;
 
   _lib = dlopen(so_path, RTLD_NOW | RTLD_GLOBAL);
   if (!_lib) { fprintf(stderr, "togsim: dlopen failed: %s\n", dlerror()); return false; }
@@ -176,6 +367,15 @@ bool LazyTog::open(const char* so_path, const int64_t* shape_args, int32_t n_sha
     return false;
   }
   if (bytes) _spad_bytes.assign(bytes, bytes + *n_bufs);
+  auto n_attrs = (const int32_t*)dlsym(_lib, "togsim_runtime_attribute_count");
+  auto ranks = (const int32_t*)dlsym(_lib, "togsim_runtime_attribute_rank");
+  if (!n_attrs || !ranks || *n_attrs < 0 || *n_attrs > TOGSIM_MAX_RUNTIME_ATTRIBUTES) {
+    fprintf(stderr, "togsim: refusing TOG %s: it states no runtime attribute table "
+            "(togsim_runtime_attribute_count / togsim_runtime_attribute_rank)\n", so_path);
+    return false;
+  }
+  const std::vector<int32_t> attribute_ranks(ranks, ranks + *n_attrs);
+  _ctx->n_attributes = *n_attrs;
   auto kernel = (void (*)(EmitCtx*, int64_t*, int32_t))dlsym(_lib, "togsim_kernel");
   if (!kernel) { fprintf(stderr, "togsim: dlsym togsim_kernel failed: %s\n", dlerror()); return false; }
 
@@ -183,6 +383,7 @@ bool LazyTog::open(const char* so_path, const int64_t* shape_args, int32_t n_sha
   // registers a work-item and returns, so no tile body runs and no record is
   // emitted yet. run_item() replays an individual work-item later.
   kernel(_ctx, (int64_t*)shape_args, n_shape);
+  load_attributes(*_ctx, attribute_path, attribute_ranks);
   return true;
 }
 
@@ -196,9 +397,11 @@ const std::vector<TraceRec>& LazyTog::run_item(size_t i) {
   WorkItem& w = _ctx->items[i];
   _ctx->cur_core = w.core;                     // the binding fixed when registered
   _ctx->cur_key = w.key;
-  _ctx->indirect_seq = 0;
+  _ctx->cur_item = i;
   emit_rec(_ctx, blank(TraceRec::TILE_BEGIN, w.core));
+  _ctx->in_item = true;
   ((togsim_tile_fn)w.fn)(_ctx, w.iv.empty() ? nullptr : w.iv.data(), (int32_t)w.iv.size());
+  _ctx->in_item = false;
   emit_rec(_ctx, blank(TraceRec::TILE_END, w.core));
   return _ctx->trace;   // one work-item's records; overwritten by the next call
 }

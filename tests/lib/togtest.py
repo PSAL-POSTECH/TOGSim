@@ -5,6 +5,7 @@ import os
 import re
 import resource
 import shutil
+import struct
 import subprocess
 import threading
 import time
@@ -19,8 +20,10 @@ TYPED_WARNING = "uses the typed grouping"
 EVENT = re.compile(r"\[(\d+)\]\[Core (\d+)\]\[(\w+) *\]\[INST_ID=(\d+)\] ([A-Z_]+)(?: \((.*)\))?$", re.M)
 SCHEDULED = re.compile(r"TILE_SCHEDULED *\] spad_footprint=(\d+) max_dispatch=(\d+)")
 CORE_LINE = re.compile(r"\[(\d+)\]\[Core (\d+)\]\[(TILE_SCHEDULED|SPAD_HOLD|SPAD_HOLD_END) *\] (.*)$", re.M)
-SAID = re.compile(r"^(?:\[[^\]]*\] \[(?:error|critical)\] |\s*what\(\):\s*)(.*)$|^(togsim: .*)$", re.M)
+SAID = re.compile(r"^(?:\[[^\]]*\] \[(?:error|critical)\] |\s*what\(\):\s*)(.*)$|^(togsim(?:\.hpp)?: .*)$", re.M)
 WARNED = re.compile(r"^\[[^\]]*\] \[warning\] (.*)$", re.M)
+ABI = 17
+PROGRAMS_MAGIC, RECORD_MAGIC = 0x50415354, 0x41525354
 _built, _locks, _guard = {}, {}, threading.Lock()
 
 
@@ -80,6 +83,30 @@ def write_table(path, rows):
     return path
 
 
+def shape_of(value):
+    """(extents, row-major values) of `value`: an int is a scalar, a list of lists ... an array of that many dims."""
+    if isinstance(value, int):
+        return [], [value]
+    inner = [shape_of(v) for v in value]
+    if any(e != inner[0][0] for e, _ in inner):
+        raise ValueError(f"a ragged attribute value {value}")
+    return [len(value)] + (inner[0][0] if inner else []), [x for _, v in inner for x in v]
+
+
+def record_bytes(key, id, value, rank=None, magic=RECORD_MAGIC, abi=ABI, held=None):
+    """attr_<key>_<id>.bin of `value` (shape_of; or (extents, values)): its header states `rank` (default the value's),
+    and `held` = (key, id) in place of the file's own."""
+    extents, values = value if isinstance(value, tuple) else shape_of(value)
+    held_key, held_id = held or (key, id)
+    return (struct.pack("<IIiiQ", magic, abi, held_id, len(extents) if rank is None else rank, held_key) +
+            struct.pack(f"<{len(extents)}q", *extents) + struct.pack(f"<{len(values)}q", *values))
+
+
+def programs_bytes(keys, magic=PROGRAMS_MAGIC, abi=ABI):
+    """programs.bin listing `keys` in the order given."""
+    return struct.pack("<IIQ", magic, abi, len(keys)) + struct.pack(f"<{len(keys)}Q", *keys)
+
+
 def read_table(path):
     """The tab-separated rows of `path`, each a list of strings."""
     return [line.split("\t") for line in Path(path).read_text().splitlines() if line]
@@ -118,8 +145,8 @@ class Run:
         raise Failure(f"{what}  [log: {self.log_path}]")
 
     def said(self):
-        """The error lines of the log: spdlog errors and an uncaught exception without their prefix, the loader's
-        stderr lines whole (`togsim: ...`)."""
+        """The error lines of the log: spdlog errors and an uncaught exception without their prefix, the loader's and
+        togsim.hpp's stderr lines whole (`togsim: ...`, `togsim.hpp: ...`)."""
         return [m[1] if m[2] is None else m[2] for m in SAID.finditer(self.log)]
 
     def _exit(self):
@@ -260,6 +287,20 @@ class Ctx:
         out.write_text("\n".join(lines) + "\n")
         return out
 
+    def attributes(self, records, programs=None, into="attributes"):
+        """<work dir>/<into>/ as the functional run leaves it: attr_<key>_<id>.bin of each (key, id): value of
+        `records` (record_bytes), programs.bin listing `programs` (default: the records' keys; None in the list
+        leaves the file out)."""
+        out = self.work_dir / into
+        shutil.rmtree(out, ignore_errors=True)
+        out.mkdir(parents=True)
+        for (key, id), value in records.items():
+            (out / f"attr_{key}_{id}.bin").write_bytes(record_bytes(key, id, value))
+        keys = sorted({key for key, _ in records}) if programs is None else programs
+        if keys is not None and None not in keys:
+            (out / "programs.bin").write_bytes(programs_bytes(keys))
+        return out
+
     def table(self, name, rows):
         """<work dir>/<name>.tsv holding `rows`, tab-separated."""
         return write_table(self.work_dir / f"{name}.tsv", rows)
@@ -293,11 +334,13 @@ class Ctx:
                      "its case does not belong in tests/typed/")
         return run
 
-    def simulate(self, tog, machine, cycles, units=None, log_level="trace", timeout=TIMEOUT_S):
+    def simulate(self, tog, machine, cycles, units=None, log_level="trace", timeout=TIMEOUT_S, attributes=None):
         """Replay `tog` on `machine`: `cycles` lists the cycles of tile 0, 1, ... (the cycle table, overlap 0),
-        `units` the rows of the unit table when there is one."""
+        `units` the rows of the unit table when there is one, `attributes` the --attribute_path when there is one."""
         args = ["--config", machine, "--tog_so", tog,
                 "--cycle_table", self.table("cycles", [(c, 0) for c in cycles])]
         if units is not None:
             args += ["--unit_table", self.table("units", units)]
+        if attributes is not None:
+            args += ["--attribute_path", attributes]
         return self.execute("Simulator", [*args, "--log_level", log_level], timeout)

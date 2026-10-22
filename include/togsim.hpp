@@ -1,26 +1,31 @@
 #pragma once
-// togsim.hpp -- TOGSim API v1.0.0: a TOG as one C++20 struct over the C ABI of togsim_runtime.h, every call with
+// togsim.hpp -- TOGSim API v1.1.0: a TOG as one C++20 struct over the C ABI of togsim_runtime.h, every call with
 // one struct of named arguments (docs/tog-api.md). A rule broken at run time prints "togsim.hpp: ..." and exits 1;
 // one broken in a constant expression fails to compile.
 
+#include <algorithm>
 #include <array>
+#include <cstdarg>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <initializer_list>
+#include <string>
 #include <type_traits>
 #include <vector>
 
 #include "togsim_runtime.h"
 
 namespace togsim {
-inline constexpr int API_MAJOR = 1, API_MINOR = 0, API_PATCH = 0;
-inline constexpr char API_VERSION[] = "1.0.0";
-inline constexpr int ABI = 16;
+inline constexpr int API_MAJOR = 1, API_MINOR = 1, API_PATCH = 0;
+inline constexpr char API_VERSION[] = "1.1.0";
+inline constexpr int ABI = 17;
 inline constexpr int32_t MAX_SPAD_BUFFERS = 1024;
-static_assert(TOGSIM_ABI_VERSION == ABI, "togsim.hpp implements TOG ABI 16");
+inline constexpr int32_t MAX_RUNTIME_ATTRIBUTES = TOGSIM_MAX_RUNTIME_ATTRIBUTES;
+inline constexpr int32_t MAX_ATTRIBUTE_RANK = TOGSIM_MAX_ATTRIBUTE_RANK;
+static_assert(TOGSIM_ABI_VERSION == ABI, "togsim.hpp implements TOG ABI 17");
 }  // namespace togsim
 
 // The ABI's buffer table, filled from the TOG's buffers when the .so is loaded. Protected: TOGs load RTLD_GLOBAL,
@@ -28,6 +33,8 @@ static_assert(TOGSIM_ABI_VERSION == ABI, "togsim.hpp implements TOG ABI 16");
 extern "C" {
 __attribute__((visibility("protected"))) int32_t togsim_spad_buffer_count = 0;
 __attribute__((visibility("protected"))) int64_t togsim_spad_buffer_bytes[togsim::MAX_SPAD_BUFFERS] = {};
+__attribute__((visibility("protected"))) int32_t togsim_runtime_attribute_count = 0;
+__attribute__((visibility("protected"))) int32_t togsim_runtime_attribute_rank[togsim::MAX_RUNTIME_ATTRIBUTES] = {};
 }
 
 namespace togsim {
@@ -35,6 +42,17 @@ namespace {
 
 [[noreturn]] inline void fail_(const char* what) {
   std::fprintf(stderr, "togsim.hpp: %s\n", what);
+  std::exit(1);
+}
+
+// fail_ with a printf-formatted message.
+[[noreturn]] __attribute__((format(printf, 1, 2))) inline void failf_(const char* format, ...) {
+  std::fprintf(stderr, "togsim.hpp: ");
+  va_list args;
+  va_start(args, format);
+  std::vfprintf(stderr, format, args);
+  va_end(args);
+  std::fprintf(stderr, "\n");
   std::exit(1);
 }
 
@@ -69,16 +87,32 @@ struct Dims {
   constexpr explicit Dims(D... d) : Dims({(int64_t)d...}) {}
 };
 
+// A runtime attribute: an int64 value or array the functional run recorded for each work-item, by `id`; `rank` 0 is a
+// scalar. Its extents are the record's, not the declaration's.
+struct Attribute {
+  int32_t id;
+  int32_t rank;
+};
+
+// A gather (Load.src) or scatter (Store.dst): element e of the tile also moves by scale * A[at..., i_axis(e)]
+// (`axis` >= 0: one entry per position on that dim), or by scale * A[at..., e's indices] (`axis` -1). Gather() is none.
+struct Gather {
+  Attribute attribute = {-1, 0};
+  Dims at = Dims();
+  int32_t axis = -1;
+  int64_t scale = 1;
+};
+
 // What a DMA moves: `dims` elements of kernel argument `ptr` (its line of tog_tensors.txt), of type `type`,
-// `strides` elements apart, from `offset` elements into it. `indirect`: a gather or scatter, each element moved
-// by its index (the index buffer goes in Load.after or Store.also).
+// `strides` elements apart, from `offset` elements into it, each element further moved by `gather` when it names an
+// attribute (the index buffer still goes in Load.after or Store.also).
 struct Desc {
   int32_t ptr;
   Elem type;
   int64_t offset;
   Dims dims;
   Dims strides;
-  bool indirect = false;
+  Gather gather = {};
 };
 
 // Compute node `id` of `count`: the tile id gem5 names its samples with, and how many there are. A compute takes
@@ -191,6 +225,7 @@ struct Ops_ {
   static int32_t n_shape(const Kernel& k) { return k.n_; }
   static int64_t shape(const Kernel& k, int32_t i) { return k.shape_[i]; }
   static int64_t key(Kernel& k, bool keyed, int64_t given) {
+    if (!keyed && togsim_runtime_attribute_count > 0) fail_("a TOG with runtime attributes dispatches without .key");
     if (k.keyed_ == (keyed ? 0 : 1)) fail_("a kernel mixes dispatches with and without .key");
     k.keyed_ = keyed ? 1 : 0;
     return keyed ? given : k.next_++;
@@ -217,21 +252,112 @@ inline std::vector<int64_t> ids_(const std::vector<Buf>& bufs) {
   return ids;
 }
 
+inline int64_t elements_(const Dims& d) {
+  int64_t e = 1;
+  for (int32_t i = 0; i < d.n; ++i) e *= d.v[i];
+  return e;
+}
+
+// `n` extents as text: "[2, 4]".
+inline std::string list_(const int64_t* v, int32_t n) {
+  std::string out = "[";
+  for (int32_t i = 0; i < n; ++i) out += (i ? ", " : "") + std::to_string(v[i]);
+  return out + "]";
+}
+
+// The record of `a` for the work-item `w` runs as: its values; *extents gets its extents. `a` must be declared as is.
+inline const int64_t* record_(Item& w, const Attribute& a, const int64_t** extents) {
+  if (a.id < 0 || a.id >= togsim_runtime_attribute_count || togsim_runtime_attribute_rank[a.id] != a.rank)
+    failf_("runtime attribute %d is not declared", (int)a.id);
+  int32_t rank = -1;
+  return togsim_runtime_attribute(Ops_::ctx(w), a.id, &rank, extents);
+}
+
+// The value of scalar attribute `a` (rank 0) for this work-item.
+inline int64_t scalar(Item& w, const Attribute& a) {
+  if (a.rank != 0) failf_("scalar(w, a) of attribute %d of rank %d", (int)a.id, (int)a.rank);
+  const int64_t* extents = nullptr;
+  return record_(w, a, &extents)[0];
+}
+
+// Element `i...` (one index per rank) of array attribute `a` for this work-item, each index within its extent.
+template <class... I>
+  requires(std::is_integral_v<I> && ...)
+int64_t element(Item& w, const Attribute& a, I... i) {
+  const int64_t at[sizeof...(I) + 1] = {(int64_t)i..., 0};
+  if ((int32_t)sizeof...(I) != a.rank)
+    failf_("element(w, a, i...) of attribute %d: %d indices for rank %d", (int)a.id, (int)sizeof...(I), (int)a.rank);
+  const int64_t* extents = nullptr;
+  const int64_t* values = record_(w, a, &extents);
+  int64_t linear = 0;
+  for (int32_t d = 0; d < a.rank; ++d) {
+    if (at[d] < 0 || at[d] >= extents[d])
+      failf_("element(w, a, i...) of attribute %d: index %lld on dim %d outside its extent %lld", (int)a.id,
+             (long long)at[d], (int)d, (long long)extents[d]);
+    linear = linear * extents[d] + at[d];
+  }
+  return values[linear];
+}
+
+// Extent `d` of array attribute `a` as this work-item's record has it.
+inline int64_t extent(Item& w, const Attribute& a, int64_t d) {
+  if (d < 0 || d >= a.rank)
+    failf_("extent(w, a, d) of attribute %d: dim %lld outside rank %d", (int)a.id, (long long)d, (int)a.rank);
+  const int64_t* extents = nullptr;
+  record_(w, a, &extents);
+  return extents[d];
+}
+
+// One element offset per element of `d`'s tile, row-major: its gather's row times its scale.
+inline std::vector<int64_t> element_offsets_(Item& w, const Desc& d) {
+  const Gather& g = d.gather;
+  const int64_t* extents = nullptr;
+  const int64_t* values = record_(w, g.attribute, &extents);
+  const int32_t row_rank = g.axis >= 0 ? 1 : d.dims.n;
+  if (g.axis < -1 || g.axis >= d.dims.n)
+    failf_("a gather on attribute %d on axis %d of a %d-dim tile", (int)g.attribute.id, (int)g.axis, (int)d.dims.n);
+  if (g.at.n + row_rank != g.attribute.rank)
+    failf_("a gather on attribute %d of rank %d: %d indices at and a row of %d dims on axis %d", (int)g.attribute.id,
+           (int)g.attribute.rank, (int)g.at.n, (int)row_rank, (int)g.axis);
+  const std::string at = list_(g.at.v, g.at.n);
+  int64_t row = 0;
+  for (int32_t k = 0; k < g.at.n; ++k) {
+    if (g.at.v[k] < 0 || g.at.v[k] >= extents[k])
+      failf_("a gather on attribute %d at %s: index %lld on dim %d outside its extent %lld", (int)g.attribute.id,
+             at.c_str(), (long long)g.at.v[k], (int)k, (long long)extents[k]);
+    row = row * extents[k] + g.at.v[k];
+  }
+  const int64_t* shape = extents + g.at.n;
+  const bool fits = g.axis >= 0 ? shape[0] == d.dims.v[g.axis]
+                                : std::equal(shape, shape + d.dims.n, d.dims.v);
+  if (!fits && g.axis >= 0)
+    failf_("a gather on attribute %d at %s: its row holds %lld entries for %lld tile elements on axis %d",
+           (int)g.attribute.id, at.c_str(), (long long)shape[0], (long long)d.dims.v[g.axis], (int)g.axis);
+  if (!fits)
+    failf_("a gather on attribute %d at %s: its row holds %s entries for %s tile elements on axis -1",
+           (int)g.attribute.id, at.c_str(), list_(shape, d.dims.n).c_str(), list_(d.dims.v, d.dims.n).c_str());
+  const int64_t n = elements_(d.dims);
+  const int64_t* entries = values + row * (g.axis >= 0 ? shape[0] : n);
+  int64_t inner = 1;
+  for (int32_t k = g.axis + 1; g.axis >= 0 && k < d.dims.n; ++k) inner *= d.dims.v[k];
+  std::vector<int64_t> offsets(n);
+  for (int64_t e = 0; e < n; ++e)
+    offsets[e] = g.scale * entries[g.axis >= 0 ? e / inner % d.dims.v[g.axis] : e];
+  return offsets;
+}
+
 inline void dma_(Item& w, int32_t dir, const Desc& at, int32_t async, uint64_t sem, const std::vector<Buf>& read,
                  const std::vector<Buf>& written) {
   const std::vector<int64_t> reads = ids_(read), writes = ids_(written);
   if (at.dims.n < 1) fail_("a DMA with no dims");
   if (at.strides.n != at.dims.n) fail_("a DMA gives another count of strides than of dims");
   if (at.type.bits < 8 || at.type.bits % 8) fail_("a DMA's descriptor has no byte-sized element type");
+  const bool gathers = at.gather.attribute.id != -1 || at.gather.attribute.rank != 0;
+  const std::vector<int64_t> offsets = gathers ? element_offsets_(w, at) : std::vector<int64_t>{};
   togsim_dma(Ops_::ctx(w), dir, at.ptr, (uint64_t)at.offset, at.dims.n, at.dims.v, at.strides.v, at.type.bits,
              async, sem, reads.empty() ? nullptr : reads.data(), (int32_t)reads.size(),
-             writes.empty() ? nullptr : writes.data(), (int32_t)writes.size(), at.indirect ? 1 : 0);
-}
-
-inline int64_t elements_(const Dims& d) {
-  int64_t e = 1;
-  for (int32_t i = 0; i < d.n; ++i) e *= d.v[i];
-  return e;
+             writes.empty() ? nullptr : writes.data(), (int32_t)writes.size(),
+             gathers ? offsets.data() : nullptr, gathers ? (int64_t)offsets.size() : 0);
 }
 
 // A new semaphore: load(w, {..., .sem = s}) signals it, wait(w, {.sem = s}) waits for those loads.
@@ -390,7 +516,8 @@ void dispatch_(Kernel& k, const A* args, bool keyed, int64_t key) {
                   args ? (int32_t)(sizeof(A) / sizeof(int64_t)) : 0, Ops_::key(k, keyed, key));
 }
 
-// A dispatch that names its own key (the dump name of its indirect DMAs): {.key = key, .args = Args{...}}.
+// A dispatch that names its own key (its program's key, under which its attributes are recorded):
+// {.key = key, .args = Args{...}}. A TOG with runtime attributes dispatches only so.
 template <class A>
 struct Keyed {
   int64_t key;
@@ -446,7 +573,19 @@ constexpr bool buffers_ok_(const Buf* bufs, std::size_t n) {
   return true;
 }
 
-inline bool register_(EntryFn_ entry, const Buf* bufs, std::size_t n) {
+// A TOG's attribute list: ids exactly 0..n-1, each once, of rank 0 to MAX_ATTRIBUTE_RANK.
+constexpr bool attributes_ok_(const Attribute* attrs, std::size_t n) {
+  for (std::size_t i = 0; i < n; ++i) {
+    if (attrs[i].id < 0 || attrs[i].id >= MAX_RUNTIME_ATTRIBUTES) fail_("an attribute id outside 0..63");
+    if (attrs[i].rank < 0 || attrs[i].rank > MAX_ATTRIBUTE_RANK) fail_("an attribute of rank outside 0..8");
+    if ((std::size_t)attrs[i].id >= n) fail_("attribute ids are not 0..n-1 once each");
+    for (std::size_t j = 0; j < i; ++j)
+      if (attrs[j].id == attrs[i].id) fail_("attribute ids are not 0..n-1 once each");
+  }
+  return true;
+}
+
+inline bool register_(EntryFn_ entry, const Buf* bufs, std::size_t n, const Attribute* attrs, std::size_t m) {
   if (entry_) fail_("two TOGs registered in one .so");
   entry_ = entry;
   int32_t count = 0;
@@ -455,6 +594,8 @@ inline bool register_(EntryFn_ entry, const Buf* bufs, std::size_t n) {
     if (bufs[i].id + 1 > count) count = (int32_t)bufs[i].id + 1;
   }
   togsim_spad_buffer_count = count;
+  for (std::size_t i = 0; i < m; ++i) togsim_runtime_attribute_rank[attrs[i].id] = attrs[i].rank;
+  togsim_runtime_attribute_count = (int32_t)m;
   return true;
 }
 
@@ -463,11 +604,13 @@ void run_free_entry_(EmitCtx* c, int64_t* shape, int32_t n) {
   Ops_::run_kernel(c, shape, n, [](Kernel& k) { Entry(k); });
 }
 
-// For generated code, which has no base classes: static const bool tog = register_tog<entry>({Buf{...}, ...});
+// For generated code, which has no base classes: static const bool tog = register_tog<entry>({Buf{...}, ...}), and
+// register_tog<entry>({Buf{...}, ...}, {Attribute{...}, ...}) for a TOG that reads runtime attributes.
 template <void (*Entry)(Kernel&)>
-bool register_tog(std::initializer_list<Buf> bufs) {
+bool register_tog(std::initializer_list<Buf> bufs, std::initializer_list<Attribute> attrs = {}) {
   buffers_ok_(bufs.begin(), bufs.size());
-  return register_(run_free_entry_<Entry>, bufs.begin(), bufs.size());
+  attributes_ok_(attrs.begin(), attrs.size());
+  return register_(run_free_entry_<Entry>, bufs.begin(), bufs.size(), attrs.begin(), attrs.size());
 }
 
 template <class T>
@@ -475,16 +618,28 @@ void run_struct_entry_(EmitCtx* c, int64_t* shape, int32_t n) {
   Ops_::run_kernel(c, shape, n, [](Kernel& k) { T{}.entry(k); });
 }
 
+// A TOG struct's `attributes`: none when it has no such member.
+template <class T>
+constexpr std::array<Attribute, 0> no_attributes_{};
+template <class T>
+constexpr const auto& attributes_of_() {
+  if constexpr (requires { T::attributes; }) return T::attributes;
+  else return no_attributes_<T>;
+}
+
 template <class T>
 bool register_struct_() {
   static_assert(std::is_same_v<decltype(&T::entry), void (T::*)(Kernel&) const>,
                 "a TOG struct has a member void entry(togsim::Kernel&) const");
   static_assert(buffers_ok_(T::buffers.data(), T::buffers.size()), "the TOG struct's buffers");
-  return register_(run_struct_entry_<T>, T::buffers.data(), T::buffers.size());
+  constexpr const auto& attrs = attributes_of_<T>();
+  static_assert(attributes_ok_(attrs.data(), attrs.size()), "the TOG struct's attributes");
+  return register_(run_struct_entry_<T>, T::buffers.data(), T::buffers.size(), attrs.data(), attrs.size());
 }
 
 // Derive the TOG's struct from Tog<itself>: loading the .so registers its entry and fills the buffer table from
-// its buffers. One TOG per .so, in one .cpp: the header defines the ABI's symbols.
+// its buffers, and the attribute table from its optional `attributes`. One TOG per .so, in one .cpp: the header
+// defines the ABI's symbols.
 template <class T>
 struct Tog {
  private:

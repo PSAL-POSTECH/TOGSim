@@ -21,7 +21,7 @@ std::string format_dma_inst_issued_detail(Instruction& inst) {
         fmt::join(inst.get_tile_stride(), ","),
         inst.get_elem_bits(),
         inst.is_async_dma(),
-        inst.is_indirect_mode(),
+        inst.has_element_offsets(),
         format_tag_key_list_hex(inst.get_tag_id()));
   }
   uint64_t tag_hex = 0;
@@ -37,7 +37,7 @@ std::string format_dma_inst_issued_detail(Instruction& inst) {
       rank,
       inst.get_elem_bits(),
       inst.is_async_dma(),
-      inst.is_indirect_mode(),
+      inst.has_element_offsets(),
       tag_hex,
       fmt::join(inst.get_tile_stride(), ","),
       fmt::join(ts, ","),

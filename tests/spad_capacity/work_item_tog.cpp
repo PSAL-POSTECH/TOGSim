@@ -10,6 +10,8 @@
 #endif
 
 extern "C" const int64_t togsim_spad_buffer_bytes[] = {SIZES};
+extern "C" const int32_t togsim_runtime_attribute_count = 0;
+extern "C" const int32_t togsim_runtime_attribute_rank[1] = {0};
 extern "C" const int32_t togsim_spad_buffer_count = sizeof(togsim_spad_buffer_bytes) / sizeof(int64_t);
 
 static void tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
@@ -20,7 +22,7 @@ static void tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   auto dma = [&](int32_t dir, int64_t b, Bufs reads, Bufs writes) {
     const int64_t bytes[1] = {togsim_spad_buffer_bytes[b]}, contiguous[1] = {1};
     togsim_dma(ctx, dir, dir, at, 1, bytes, contiguous, 8, 0, 0, reads.begin(), (int32_t)reads.size(), writes.begin(),
-               (int32_t)writes.size(), 0);
+               (int32_t)writes.size(), nullptr, 0);
     at += (uint64_t)bytes[0];
   };
   auto T = [&](uint64_t id, Bufs reads, Bufs writes) {
