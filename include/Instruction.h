@@ -135,7 +135,7 @@ class Instruction : public std::enable_shared_from_this<Instruction> {
     return _wait_keys;
   }
   uint64_t get_global_inst_id() const { return _global_inst_id; }
-  // The id the next instruction takes, and the way to hand ids back: a replay that builds instructions only to
+  // The id the next instruction takes, and the way to hand ids back: a pass that builds instructions only to
   // measure them (togsim_trace_bridge.cc, refuse_overflow) leaves the run the ids it would have had.
   static uint64_t next_global_inst_id() { return _next_global_inst_id; }
   static void rewind_global_inst_id(uint64_t id) { _next_global_inst_id = id; }

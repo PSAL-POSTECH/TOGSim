@@ -122,7 +122,7 @@ class Semaphore {
   uint64_t item_ = 0;
 };
 
-// One replay of a work-item, serial 1, 2, ... in construction order, and its semaphores, ABI sem ids 1, 2, ... in
+// One run of a work-item, serial 1, 2, ... in construction order, and its semaphores, ABI sem ids 1, 2, ... in
 // creation order. A semaphore a load signaled since its last wait must be waited before the work-item returns.
 class Item {
  public:

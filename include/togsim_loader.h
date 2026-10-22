@@ -1,6 +1,6 @@
 #pragma once
 // togsim_loader.h -- the TOGSim half (not the TOG ABI): `dlopen` a TOG `.so`, run its
-// `togsim_kernel`, and record the instructions a replay makes as TraceRecs (sec 5.3 / 9.7).
+// `togsim_kernel`, and record the instructions a run makes as TraceRecs (sec 5.3 / 9.7).
 // togsim_trace_bridge.h turns them into a TileGraph.
 
 #include <cstdint>
@@ -36,9 +36,9 @@ struct TraceRec {
   int64_t  overlapping;   // looked up from the cycle table
 };
 
-// The TOG is replayed ON DEMAND, one work-item at a time (materializing the whole
+// The TOG is run ON DEMAND, one work-item at a time (materializing the whole
 // record stream cost 12.7 GiB on a large 8x8 conv). A tile body reads only ctx and
-// iv, so a work-item is (fn, iv, core) -- replayable on its own, whenever needed.
+// iv, so a work-item is (fn, iv, core) -- runnable on its own, whenever needed.
 struct WorkItem {
   void* fn = nullptr;           // togsim_tile_fn
   std::vector<int64_t> iv;      // the enclosing parallel loop indices
@@ -67,7 +67,7 @@ class LazyTog {
   // The TOG's togsim_spad_buffer_bytes, indexed by buffer id (0: not a spad buffer).
   const std::vector<int64_t>& spad_buffer_bytes() const { return _spad_bytes; }
   int64_t item_key(size_t i) const;   // work-item i's togsim_dispatch key
-  // Replay work-item `i` and return its record stream (TILE_BEGIN, body,
+  // Run work-item `i` and return its record stream (TILE_BEGIN, body,
   // TILE_END). The returned vector is a buffer reused by the next call.
   const std::vector<TraceRec>& run_item(size_t i);
 

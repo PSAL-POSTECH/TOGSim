@@ -6,8 +6,7 @@ What a compiler, a driver or a script may depend on, and how the version numbers
 
 A consumer of TOGSim may depend on these five, and on nothing else in this repository:
 
-1. TOGSim API v1.0.0, `include/togsim.hpp` ([The TOGSim API](tog-api.md#togsim-api-v100)), and the
-   C ABI 16 of `include/togsim_runtime.h` under it ([The TOG ABI](tog-abi.md#the-tog-abi));
+1. `include/togsim.hpp` ([API v1.0.0](tog-api.md)) and the [C ABI 16](tog-abi.md) under it;
 2. the files beside `tog.so` and the two tables
    ([files](tog-abi.md#files-beside-togso), [tables](tog-abi.md#the-cycle-table));
 3. the command line and the exit statuses ([Running TOGSim](running.md#running-togsim));
@@ -21,16 +20,11 @@ lines that list 4 does not name can change in any commit.
 
 Tags are `vMAJOR.MINOR.PATCH`.
 
-- **MAJOR** moves when 1 or 2 changes incompatibly. `TOGSIM_ABI_VERSION` moves with an
-  incompatible C ABI, so a TOG built against another header is refused by name and version
-  instead of being replayed wrongly.
+- **MAJOR** moves when 1 or 2 changes incompatibly. `TOGSIM_ABI_VERSION` (16) moves with an
+  incompatible C ABI: TOGSim compares it with the TOG's `togsim_abi_version` at load and refuses a
+  TOG built against another, instead of simulating it wrongly.
 - **MINOR** moves when 3, 4 or 5 changes.
 - **PATCH** changes no contract.
-
-TOGSim API v1.0.0 is `togsim.hpp` over C ABI 16. The header states its version as
-`togsim::API_MAJOR`, `API_MINOR`, `API_PATCH` and `API_VERSION` (`"1.0.0"`), and checks that
-`TOGSIM_ABI_VERSION` is its `togsim::ABI`, 16. Including `togsim_runtime.h` defines the symbol
-`togsim_abi_version` in the TOG with that value, and TOGSim compares it when it loads the TOG.
 
 ## Using TOGSim from another repository
 
@@ -43,6 +37,6 @@ the build tree it was built in; a build tree moved to another path does not star
 
 ## Deprecated: `compute_type` 1, 2 and 3
 
-togsim.hpp always passes `compute_type` 0 to `togsim_compute`; the unit table says which units a
-compute used. The values 1, 2 and 3, on the raw C ABI only, name the unit in the call instead.
-They still replay, with one warning when the TOG is loaded, and will be removed together with the config key `sa_weight_buffer_depth`.
+togsim.hpp always passes `compute_type` 0; the unit table says which units a compute used. The
+values 1, 2 and 3 (raw C ABI only) name the unit in the call instead; they still run, with one
+warning at load, and will be removed together with the config key `sa_weight_buffer_depth`.

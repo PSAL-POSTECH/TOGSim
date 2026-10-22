@@ -3,7 +3,7 @@
 TOGSim tells you how many cycles a kernel takes on a modeled accelerator. Its input is a
 tile-operation-graph (TOG): a small shared object whose function calls are the kernel's memory
 transfers, computes and waits. A compiler emits a TOG, or you write one by hand in C++. TOGSim
-loads it, replays those calls on a machine you describe in a YAML file (cores with systolic arrays
+loads it, simulates those calls on a machine you describe in a YAML file (cores with systolic arrays
 and a vector unit, DRAM, an interconnect), and reports the total cycles, how busy each unit was and
 how much DRAM bandwidth the kernel used.
 
@@ -51,7 +51,7 @@ cd ..
 ```
 
 The build has succeeded when `build/bin/Simulator` exists. Now compile a TOG with plain `g++` and
-replay it:
+simulate it:
 
 ```bash
 g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/hello/hello_tog.cpp -o examples/hello/tog.so
@@ -93,49 +93,33 @@ struct Hello : Tog<Hello> {
 };
 ```
 
-- **`buffers`** lists the spad buffers, each with its id and byte size.
-- **`entry`** runs once and dispatches each work-item, the unit of parallelism: a body function
-  bound to one core.
-- **`body`** holds the instructions of the work-item: a load of tensor argument 0 into buffer 1, a
-  compute that reads buffer 1 and writes buffer 2, and a store of buffer 2 to tensor argument 1.
-  The compute takes row 0 of the cycle table (`STEP`, node 0 of 1).
-- **The buffers order the instructions.** An instruction waits for the earlier instruction that
-  wrote a buffer it reads, and for nothing else.
+- **`entry`** runs once and dispatches each work-item, the unit of parallelism: a body bound to
+  one core.
+- **The buffers order the instructions.** An instruction waits only for the earlier one that wrote
+  a buffer it reads.
 
 Three files go with it:
 
 | File | Contents | Meaning |
 |---|---|---|
 | `tog_tensors.txt`, beside `tog.so` | `16384`<br>`16384` | The byte size of each tensor argument. |
-| `tog_cycles.tsv`, `--cycle_table` | `600<TAB>0` | Compute tile 0 (`tile_id` 0) takes 600 cycles. |
-| `tog_units.tsv`, `--unit_table` | `0<TAB>TPUV6E_MXU<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | What each hardware unit did during one run of compute tile 0. |
+| `tog_cycles.tsv`, `--cycle_table` | `600<TAB>0` | Row 0 (`STEP`, node 0) takes 600 cycles. |
+| `tog_units.tsv`, `--unit_table` | `0<TAB>TPUV6E_MXU<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | What each hardware unit did during one run of row 0. |
 
 [docs/tutorial.md](docs/tutorial.md) reads this TOG and its trace line by line, then builds up to
 asynchronous loads, many work-items, the array split and sessions.
 
 ## Writing a TOG
 
-A TOG is written against **TOGSim API v1.0.0**, the one header `include/togsim.hpp` (C++20), by
-hand or by a compiler. Every call takes one struct of named arguments:
-
-| Call | What it models |
-|---|---|
-| `dispatch<&X::f>(k, ...)` | One work-item, from the kernel's `entry`. |
-| `load(w, {.src, .dst, ...})`, `store(w, {.src, .dst, ...})` | One DMA between DRAM and the scratchpad. |
-| `load_async`, `semaphore`, `wait(w, {.sem})` | Asynchronous loads and the wait for them. |
-| `compute(w, {.node, .variant, .reads, .writes})` | One compute. Its cycles are a row of the cycle table. |
-
-The header lowers each call to the C ABI 16 of `include/togsim_runtime.h`, which is what TOGSim
-loads. A body is called three times, so it must make the same calls every time, and it must call
-the producer of a buffer before its consumer.
-
-[docs/tog-api.md](docs/tog-api.md) is the API reference. [docs/tog-abi.md](docs/tog-abi.md) is
-the C ABI under it: what each call models, the buffer and scratchpad rules, the files and the two
-tables, and every refusal with its cause and fix.
+A TOG is C++20 against one header, `include/togsim.hpp` (TOGSim API v1.0.0), which lowers each call
+to the C ABI 16 of `include/togsim_runtime.h` that TOGSim loads. A body is called three times, so it
+must make the same calls every time, and must call a buffer's producer before its consumer.
+[docs/tog-api.md](docs/tog-api.md) lists every call and type; [docs/tog-abi.md](docs/tog-abi.md)
+holds what each call models, the files, the tables and every refusal.
 
 ## Examples
 
-`examples/run.sh [name]...` builds and replays the examples and prints the lines of each log that
+`examples/run.sh [name]...` builds and simulates the examples and prints the lines of each log that
 matter; `examples/<name>/expected.txt` is that output.
 
 | Example | What it shows | Total cycles |
@@ -154,7 +138,7 @@ build/bin/Simulator --config <yml> --tog_so <so> --cycle_table <tsv> [--unit_tab
 build/bin/Simulator --config <yml> --models_list <file> [--log_level <level>]
 ```
 
-The first form replays one TOG; the second replays a command stream that launches several. The
+The first form simulates one TOG; the second a command stream that launches several. The
 result is the last line of the log, `Total execution cycles: N`; the lines above it give the
 utilization of each unit per core and the DMA and DRAM bandwidth. `--log_level trace` prints when
 each instruction was issued and finished. A refused run exits non-zero with a line that names the
@@ -168,8 +152,8 @@ The machine is the YAML file given to `--config`. `configs/` ships 7 of them, an
 | Page | What it holds |
 |---|---|
 | [docs/tutorial.md](docs/tutorial.md) | The model, and the six examples step by step. |
-| [docs/tog-api.md](docs/tog-api.md) | TOGSim API v1.0.0: the header every TOG is written against. |
-| [docs/tog-abi.md](docs/tog-abi.md) | The C ABI under it: what each call models, the files, the tables and the refusals. |
+| [docs/tog-api.md](docs/tog-api.md) | The API of `include/togsim.hpp`: every call and type. |
+| [docs/tog-abi.md](docs/tog-abi.md) | The C ABI under it: what each call models, the files, the tables, the refusals. |
 | [docs/running.md](docs/running.md) | The command line, the command stream, how to read the output, troubleshooting and known limitations. |
 | [docs/machine.md](docs/machine.md), [docs/config-keys.md](docs/config-keys.md) | The knobs of a machine config, and how to change and sweep them. Every machine config key. |
 | [docs/output-lines.md](docs/output-lines.md) | A whole log line by line, and the lines a script may rely on. |
@@ -183,7 +167,7 @@ The machine is the YAML file given to `--config`. `configs/` ships 7 of them, an
 python3 tests/run.py
 ```
 
-It replays hand-written TOGs against `build/` and ends with `ALL PASS (N cases in ...)`.
+It simulates hand-written TOGs against `build/` and ends with `ALL PASS (N cases in ...)`.
 [tests/README.md](tests/README.md) says what each directory pins and how to add a case.
 
 ## License

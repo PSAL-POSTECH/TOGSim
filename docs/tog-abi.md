@@ -1,40 +1,18 @@
 # The TOG ABI
 
-A TOG has two layers:
+`include/togsim_runtime.h`, C ABI 16 (`TOGSIM_ABI_VERSION`), is what TOGSim loads;
+[togsim.hpp](tog-api.md) lowers every call to it. This page says what the calls model, the buffer
+and scratchpad rules, the files and tables, and the refusals.
 
-- **TOGSim API v1.0.0**, `include/togsim.hpp`: what every TOG author writes against, by hand or
-  from a compiler. [The TOGSim API](tog-api.md#togsim-api-v100) is its reference.
-- **The C ABI 16**, `include/togsim_runtime.h` (`TOGSIM_ABI_VERSION`): what togsim.hpp lowers
-  each call to and what TOGSim loads. This page is its reference: what the calls model, the
-  buffer and scratchpad rules, the files and tables, and the refusals.
+togsim.hpp exports the four symbols TOGSim looks up: `togsim_kernel` (the TOG's `entry`),
+`togsim_spad_buffer_count` and `togsim_spad_buffer_bytes[]` (from `buffers`; 0 for an id that is
+no buffer) and `togsim_abi_version`.
 
-A TOG is compiled to a shared object with `g++ -std=c++20 -shared -fPIC -I<TOGSim>/include`.
-
-## What a TOG defines and what it calls
-
-A TOG `.so` exports four symbols. togsim.hpp defines all of them:
-
-| Symbol | What it is |
-|---|---|
-| `togsim_kernel(ctx, shape_args, n_shape_args)` | The entry point: the TOG's `entry`. |
-| `togsim_spad_buffer_count` | The number of entries in the next array. |
-| `togsim_spad_buffer_bytes[]` | The byte size of each spad buffer id, from the TOG's `buffers`; 0 for an id that is not a buffer. |
-| `togsim_abi_version` | The ABI version the TOG was compiled against. Including `togsim_runtime.h` defines it. |
-
-A TOG calls four functions, which TOGSim provides at load time:
-
-| Call | What it models |
-|---|---|
-| `togsim_dispatch(ctx, fn, iv, n_iv, key)` | Registers one work-item. `dispatch` in togsim.hpp. |
-| `togsim_dma(ctx, ...)` | One load or store. `load`, `load_async`, `store`. |
-| `togsim_compute(ctx, ...)` | One compute. `compute`. |
-| `togsim_memory_barrier(ctx, sem, expected)` | A wait for asynchronous loads. `wait`. |
-
-## How a TOG is replayed
+## How TOGSim runs a TOG
 
 1. TOGSim opens `tog.so`, checks the ABI version, reads the buffer table and calls `togsim_kernel`
-   **once**. Each `togsim_dispatch` only registers a work-item (the body function, a copy of `iv`,
-   the key) and binds it to a core: round-robin, in dispatch order, over the cores of the
+   **once**. Each `dispatch` only registers a work-item (its function, a copy of its arguments,
+   its key) and binds it to a core: round-robin, in dispatch order, over the cores of the
    kernel's partition.
 2. TOGSim then calls each work-item's body to record its instructions. It calls each body **three
    times** over the run: twice up front, to find the buffers and to plan the spad, and once more
@@ -42,68 +20,28 @@ A TOG calls four functions, which TOGSim provides at load time:
 3. The recorded instructions run on the modeled core as [the model](tutorial.md#the-model) says: each as soon
    as the instructions it depends on are done and the resource it needs is free.
 
-Three rules follow. togsim.hpp keeps the third; nothing checks the first two:
+Two rules follow, and nothing checks them:
 
-- **A body must be pure.** It may read only `ctx` and its `iv`, and must make the same calls every
-  time. A counter, a static variable or I/O in a body happens three times.
+- **A body must be pure.** It may read only its `Item` and arguments, and must make the same calls
+  every time. A counter, a static variable or I/O in a body happens three times.
 - **Call order is not execution order.** An instruction depends only on instructions that were
   called *before* it in the same work-item and wrote a buffer it reads; a load depends on nothing.
   Write the producer before the consumer: otherwise the consumer reads
   [data already on the chip](#data-that-is-already-on-the-chip). Two instructions that share no
   buffer are not ordered at all.
-- **Body functions have internal linkage.** In a session all TOGs are loaded into one process, and
-  a second kernel's exported `body` function would resolve to the first kernel's. togsim.hpp
-  gives every function of a TOG internal linkage.
 
-## `togsim_dispatch`
+## DMAs
 
-```cpp
-typedef void (*togsim_tile_fn)(EmitCtx* ctx, int64_t* iv, int32_t n_iv);
-```
-
-`togsim_dispatch(ctx, fn, iv, n_iv, key)` registers one work-item. The type of a body is named
-`togsim_tile_fn` because the header, like the log, calls a work-item a tile.
-
-| Argument | Meaning |
-|---|---|
-| `fn` | The body of the work-item. |
-| `iv`, `n_iv` | `n_iv` integers, copied at the call; the body receives the copy. May be null with `n_iv` 0. |
-| `key` | An integer that names the work-item in error messages and in the file names of indirect index dumps. It does not select a core. |
-
-## `togsim_dma`
-
-```cpp
-void togsim_dma(EmitCtx* ctx, int32_t dir, int32_t arg_id,
-                uint64_t offset, int32_t ndim, const int64_t* dims,
-                const int64_t* strides, int32_t elem_bits,
-                int32_t is_async, uint64_t sem,
-                const int64_t* read_bufs, int32_t n_read,
-                const int64_t* write_bufs, int32_t n_write,
-                int32_t indirect);
-```
-
-| Argument | Meaning |
-|---|---|
-| `dir` | `TOGSIM_DMA_LOAD` (0, DRAM to spad, `MOVIN`) or `TOGSIM_DMA_STORE` (1, spad to DRAM, `MOVOUT`). |
-| `arg_id` | Which tensor argument: the line of `tog_tensors.txt`, from 0. |
-| `offset` | Where the data tile starts inside that tensor, **in elements**. The byte address is the tensor's base plus `offset * (elem_bits / 8)`. |
-| `ndim`, `dims` | The data tile's extent in elements, 1 to 4 dimensions. |
-| `strides` | The distance in elements between neighbours along each dimension. Always pass it. |
-| `elem_bits` | The width of an element in bits: a multiple of 8. The division above is an integer division, so a width below 8 drops the offset. |
-| `is_async` | 0, or 1 for an asynchronous load. Pass 0 for a store. |
-| `sem` | The semaphore an asynchronous load signals. Ignored otherwise. |
-| `read_bufs`, `n_read` | For a store: the buffer it drains first, then any buffer it only depends on (`.also`). For a load: any buffer it depends on (`.after`), else null, 0. |
-| `write_bufs`, `n_write` | For a load: the buffers it fills. For a store: null, 0. |
-| `indirect` | 0, or 1 for a gather or scatter (see [indirect DMAs](#indirect-dmas)). |
+A DMA's `offset` is **in elements**: its byte address is the tensor's base plus `offset` times the
+element's bytes.
 
 `dims` and `strides` describe a data tile inside a larger tensor. A T x T data tile that starts at
 row `r`, column `c` of a matrix with `W` columns has `offset = r * W + c`, `dims = {T, T}` and
-`strides = {W, 1}`. The gemm example loads its data tiles of A, a 64 x 128 matrix, with
-`strides = {128, 1}`; the hello data tile is the whole tensor, so its row stride equals its width.
+`strides = {W, 1}`.
 
 **What a DMA costs.** A DMA is one DRAM request for every distinct request-sized block its
 elements touch. A request is 32 bytes on every shipped config (the log's `[Config/DRAM]` line
-states it), so the 64 x 64 x 4-byte data tile above is 512 requests. A core's DMA engine sends one
+states it), so a 64 x 64 x 4-byte data tile is 512 requests. A core's DMA engine sends one
 DMA at a time, loads ahead of stores, at `icnt_injection_ports_per_core` requests per cycle. A
 synchronous load is finished `dma_load_ready_cycles` after its last response arrives. An
 asynchronous load counts as finished when its last request is sent, and its barrier waits for its
@@ -115,36 +53,16 @@ store) before its first request, so the DMAs pay it one after another, asynchron
 `dma_load_ready_cycles` does not hold the engine: it goes on to the next DMA, so loads in flight
 together wait theirs at the same time.
 
-## `togsim_compute`
+## Computes
 
-```cpp
-void togsim_compute(EmitCtx* ctx, uint64_t tile_id, int32_t compute_type,
-                    int32_t ndim, const int64_t* dims,
-                    const int64_t* read_bufs, int32_t n_read,
-                    const int64_t* write_bufs, int32_t n_write);
-```
+A compute that lists one buffer in both `.reads` and `.writes` updates it in place, which is how
+the gemm example chains its accumulate steps.
 
-| Argument | Meaning |
-|---|---|
-| `tile_id` | The compute tile: the row of the cycle table, from 0, that gives its cycles, and the key of its unit-table rows. A `tile_id` the cycle table has no row for is refused. |
-| `compute_type` | Pass 0. The values 1, 2 and 3 are [deprecated](compatibility.md#deprecated-compute_type-1-2-and-3). |
-| `ndim`, `dims` | Not used. Pass `0, nullptr`. |
-| `read_bufs`, `write_bufs` | The buffers it reads and writes. They create its dependencies. |
+## Waits
 
-A core runs one compute at a time. A compute that lists the same buffer in both `read_bufs` and
-`write_bufs` updates it in place, which is how the gemm example chains its accumulate steps.
-
-## `togsim_memory_barrier`
-
-```cpp
-void togsim_memory_barrier(EmitCtx* ctx, uint64_t sem, int64_t expected);
-```
-
-It waits for the data of every asynchronous load signaled on `sem` since the previous barrier on
-`sem` in this work-item, and becomes the writer of their buffers: whatever reads one of them
-afterwards waits for the barrier. `expected` must equal the sum of those loads' element counts
-(the product of `dims` each). Semaphore numbers are local to a work-item. A second barrier on a
-semaphore with no new loads is accepted if it states the same count again.
+A `wait` (`MEMORY_BAR` in the log) waits for the data of the async loads that signaled its
+semaphore since its last wait, and becomes the writer of their buffers: whatever reads one of them
+afterwards waits for it.
 
 ## Buffers and the scratchpad
 
@@ -154,9 +72,8 @@ the scratchpad.
 - **Buffer ids are local to a work-item.** The same id in two work-items is two unrelated
   buffers: no instruction waits for an instruction of another work-item, and each work-item's
   buffers take their own space in the spad.
-- State a size in `togsim_spad_buffer_bytes` for every buffer a DMA fills or drains, and for
-  every [held](#data-that-is-already-on-the-chip) buffer. By convention id 0 has size 0 and is
-  not used.
+- Give every buffer a DMA fills or drains, and every [held](#data-that-is-already-on-the-chip)
+  buffer, a size in `buffers`.
 - A work-item's `spad_footprint` (printed on its `TILE_SCHEDULED` line) is the sum of the sizes of
   its own distinct buffers, counting only buffers that some DMA of the TOG moves. A buffer that
   only computes touch, like the gemm accumulator, is not counted.
@@ -174,12 +91,10 @@ the scratchpad.
   instruction that waits for it, reads, and of every buffer nothing reads whose fill does not wait
   for it. An instruction is issued only while that fits, so a work-item that needs more would never end: its TOG is
   [refused](#what-gets-a-run-refused) while it is loaded, before anything is simulated. The hello
-  TOG holds its two buffers together at the compute, 32768 bytes: it replays in a spad of 32 KB
+  TOG holds its two buffers together at the compute, 32768 bytes: it runs in a spad of 32 KB
   and is refused in a smaller one.
 - A work-item that names more bytes than the spad without holding them together is not refused:
-  its loads wait for the spad. A fill that its reader does not wait for is not counted. The
-  refusal does not cover every run that stops for want of spad: one that depends on the order of
-  issue, or on what another work-item holds, is not seen while loading
+  its loads wait for the spad, and some such runs stall or never end
   ([known limitations](running.md#known-limitations)).
 
 ### Data that is already on the chip
@@ -188,7 +103,7 @@ A TOG states the transfers that happen. When data is on the chip already, the TO
 it, and an instruction reads a buffer that nothing in its work-item wrote: a **held buffer**.
 TOGSim does not decide that a load can be left out; the emitter of the TOG does.
 
-- A held buffer has the size `togsim_spad_buffer_bytes` states for its id, and a read of it waits
+- A held buffer has the size `buffers` gives its id, and a read of it waits
   for nothing.
 - The core that runs the work-item holds those bytes once, from the kernel's first work-item there
   until its last one there ends. A later write to the id in the same work-item takes no more.
@@ -201,16 +116,15 @@ TOGSim does not decide that a load can be left out; the emitter of the TOG does.
 
 ## Indirect DMAs
 
-`indirect` 1 marks a gather (load) or scatter (store): each element moves by an extra offset read
+`Desc.indirect` marks a gather (load) or scatter (store): each element moves by an extra offset read
 from a file. TOGSim looks for
 `<directory of tog.so>/runtime/indirect_access/indirect_index_<key>_<n>.raw`, where `<key>` is the
 work-item's dispatch key printed as an unsigned 64-bit number and `<n>` counts that work-item's
 indirect DMAs from 0. The file holds one native `uint64` per element of the data tile, each an
 offset in elements. If the file is absent or has another size the DMA is modeled as a dense data
 tile, with one warning (`[TOGSim] indirect dma without its index dump ...`) and a summary line
-(`[TOGSim] indirect dmas: X with their index dump, Y without`). An indirect store lists its index
-buffer after the buffer it drains, in `read_bufs` (`.also` in togsim.hpp; `Desc.indirect` sets
-`indirect`). `tests/spad_footprint/indirect_store_tog.cpp` is a worked example.
+(`[TOGSim] indirect dmas: X with their index dump, Y without`).
+`tests/spad_footprint/indirect_store_tog.cpp` is a worked example.
 
 ## Files beside `tog.so`
 
@@ -218,14 +132,14 @@ TOGSim reads these from the directory of the TOG, by fixed name:
 
 | File | Required | Format | Example |
 |---|---|---|---|
-| `tog_tensors.txt` | always | One byte size per tensor argument, whitespace-separated, in `arg_id` order. | `16384`<br>`16384` |
-| `tog_shape.txt` | no | The integers handed to `togsim_kernel` as `shape_args`. | `2 4` |
+| `tog_tensors.txt` | always | One byte size per tensor argument, whitespace-separated, in `ptr` order. | `16384`<br>`16384` |
+| `tog_shape.txt` | no | The kernel's shape arguments, read by `shape<N>`. | `2 4` |
 | `tog_tensor_shapes.txt` | only if the config sets `tog_tensor_tile` | `rows cols elem_bytes` per tensor argument. | `256 256 4` |
 | `runtime/indirect_access/*.raw` | no | Index dumps of indirect DMAs. | |
 
-Tensors are placed in DRAM back to back from address 0 in `arg_id` order, each start rounded up to
+Tensors are placed in DRAM back to back from address 0 in `ptr` order, each start rounded up to
 16 KiB. An empty `tog_tensors.txt` is fine for a TOG without DMAs; a missing one is refused. A DMA
-whose `arg_id` the file does not list still runs, addressed from base 0, and TOGSim says so once
+whose `ptr` the file does not list still runs, addressed from base 0, and TOGSim says so once
 per TOG in a `[warning]` line ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)).
 
 ## Where the numbers in the tables come from
@@ -236,15 +150,10 @@ models one core at the level of a single compute has to supply them.
 - **In the compiler flow** gem5 does: its model of the core runs each kind of compute tile and
   reports its cycles and, for each hardware unit, what the unit took in. That is also why
   the array unit is called what the config's `systolic_array_unit` says: `TPUV6E_MXU` is the name
-  vcix's libtpuv6e.so gives it; `TPUV3_MXU` and `TPUV4_MXU` name vcix models that do not exist yet.
+  vcix's libtpuv6e.so gives it.
 - **By hand**, take the numbers from whatever you trust for your core: an RTL or cycle-accurate
   simulation of one compute tile, or an estimate. Every example in `examples/` uses made-up round
   numbers.
-
-A unit-table row counts work in the unit's own terms. `unit_of_work` names what is counted (rows
-pushed through an array, cycles a vector unit was busy), `admitted` is how many of those the unit
-took in during one run of the compute tile, and `capacity_per_cycle` is how many it can take in
-per cycle. So `admitted / capacity_per_cycle` is the number of cycles the unit was busy.
 
 ## The cycle table
 
@@ -258,15 +167,9 @@ deprecated and has no effect on timing: write 0.
 ```
 
 `--cycle_table <file>` names it; in a session it is `tog_cycles.tsv` in the kernel's directory.
-There is no default table:
-
-- A run without a cycle table, or with one that cannot be opened, is refused.
-- A TOG whose `togsim_compute` names a `tile_id` the table does not hold is refused while it is
-  loaded, before anything is simulated.
-- Do not give the table a header line or comments. The reader takes numbers in pairs until one
-  fails to parse, so a header leaves the table without a row, and the first compute is refused
-  with `the cycle table does not hold (it has no line)`.
-- A table without a row is a correct table for a TOG that has no compute.
+There is no default table. Give it no header line or comments: the reader takes numbers in pairs
+until one fails to parse, so a header leaves it without a row. A table without a row suits a TOG
+that has no compute.
 
 ## The unit table and the array split
 
@@ -326,9 +229,7 @@ A TOG with a compute whose `tile_id` has a row above that is
 [refused](#what-gets-a-run-refused) while it is loaded, before anything is simulated: 128 rows at
 1 per cycle do not fit a tile of 100 cycles on one array, and a tile of 0 cycles admits nothing.
 Under the split a tile needs about `cc >= B_sys`: 512 rows fit a `cc` of 512 (the compute then
-runs 256 cycles, 256 rows on each of two arrays) and 513 rows do not. The refusal does not depend
-on when the compute runs or on `core_stats_print_period_cycles`. Only the `tile_id`s that a
-compute names are measured.
+runs 256 cycles, 256 rows on each of two arrays) and 513 rows do not.
 
 Because the split is on by default and no shipped config turns it off, **every shipped config
 needs a unit table that has rows of its array unit**. To run without one, set
@@ -370,21 +271,13 @@ In a session a refusal is the error of the command that met it, `[TOGSim] Error 
 contract is the launch's error too; without a spad size it is the error of the `DEVICE_SYNC` that
 runs the kernel.
 
-TOGSim has more refusals than a first TOG runs into. These are not in the example; all exit 1.
-Only a TOG written on the raw C ABI can meet the first eight and `issued tile is not supported
-format`: togsim.hpp refuses those mistakes itself ([its refusals](tog-api.md#refusals)).
+TOGSim has more refusals than a first TOG runs into; all exit 1. Its raw C ABI checks (version
+symbol, buffer table, semaphore counts, `ndim`) are ones a TOG built on togsim.hpp cannot fail
+([its refusals](tog-api.md#refusals)), except a `.so` built against another ABI:
 
 | Message contains | Cause |
 |---|---|
 | `togsim: refusing TOG <so>: it was built against TOG ABI 15, TOGSim expects ABI 16; rebuild the TOG` | The TOG's `togsim_abi_version` is another number: it was compiled against another version of the header. |
-| `togsim: refusing TOG <so>: it embeds no togsim_abi_version (built without togsim_runtime.h); TOGSim expects ABI 16` | The TOG does not include the header. |
-| `togsim: dlsym togsim_kernel failed: <so>: undefined symbol: togsim_kernel` | The TOG defines no `togsim_kernel`. |
-| `togsim: refusing TOG <so>: it states no spad buffer sizes (togsim_spad_buffer_count / togsim_spad_buffer_bytes)` | The buffer table is missing or not `extern "C"`. |
-| `[TOGSim] wait expects another element count: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects 2048` | `expected` is not the sum of the loads' element counts. |
-| `[TOGSim] wait on a semaphore never signaled: work-item 0 (key 0) sem 8 signaled 0 elements, wait expects 4096` | The barrier names a semaphore no asynchronous load of this work-item used. |
-| `[TOGSim] unwaited semaphore: work-item 0 (key 0) sem 7 signaled 4096 elements, wait expects none` | An asynchronous load has no barrier after it. |
-| `re-wait expects another element count` | A second barrier on a semaphore, with no new loads, states another count than the first. |
-| `issued tile is not supported format` | A DMA has `ndim` 0, `ndim` above 4, or null `dims`. |
 | `[Simulator] simulation wedged at cycle <n>: work remains but nothing is in flight` | A work-item waits for spad that is never freed, in a way the loader does not see ([known limitations](running.md#known-limitations)). |
 | `--unit_table <file>: cannot open` | The unit table is not there. |
 | `unit <name> disagrees with line <n> on unit_of_work/capacity` | Two rows of one unit differ in `unit_of_work` or `capacity_per_cycle`. |
@@ -397,12 +290,8 @@ format`: togsim.hpp refuses those mistakes itself ([its refusals](tog-api.md#ref
 
 ## Checklist for a TOG generator
 
-A frontend that emits TOGs writes them against togsim.hpp, like a hand-written TOG
-([generated code](tog-api.md#generated-code)). Beside the TOG it writes:
-
-1. `tog_tensors.txt`, and `tog_shape.txt` if the kernel reads shape arguments.
-2. The cycle table, one row per row a compute names (`node.id + node.count * variant`) and no
-   header, and the unit table, with at least one row per such row and a row of the array unit for
-   every compute that uses the array.
-3. Then it replays once with `--log_level trace` and checks that there is no `[warning]` line, and
-   the computes, addresses and issue order.
+Emit the TOG against togsim.hpp ([generated code](tog-api.md#generated-code)), write
+[the files beside it](#files-beside-togso) and both tables, with a row for every
+`node.id + node.count * variant` a compute names and an array-unit row for each compute that uses
+the array. Run it once with `--log_level trace`: no `[warning]` line, and the computes, addresses
+and issue order as intended.
