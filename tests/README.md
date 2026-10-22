@@ -21,9 +21,9 @@ that selects nothing). A failing case says what it expected, what it saw and whe
 
 | Directory | What its cases pin |
 |---|---|
-| `tests/abi/` | A TOG built against another ABI version is refused; the same TOG at this version replays. On the raw C ABI, a TOG without `togsim_kernel` is refused and a DMA with null strides replays unstrided. |
+| `tests/abi/` | A TOG built against another ABI version is refused; the same TOG at this version runs. On the raw C ABI, a TOG without `togsim_kernel` is refused and a DMA with null strides runs unstrided. |
 | `tests/array_split/` | The array split of a segment TOG, and what it refuses. |
-| `tests/configs/` | Every shipped config replays a small TOG, and is refused without a unit table. Every one follows tpuv6e's convention: an `isa` with exactly one `vcix_*` entry, `vcix`, `address_map` and `systolic_array_unit`. |
+| `tests/configs/` | Every shipped config runs a small TOG, and is refused without a unit table. Every one follows tpuv6e's convention: an `isa` with exactly one `vcix_*` entry, `vcix`, `address_map` and `systolic_array_unit`. |
 | `tests/cycle_table/` | A run without a cycle table, or with a `tile_id` the table does not hold, is refused. |
 | `tests/cycles/` | `Total execution cycles` of four hand-written TOGs on tpuv6e, as goldens. |
 | `tests/examples/` | `examples/run.sh <name>` prints `examples/<name>/expected.txt`; the fenced blocks of the READMEs and of `docs/` quote only lines of those files and of the examples' sources; every row of the README's refusal table is a refusal the mistakes example prints. |
@@ -32,7 +32,7 @@ that selects nothing). A failing case says what it expected, what it saw and whe
 | `tests/kernels/` | Each kernel of [`kernels/`](../docs/kernels.md) at its example shape: its `MOVIN`/`MOVOUT`/`COMP`/`MEMORY_BAR` counts and its `Total execution cycles`, as goldens; that gemm, conv and attention read their shape arguments; that conv, at a stride, a dilation and symmetric or asymmetric pads (a 1x1 at stride 2, a 7x7 at stride 2 with pad 3 over 3 channels among them), moves exactly the input, weight and output elements a convolution of that shape reads and writes, read from the address, size and stride of every DMA; each kernel at a shape none of its tiles divides (and conv short on every axis, and with 112 output columns in tiles of 32): no DMA ends past its tensor, every element is moved as often as the shape says, the computes name the tile ids of the short variants and no other, and the counts and the total are goldens; the shape arguments a kernel refuses (exit `1`). No run that checks instruction counts logs a warn-level line: the tables and `tog_tensors.txt` cover every tile id and `arg_id` the kernel names. |
 | `tests/outputs/` | The shape of the lines a run logs, against golden files. |
 | `tests/semaphore/` | A barrier waits for every load of its semaphore; a broken contract is refused, with `--models_list` and a spad size at the launch. |
-| `tests/session/` | `--models_list` with two kernels, on one partition and on two. A kernel launched behind another with no `DEVICE_SYNC` between is replayed whole. A kernel with an empty unit table may come first, and a later table may add a unit. |
+| `tests/session/` | `--models_list` with two kernels, on one partition and on two. A kernel launched behind another with no `DEVICE_SYNC` between is run whole. A kernel with an empty unit table may come first, and a later table may add a unit. |
 | `tests/spad_capacity/` | A work-item that needs more of the spad at once than a core has (`core_spad_size_kb`) is refused while its TOG is loaded, with `--tog_so` and with `--models_list` (the first kernel or the second): one byte over, one KB short, a later work-item, a single load larger than the spad, loads nothing reads, readers stated in another order than they are issued; a fill the reader does not wait for is not counted. A load nothing reads keeps its bytes until its work-item ends. One that fills the spad to the byte runs, and so does one that names more bytes than the spad and never holds them together, each to a pinned total; `core_spad_size_kb: 0`, or no such key, refuses nothing. A run that was measured traces what one that was not traces. |
 | `tests/spad_footprint/` | Buffers are as large as the TOG states; an unsized one is refused. |
 | `tests/typed/` | The deprecated `compute_type` 1, 2 and 3. What they pin is not typed-only: among it, the spad a work-item needs at once. |
@@ -46,9 +46,9 @@ prose; those were copied from the `expected.txt` files by hand.
 ## Adding a test
 
 A test is a function in the `cases.py` of the directory it belongs to, or of a new directory, next
-to the hand-written TOG (`*_tog.cpp`) it replays. `tests/lib/togtest.py` compiles the TOG, writes
+to the hand-written TOG (`*_tog.cpp`) it runs. `tests/lib/togtest.py` compiles the TOG, writes
 the tables and the machine config, runs the simulator and reads its log. A new directory with one
-case, replaying a copy of the hello TOG:
+case, running a copy of the hello TOG:
 
 ```bash
 mkdir -p tests/mine

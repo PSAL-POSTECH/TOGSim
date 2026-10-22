@@ -70,7 +70,7 @@ what changing one does; this page is the full list.
 | `num_partition` | no | 1 | The number of partitions. A kernel runs on the cores of one partition. |
 | `partition` | no | every core in 0 | A map `core_<i>: <partition id>`. A core it leaves out goes to partition 0, with a warning. |
 
-`--tog_so` replays its TOG on partition 0. In a command stream the `stream_index` field of
+`--tog_so` runs its TOG on partition 0. In a command stream the `stream_index` field of
 `LAUNCH_KERNEL` is the partition.
 
 ## TOG layout

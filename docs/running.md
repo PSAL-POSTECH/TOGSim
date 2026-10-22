@@ -10,14 +10,14 @@ build/bin/Simulator --config <yml> --models_list <file> [--log_level <level>]
 | Flag | Meaning |
 |---|---|
 | `--config <yml>` | The machine config. Required. |
-| `--tog_so <so>` | Replay one TOG, as kernel 0 on partition 0. The path needs a `/` in it. |
+| `--tog_so <so>` | Simulate one TOG, as kernel 0 on partition 0. The path needs a `/` in it. |
 | `--cycle_table <tsv>` | The cycle table of that TOG. Required. |
 | `--unit_table <tsv>` | The unit table of that TOG. Required unless the config sets `systolic_array_split: none`. |
-| `--models_list <file>` | Replay a command stream (a file or a FIFO) instead of one TOG. |
+| `--models_list <file>` | Simulate a command stream (a file or a FIFO) instead of one TOG. |
 | `--log_level <level>` | `info` (the default), `debug` or `trace`. Any other value is treated as `info`. |
 | `--help`, `-h` | Print the options. |
 
-If both `--tog_so` and `--models_list` are given, the TOG is replayed and the stream ignored.
+If both `--tog_so` and `--models_list` are given, the TOG is simulated and the stream ignored.
 
 **The command stream.** One command per line, seven comma-separated fields:
 `command_type,kernel_id,device_index,stream_index,tog_path,attribute_path,timestamp`. Empty lines
