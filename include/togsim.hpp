@@ -436,7 +436,7 @@ using EntryFn_ = void (*)(EmitCtx*, int64_t*, int32_t);
 EntryFn_ entry_ = nullptr;
 
 // A TOG's buffer list: ids from 0 below MAX_SPAD_BUFFERS, each once, no negative size.
-constexpr bool buffers_ok(const Buf* bufs, std::size_t n) {
+constexpr bool buffers_ok_(const Buf* bufs, std::size_t n) {
   for (std::size_t i = 0; i < n; ++i) {
     if (bufs[i].id < 0 || bufs[i].id >= MAX_SPAD_BUFFERS) fail_("a spad buffer id outside 0..1023");
     if (bufs[i].bytes < 0) fail_("a spad buffer with a negative size");
@@ -466,7 +466,7 @@ void run_free_entry_(EmitCtx* c, int64_t* shape, int32_t n) {
 // For generated code, which has no base classes: static const bool tog = register_tog<entry>({Buf{...}, ...});
 template <void (*Entry)(Kernel&)>
 bool register_tog(std::initializer_list<Buf> bufs) {
-  buffers_ok(bufs.begin(), bufs.size());
+  buffers_ok_(bufs.begin(), bufs.size());
   return register_(run_free_entry_<Entry>, bufs.begin(), bufs.size());
 }
 
@@ -479,7 +479,7 @@ template <class T>
 bool register_struct_() {
   static_assert(std::is_same_v<decltype(&T::entry), void (T::*)(Kernel&) const>,
                 "a TOG struct has a member void entry(togsim::Kernel&) const");
-  static_assert(buffers_ok(T::buffers.data(), T::buffers.size()), "the TOG struct's buffers");
+  static_assert(buffers_ok_(T::buffers.data(), T::buffers.size()), "the TOG struct's buffers");
   return register_(run_struct_entry_<T>, T::buffers.data(), T::buffers.size());
 }
 
