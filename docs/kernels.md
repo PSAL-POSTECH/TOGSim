@@ -1,6 +1,6 @@
 # The kernel library
 
-`kernels/` holds fourteen kernels written by hand against [TOGSim API v1.0.0](tog-api.md), one
+`kernels/` holds fourteen kernels written by hand against [TOGSim API v1.1.0](tog-api.md), one
 `<name>_tog.cpp` each: `gemm`, `conv`, `attention`, `softmax`, `layernorm`, `embed_layernorm`,
 `global_avgpool`, `bias_act`, `bias_gelu`, `maxpool`, `adaptive_avgpool`, `concat`,
 `kvcache_concat` and `flatten`. They come from

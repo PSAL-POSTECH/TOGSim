@@ -102,7 +102,6 @@ their shape.
   `DMA active_cycles: ..., DMA idle_cycles: ..., DRAM BW: ...`, `Total_cycles: N`, and with a unit
   table one `<unit> utilization(%): P, active_cycles: A, idle_cycles: I` line per unit, plus a
   `Total : <unit> ...` line per unit when there is more than one core.
-- `[TOGSim] indirect dmas: X with their index dump, Y without`.
 - With Ramulator2 only: `[DRAM] channel N | ...`, `[DRAM] all N channels combined | ...`,
   `[DRAM] channels 0..N combined | ...`.
 - `[Config/DRAM] Total bandwidth ...`.
@@ -123,7 +122,6 @@ per TOG, while the TOG is loaded, or per config key, and the run exits 0. They a
 | `[TOGSim] TOG <so>: the unit table has no rows for tile ids <ids>, which its computes name: those computes add nothing to the units` | Those computes count for no unit's utilization and are not split over the arrays. `<ids>` folds consecutive ids (`1, 3 to 5`). A run without a unit table says nothing. |
 | `[TOGSim] TOG <so>: its DMAs name arg_id <ids>, and tog_tensors.txt lists <n> tensor(s): those DMAs are addressed from base 0` | Those DMAs go to address 0 plus their offset, on top of tensor 0. |
 | `[TOGSim] config <path>: key <key> is not read by TOGSim` | A key of the config that TOGSim does not read and no [other tool](config-keys.md) owns: a misspelling, most often. |
-| `[TOGSim] indirect dma without its index dump (...); modeled as a dense tile` | An indirect DMA whose index file is absent or of another size. |
 | `[TOGSim] <so> uses the typed grouping (compute_type 1, 2 or 3), which is deprecated: ...` | See [compatibility.md](compatibility.md#deprecated-compute_type-1-2-and-3). |
 
 `examples/run.sh mistakes` shows the first two.
@@ -192,7 +190,7 @@ are `MOVIN` (load), `MOVOUT` (store), `COMP` and `MEMORY_BAR`.
 | `tile=N` | every instruction | The work-item the instruction belongs to, counted from 0 in dispatch order within its kernel. It is not the `tile_id`. |
 | `addr_name=tagN` | DMAs, barriers | The DMA is the `N`th of its work-item, from 0. A barrier carries the name of the first load it waits for. |
 | `dram`, `size`, `stride`, `elem_bits`, `rank` | DMAs | The byte address in DRAM, `dims` and `strides` as the TOG passed them, the element width, and the number of dimensions. |
-| `async`, `indirect` | DMAs | The `is_async` and `indirect` arguments. |
+| `async`, `indirect` | DMAs | The `is_async` argument; whether the DMA is a gather or scatter (it was given element offsets). |
 | `compute_cycle` | `COMP` | The cycles the compute holds its core, after any array split. |
 | `overlapping_cycle` | `COMP` | The second column of the cycle table. Deprecated: it is printed and changes nothing. |
 | `compute_type`, `sa` | `COMP` | `compute_type` as the TOG passed it. `sa` is `-1` for `compute_type` 0. |
