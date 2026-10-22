@@ -1,5 +1,5 @@
 // TypedGrouping.cc -- see TypedGrouping.h. DEPRECATED with the typed grouping: kept so a typed TOG
-// still replays for comparison, and removed with it.
+// is still simulated for comparison, and removed with it.
 #include "TypedGrouping.h"
 
 #include <spdlog/spdlog.h>
@@ -117,7 +117,7 @@ void Units::warn_deprecated_once(const char* so_path) {
   if (warned) return;
   warned = true;
   spdlog::warn("[TOGSim] {} uses the typed grouping (compute_type 1, 2 or 3), which is deprecated: it "
-               "replays for comparison and will be removed. Emit the TOG with the segment grouping "
+               "is simulated for comparison and will be removed. Emit the TOG with the segment grouping "
                "(compute_type 0 only)", so_path);
 }
 

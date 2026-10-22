@@ -137,7 +137,7 @@ void launchKernel(Simulator* simulator, unsigned int kernel_id, std::string onnx
   std::unique_ptr<TileGraph> tile_graph =
       build_tog_tilegraph(simulator, tog_so, cycle_tsv, partition_id, unit_tile_base);
   if (!tile_graph)
-    throw std::runtime_error("[TOGSim] tog.so failed to load or replay for " + tog_so);
+    throw std::runtime_error("[TOGSim] tog.so failed to load or simulate for " + tog_so);
   tile_graph->set_arrival_time(request_time ? request_time : simulator->get_core_cycle());
   tile_graph->set_kernel_id(kernel_id);
   spdlog::info("[Scheduler {}] Enqueued kernel_id: {}, tog_path: {}, operation: {}, request_time_cycles: {}",
@@ -302,7 +302,7 @@ int main(int argc, char** argv) {
     }
     try {
       auto tg = build_tog_tilegraph(simulator, tog_so_path, cycle_table_path, 0);
-      if (!tg) { spdlog::error("[TOGSim] the TOG failed to load or replay"); exit(1); }
+      if (!tg) { spdlog::error("[TOGSim] the TOG failed to load or simulate"); exit(1); }
       tg->set_arrival_time(simulator->get_core_cycle());
       tg->set_kernel_id(0);
       simulator->enqueue_graph(0, std::move(tg));

@@ -148,7 +148,7 @@ A run that ends with a message: look the message up in the
 
 | Symptom | Likely cause |
 |---|---|
-| The log shows only `[TOGSim] the TOG failed to load or replay`, or the run ends with `Aborted` and no reason | The reason went to stderr. Add `2>&1`. |
+| The log shows only `[TOGSim] the TOG failed to load or simulate`, or the run ends with `Aborted` and no reason | The reason went to stderr. Add `2>&1`. |
 | The total is too small | A consumer called before its producer (look for the `holds ... bytes for the kernel` line), or null `strides` ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)). |
 | A unit's utilization is lower than expected, or a compute is not split | The unit table has no rows for that `tile_id`. Look for the `[warning]` line that says so. |
 | A compute takes fewer cycles than the cycle table says | The array split shortened it. `compute_cycle` in the trace is the value after the split. |
