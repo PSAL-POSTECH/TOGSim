@@ -30,7 +30,7 @@ isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv6e, spad-vector-memory
 # runs/v6e/mxu_chain/2026-10-19_pallas_mirror, 111.8 ns a step at 1751 MHz). The same chain on libtpuv6e.so, 8 rows
 # a step, takes the delay + 9 cycles a step on gem5 (vmatmul 1 cycle after its vmatprep, vpop the delay + 8 after).
 vcix: {tpu_mxu_queue_entries: 512, tpu_mxu_delay_cycles: 187, tpu_xlu_queue_entries: 256, tpu_xlu_latency_cycles: 137, tpu_xlu_elements_per_cycle: 16, tpu_xlu_issue_per_cycle: 2, tpu_sfu_latency_cycles: 10, tpu_sfu_queue_registers: 16}
-address_map: {spad_vaddr: 0xd0000000, dram_base: 0x80000000, dram_size: 107374182400}
+address_map: {spad_vaddr: 0x40000000, dram_base: 0x80000000, dram_size: 107374182400}
 
 dram_type: ramulator2
 dram_channels: 32

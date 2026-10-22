@@ -14,7 +14,7 @@ isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv3, spad-vector-memory]
 # model puts a v3 vmatmul's first vpop 105 cycles after it (128x128), and on libtpuv3.so at 128 lanes a vpop of 8
 # rows issues the delay + 8 cycles after its vmatmul on gem5. No v3 hardware measurement backs it.
 vcix: {tpu_mxu_delay_cycles: 97}
-address_map: {spad_vaddr: 0xd0000000, dram_base: 0x80000000, dram_size: 17179869184}
+address_map: {spad_vaddr: 0x40000000, dram_base: 0x80000000, dram_size: 17179869184}
 
 dram_type: ramulator2
 dram_channels: 16
