@@ -111,8 +111,8 @@ asynchronous loads, many work-items, the array split and sessions.
 
 ## Writing a TOG
 
-A TOG is C++20 against one header, `include/togsim.hpp` (TOGSim API v1.0.0), which lowers each call
-to the C ABI 17 of `include/togsim_runtime.h` that TOGSim loads. A body is called three times, so it
+A TOG is C++20 against one header, `include/togsim.hpp` (TOGSim 1.0.0), which lowers each call
+to the C ABI of `include/togsim_runtime.h` that TOGSim loads. A body is called three times, so it
 must make the same calls every time, and must call a buffer's producer before its consumer.
 [docs/tog-api.md](docs/tog-api.md) lists every call and type; [docs/tog-abi.md](docs/tog-abi.md)
 holds what each call models, the files, the tables and every refusal.
