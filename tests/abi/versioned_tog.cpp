@@ -1,16 +1,15 @@
-// A one-compute TOG that states its ABI version itself (TOGSIM_HOST: the header only declares it). -DPREVIOUS_VERSION
-// states one less, -DOLD_SYMBOL defines ABI 15's togsim_producer_abi_version, -DNO_SYMBOL neither. -DNO_KERNEL names
-// the entry point otherwise; -DNULL_STRIDES first loads a 4x4 f32 tile with no strides. -DNO_ATTRIBUTE_TABLE leaves
-// out togsim_runtime_attribute_count and _rank.
+// A one-compute TOG that states its version itself (TOGSIM_HOST: the header only declares it): -DSTATED_VERSION=<v>
+// states <v>, -DOLD_SYMBOL ABI 15's togsim_producer_abi_version, -DNO_SYMBOL neither; -DNO_KERNEL renames the entry,
+// -DNULL_STRIDES first loads a 4x4 f32 tile with no strides, -DNO_ATTRIBUTE_TABLE drops the attribute table.
 #define TOGSIM_HOST
 #include "togsim_runtime.h"
 
-#if defined(PREVIOUS_VERSION)
-extern "C" const int32_t togsim_abi_version = TOGSIM_ABI_VERSION - 1;
+#if defined(STATED_VERSION)
+extern "C" const int32_t togsim_abi_version = STATED_VERSION;
 #elif defined(OLD_SYMBOL)
 extern "C" const int32_t togsim_producer_abi_version = 15;
 #elif !defined(NO_SYMBOL)
-extern "C" const int32_t togsim_abi_version = TOGSIM_ABI_VERSION;
+extern "C" const int32_t togsim_abi_version = TOGSIM_VERSION;
 #endif
 
 static void tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {

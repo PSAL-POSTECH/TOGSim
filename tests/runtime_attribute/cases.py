@@ -103,12 +103,15 @@ LOADER = {
     "e03.no_programs_bin": dict(
         make=broken_dir(remove("programs.bin")),
         saying="{dir} has no programs.bin: the functional run recorded no program"),
-    "e04.programs_bin_of_abi_16": dict(
-        make=broken_dir(write("programs.bin", programs_bytes([0, KEY1], abi=16))),
-        saying="{dir}/programs.bin: not a runtime attribute file of ABI 17"),
+    "e04.programs_bin_of_abi_17": dict(
+        make=broken_dir(write("programs.bin", programs_bytes([0, KEY1], abi=17))),
+        saying="{dir}/programs.bin was recorded at TOG ABI 17, TOGSim is version 1.0.0"),
+    "e04.record_of_next_major": dict(
+        make=broken_dir(write("attr_0_0.bin", record_bytes(0, 0, 4096, abi=0x20000))),
+        saying="{dir}/attr_0_0.bin was recorded at version 2.0.0, TOGSim is version 1.0.0"),
     "e04.record_without_magic": dict(
         make=broken_dir(write("attr_0_0.bin", record_bytes(0, 0, 4096, magic=0))),
-        saying="{dir}/attr_0_0.bin: not a runtime attribute file of ABI 17"),
+        saying="{dir}/attr_0_0.bin: not a runtime attribute file"),
     "e05.dispatched_key_not_listed": dict(
         make=broken_dir(write("programs.bin", programs_bytes([0]))),
         saying=f"work-item key {KEY1} was dispatched and {{dir}}/programs.bin does not list it"),
