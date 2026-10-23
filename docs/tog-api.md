@@ -1,11 +1,11 @@
-# TOGSim API v1.1.0
+# TOGSim API v1.0.0
 
 Every TOG, hand-written or compiler-emitted, includes `include/togsim.hpp`, which lowers each call to
 C ABI 17 of `include/togsim_runtime.h` ([The TOG ABI](tog-abi.md#the-tog-abi)). A TOG is C++20 with
 no API macros and no `extern "C"`; build it with
 `g++ -std=c++20 -shared -fPIC -I<TOGSim>/include my_tog.cpp -o tog.so`. The header's version
-constants are `togsim::API_MAJOR`, `API_MINOR`, `API_PATCH` (1, 1, 0), `togsim::API_VERSION`
-(`"1.1.0"`) and `togsim::ABI` (17, checked against `TOGSIM_ABI_VERSION`).
+constants are `togsim::API_MAJOR`, `API_MINOR`, `API_PATCH` (1, 0, 0), `togsim::API_VERSION`
+(`"1.0.0"`) and `togsim::ABI` (17, checked against `TOGSIM_ABI_VERSION`).
 
 ## A TOG
 
@@ -172,11 +172,11 @@ A rule broken at compile time stops the build; these messages need a word:
 TOGSim refuses some runs itself: [what gets a run refused](tog-abi.md#what-gets-a-run-refused), and
 [a record that is missing or not the TOG's](tog-abi.md#what-togsim-checks).
 
-## From 1.0.0
+## ABI 16 to 17
 
-1.1.0 adds `Attribute`, `Gather`, `scalar`, `element`, `extent`, `Tog::attributes` and the second
-list of `register_tog`, and removes `Desc.indirect`: a gather or scatter names its offsets through
-`Desc.gather` instead of TOGSim reading them from index dumps. A TOG that never named `.indirect`
-builds unchanged against 1.1.0; any TOG must be rebuilt, as ABI 16 is refused. The removal is
-incompatible, so by [the version rules](compatibility.md#version-numbers) this would be 2.0.0; the
-version was fixed with the feature.
+API 1.0.0 with ABI 17 adds `Attribute`, `Gather`, `scalar`, `element`, `extent`, `Tog::attributes`
+and the second list of `register_tog`, and removes `Desc.indirect`: a gather or scatter names its
+offsets through `Desc.gather` instead of TOGSim reading them from index dumps. A TOG that never named
+`.indirect` builds unchanged; any TOG must be rebuilt, as ABI 16 is refused. The removal is
+incompatible, so by [the version rules](compatibility.md#version-numbers) the API would move; it
+was kept at 1.0.0 by decision, and the ABI number is what refuses an old TOG.

@@ -1,7 +1,7 @@
 # Examples
 
 Hand-written TOGs that the [tutorial](../docs/tutorial.md) walks through, one step
-each, written against `include/togsim.hpp` (TOGSim API v1.1.0). Build TOGSim first, then from the
+each, written against `include/togsim.hpp` (TOGSim API v1.0.0). Build TOGSim first, then from the
 repository root:
 
 ```bash
