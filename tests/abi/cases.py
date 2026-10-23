@@ -1,18 +1,24 @@
-"""A TOG built against another TOG ABI is refused by name and version; the same TOG at this ABI replays. Raw C ABI
-breaks that togsim.hpp cannot write: no togsim_kernel or no runtime attribute table is refused, a load with no
-strides replays unstrided."""
-from togtest import Case
+"""A TOG built against another version, or against an integer TOG ABI of before the one version, is refused naming
+both; the same TOG at this version replays. Raw C ABI breaks that togsim.hpp cannot write: no togsim_kernel or no
+runtime attribute table is refused, a load with no strides replays unstrided."""
+from togtest import VERSION, Case
 
-ABI = 17
+REBUILD = f"TOGSim is version {VERSION}; rebuild the TOG"
 REFUSED = {
-    "refused.previous_version": dict(
-        define="PREVIOUS_VERSION", saying=f"it was built against TOG ABI {ABI - 1}, TOGSim expects ABI {ABI}"),
+    "refused.integer_abi_16": dict(
+        define="STATED_VERSION=16", saying=f"it was built against TOG ABI 16, {REBUILD}"),
+    "refused.integer_abi_17": dict(
+        define="STATED_VERSION=17", saying=f"it was built against TOG ABI 17, {REBUILD}"),
+    "refused.next_major": dict(
+        define="STATED_VERSION=0x20000", saying=f"it was built against version 2.0.0, {REBUILD}"),
+    "refused.newer_minor": dict(
+        define="STATED_VERSION=0x10100", saying=f"it was built against version 1.1.0, {REBUILD}"),
     "refused.symbol_of_abi_15": dict(
-        define="OLD_SYMBOL", saying="it was built against ABI 15 (it embeds togsim_producer_abi_version, the symbol "
-                                    f"of ABI 15 and earlier), TOGSim expects ABI {ABI}; rebuild the TOG"),
+        define="OLD_SYMBOL", saying="it was built against TOG ABI 15 (it embeds togsim_producer_abi_version, the "
+                                    f"symbol of ABI 15 and earlier), {REBUILD}"),
     "refused.no_version_symbol": dict(
         define="NO_SYMBOL", saying=f"it embeds no togsim_abi_version (built without togsim_runtime.h); TOGSim "
-                                   f"expects ABI {ABI}"),
+                                   f"is version {VERSION}"),
     "refused.no_attribute_table": dict(
         define="NO_ATTRIBUTE_TABLE", saying="it states no runtime attribute table (togsim_runtime_attribute_count / "
                                             "togsim_runtime_attribute_rank)"),

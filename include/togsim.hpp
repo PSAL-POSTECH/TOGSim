@@ -1,7 +1,7 @@
 #pragma once
-// togsim.hpp -- TOGSim API v1.0.0: a TOG as one C++20 struct over the C ABI of togsim_runtime.h, every call with
-// one struct of named arguments (docs/tog-api.md). A rule broken at run time prints "togsim.hpp: ..." and exits 1;
-// one broken in a constant expression fails to compile.
+// togsim.hpp -- the TOGSim API, of TOGSim's one version (togsim_runtime.h): a TOG as one C++20 struct over the C ABI,
+// every call with one struct of named arguments (docs/tog-api.md). A rule broken at run time prints "togsim.hpp: ..."
+// and exits 1; one broken in a constant expression fails to compile.
 
 #include <algorithm>
 #include <array>
@@ -19,13 +19,12 @@
 #include "togsim_runtime.h"
 
 namespace togsim {
-inline constexpr int API_MAJOR = 1, API_MINOR = 0, API_PATCH = 0;
-inline constexpr char API_VERSION[] = "1.0.0";
-inline constexpr int ABI = 17;
+inline constexpr int API_MAJOR = TOGSIM_VERSION_MAJOR, API_MINOR = TOGSIM_VERSION_MINOR, API_PATCH = TOGSIM_VERSION_PATCH;
+inline constexpr char API_VERSION[] = TOGSIM_VERSION_STRING;
+inline constexpr int32_t VERSION = TOGSIM_VERSION;
 inline constexpr int32_t MAX_SPAD_BUFFERS = 1024;
 inline constexpr int32_t MAX_RUNTIME_ATTRIBUTES = TOGSIM_MAX_RUNTIME_ATTRIBUTES;
 inline constexpr int32_t MAX_ATTRIBUTE_RANK = TOGSIM_MAX_ATTRIBUTE_RANK;
-static_assert(TOGSIM_ABI_VERSION == ABI, "togsim.hpp implements TOG ABI 17");
 }  // namespace togsim
 
 // The ABI's buffer table, filled from the TOG's buffers when the .so is loaded. Protected: TOGs load RTLD_GLOBAL,

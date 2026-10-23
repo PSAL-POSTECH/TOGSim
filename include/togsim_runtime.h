@@ -9,15 +9,21 @@
 extern "C" {
 #endif
 
-// TOG ABI version. A TOG's TU including this header defines the weak togsim_abi_version it was
-// built against (TOGSim's TUs, TOGSIM_HOST, only declare it); LazyTog::open refuses a TOG that
-// lacks it or differs. 17 added the runtime attributes and moved gathers onto them.
-#define TOGSIM_ABI_VERSION 17
+// TOGSim's one version: of togsim.hpp's API and of this C ABI alike. A TOG's TU defines the weak togsim_abi_version
+// as TOGSIM_VERSION (TOGSim's TUs, TOGSIM_HOST, only declare it); MAJOR << 16 | MINOR << 8 | PATCH is at least
+// 0x10000, so it never equals the integer ABIs 1..17 of before, and LazyTog::open refuses those by name.
+#define TOGSIM_VERSION_MAJOR 1
+#define TOGSIM_VERSION_MINOR 0
+#define TOGSIM_VERSION_PATCH 0
+#define TOGSIM_VERSION ((TOGSIM_VERSION_MAJOR << 16) | (TOGSIM_VERSION_MINOR << 8) | TOGSIM_VERSION_PATCH)
+#define TOGSIM_VERSION_TEXT_(a, b, c) #a "." #b "." #c
+#define TOGSIM_VERSION_TEXT(a, b, c) TOGSIM_VERSION_TEXT_(a, b, c)
+#define TOGSIM_VERSION_STRING TOGSIM_VERSION_TEXT(TOGSIM_VERSION_MAJOR, TOGSIM_VERSION_MINOR, TOGSIM_VERSION_PATCH)
 #ifdef TOGSIM_HOST
 extern const int32_t togsim_abi_version;
 #else
 __attribute__((weak, used, visibility("default")))
-extern const int32_t togsim_abi_version = TOGSIM_ABI_VERSION;
+extern const int32_t togsim_abi_version = TOGSIM_VERSION;
 #endif
 
 // The TOG also defines, with external linkage, the byte size of every scratchpad buffer id

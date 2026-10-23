@@ -164,6 +164,16 @@ namespace {
 namespace fs = std::filesystem;
 constexpr uint32_t PROGRAMS_MAGIC = 0x50415354, RECORD_MAGIC = 0x41525354;   // 'TSAP', 'TSRA' little-endian
 
+// A version this TOGSim reads: its own MAJOR, no newer than itself. The integer ABIs 1..17 of before are below 0x10000.
+bool accepts_version(uint32_t v) {
+  return v >> 16 == TOGSIM_VERSION_MAJOR && v <= (uint32_t)TOGSIM_VERSION;
+}
+
+std::string version_name(uint32_t v) {
+  if (v < 0x10000) return "TOG ABI " + std::to_string(v);
+  return "version " + std::to_string(v >> 16) + "." + std::to_string(v >> 8 & 0xff) + "." + std::to_string(v & 0xff);
+}
+
 template <class T>
 T word(const std::string& bytes, size_t at) {
   T v;
@@ -206,9 +216,11 @@ std::set<uint64_t> program_keys(const std::string& so, const std::string& dir) {
   std::error_code ec;
   if (!fs::is_regular_file(file, ec)) refuse(so, dir + " has no programs.bin: the functional run recorded no program");
   const std::string bytes = bytes_of(file);
-  if (bytes.size() < 16 || word<uint32_t>(bytes, 0) != PROGRAMS_MAGIC ||
-      word<uint32_t>(bytes, 4) != (uint32_t)TOGSIM_ABI_VERSION)
-    refuse(so, file.string() + ": not a runtime attribute file of ABI " + std::to_string(TOGSIM_ABI_VERSION));
+  if (bytes.size() < 16 || word<uint32_t>(bytes, 0) != PROGRAMS_MAGIC)
+    refuse(so, file.string() + ": not a runtime attribute file");
+  if (!accepts_version(word<uint32_t>(bytes, 4)))
+    refuse(so, file.string() + " was recorded at " + version_name(word<uint32_t>(bytes, 4)) +
+                   ", TOGSim is version " TOGSIM_VERSION_STRING);
   const uint64_t n = word<uint64_t>(bytes, 8);
   if (n > (bytes.size() - 16) / 8 || bytes.size() != 16 + 8 * n)
     refuse(so, file.string() + " is " + std::to_string(bytes.size()) + " bytes, its header says " +
@@ -227,9 +239,11 @@ std::set<uint64_t> program_keys(const std::string& so, const std::string& dir) {
 AttributeRecord read_record(const std::string& so, const fs::path& file, uint64_t key, int32_t id,
                             const std::vector<int32_t>& ranks, const std::set<uint64_t>& keys) {
   const std::string bytes = bytes_of(file), name = file.string();
-  if (bytes.size() < 24 || word<uint32_t>(bytes, 0) != RECORD_MAGIC ||
-      word<uint32_t>(bytes, 4) != (uint32_t)TOGSIM_ABI_VERSION)
-    refuse(so, name + ": not a runtime attribute file of ABI " + std::to_string(TOGSIM_ABI_VERSION));
+  if (bytes.size() < 24 || word<uint32_t>(bytes, 0) != RECORD_MAGIC)
+    refuse(so, name + ": not a runtime attribute file");
+  if (!accepts_version(word<uint32_t>(bytes, 4)))
+    refuse(so, name + " was recorded at " + version_name(word<uint32_t>(bytes, 4)) +
+                   ", TOGSim is version " TOGSIM_VERSION_STRING);
   AttributeRecord r;
   const int32_t held_id = word<int32_t>(bytes, 8);
   r.rank = word<int32_t>(bytes, 12);
@@ -344,19 +358,17 @@ bool LazyTog::open(const char* so_path, const int64_t* shape_args, int32_t n_sha
   if (!abi) {
     auto old = (const int32_t*)dlsym(_lib, "togsim_producer_abi_version");
     if (old)
-      fprintf(stderr, "togsim: refusing TOG %s: it was built against ABI %d (it embeds "
-              "togsim_producer_abi_version, the symbol of ABI 15 and earlier), TOGSim expects "
-              "ABI %d; rebuild the TOG\n", so_path, (int)*old, TOGSIM_ABI_VERSION);
+      fprintf(stderr, "togsim: refusing TOG %s: it was built against TOG ABI %d (it embeds "
+              "togsim_producer_abi_version, the symbol of ABI 15 and earlier), TOGSim is version %s; "
+              "rebuild the TOG\n", so_path, (int)*old, TOGSIM_VERSION_STRING);
     else
       fprintf(stderr, "togsim: refusing TOG %s: it embeds no togsim_abi_version "
-              "(built without togsim_runtime.h); TOGSim expects ABI %d\n",
-              so_path, TOGSIM_ABI_VERSION);
+              "(built without togsim_runtime.h); TOGSim is version %s\n", so_path, TOGSIM_VERSION_STRING);
     return false;
   }
-  if (*abi != TOGSIM_ABI_VERSION) {
-    fprintf(stderr, "togsim: refusing TOG %s: it was built against TOG ABI %d, "
-            "TOGSim expects ABI %d; rebuild the TOG\n",
-            so_path, (int)*abi, TOGSIM_ABI_VERSION);
+  if (!togsim::accepts_version((uint32_t)*abi)) {
+    fprintf(stderr, "togsim: refusing TOG %s: it was built against %s, TOGSim is version %s; rebuild the TOG\n",
+            so_path, togsim::version_name((uint32_t)*abi).c_str(), TOGSIM_VERSION_STRING);
     return false;
   }
   auto n_bufs = (const int32_t*)dlsym(_lib, "togsim_spad_buffer_count");

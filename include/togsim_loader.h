@@ -62,7 +62,7 @@ class LazyTog {
   LazyTog(const LazyTog&) = delete;
   LazyTog& operator=(const LazyTog&) = delete;
 
-  // dlopen the .so (refused unless its togsim_abi_version is TOGSIM_ABI_VERSION and it states its spad buffer sizes
+  // dlopen the .so (refused unless its togsim_abi_version is a version TOGSim accepts and it states its spad buffer sizes
   // and its runtime attribute table) and run togsim_kernel once: each togsim_dispatch only registers its work-item, so
   // num_items() is known before any record is emitted. Then load the records under `attribute_path` (throws on any
   // record that is missing, malformed or not the TOG's; see docs/tog-abi.md).

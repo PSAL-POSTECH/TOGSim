@@ -22,7 +22,7 @@ SCHEDULED = re.compile(r"TILE_SCHEDULED *\] spad_footprint=(\d+) max_dispatch=(\
 CORE_LINE = re.compile(r"\[(\d+)\]\[Core (\d+)\]\[(TILE_SCHEDULED|SPAD_HOLD|SPAD_HOLD_END) *\] (.*)$", re.M)
 SAID = re.compile(r"^(?:\[[^\]]*\] \[(?:error|critical)\] |\s*what\(\):\s*)(.*)$|^(togsim(?:\.hpp)?: .*)$", re.M)
 WARNED = re.compile(r"^\[[^\]]*\] \[warning\] (.*)$", re.M)
-ABI = 17
+VERSION, ENCODED_VERSION = "1.0.0", 0x10000
 PROGRAMS_MAGIC, RECORD_MAGIC = 0x50415354, 0x41525354
 _built, _locks, _guard = {}, {}, threading.Lock()
 
@@ -93,7 +93,7 @@ def shape_of(value):
     return [len(value)] + (inner[0][0] if inner else []), [x for _, v in inner for x in v]
 
 
-def record_bytes(key, id, value, rank=None, magic=RECORD_MAGIC, abi=ABI, held=None):
+def record_bytes(key, id, value, rank=None, magic=RECORD_MAGIC, abi=ENCODED_VERSION, held=None):
     """attr_<key>_<id>.bin of `value` (shape_of; or (extents, values)): its header states `rank` (default the value's),
     and `held` = (key, id) in place of the file's own."""
     extents, values = value if isinstance(value, tuple) else shape_of(value)
@@ -102,7 +102,7 @@ def record_bytes(key, id, value, rank=None, magic=RECORD_MAGIC, abi=ABI, held=No
             struct.pack(f"<{len(extents)}q", *extents) + struct.pack(f"<{len(values)}q", *values))
 
 
-def programs_bytes(keys, magic=PROGRAMS_MAGIC, abi=ABI):
+def programs_bytes(keys, magic=PROGRAMS_MAGIC, abi=ENCODED_VERSION):
     """programs.bin listing `keys` in the order given."""
     return struct.pack("<IIQ", magic, abi, len(keys)) + struct.pack(f"<{len(keys)}Q", *keys)
 
