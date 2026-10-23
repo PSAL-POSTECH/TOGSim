@@ -1,5 +1,5 @@
 #pragma once
-// togsim.hpp -- TOGSim API v1.1.0: a TOG as one C++20 struct over the C ABI of togsim_runtime.h, every call with
+// togsim.hpp -- TOGSim API v1.0.0: a TOG as one C++20 struct over the C ABI of togsim_runtime.h, every call with
 // one struct of named arguments (docs/tog-api.md). A rule broken at run time prints "togsim.hpp: ..." and exits 1;
 // one broken in a constant expression fails to compile.
 
@@ -19,8 +19,8 @@
 #include "togsim_runtime.h"
 
 namespace togsim {
-inline constexpr int API_MAJOR = 1, API_MINOR = 1, API_PATCH = 0;
-inline constexpr char API_VERSION[] = "1.1.0";
+inline constexpr int API_MAJOR = 1, API_MINOR = 0, API_PATCH = 0;
+inline constexpr char API_VERSION[] = "1.0.0";
 inline constexpr int ABI = 17;
 inline constexpr int32_t MAX_SPAD_BUFFERS = 1024;
 inline constexpr int32_t MAX_RUNTIME_ATTRIBUTES = TOGSIM_MAX_RUNTIME_ATTRIBUTES;
