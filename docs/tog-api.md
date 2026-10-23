@@ -1,11 +1,13 @@
-# TOGSim API v1.0.0
+# TOGSim API 1.0.0
 
 Every TOG, hand-written or compiler-emitted, includes `include/togsim.hpp`, which lowers each call to
-C ABI 17 of `include/togsim_runtime.h` ([The TOG ABI](tog-abi.md#the-tog-abi)). A TOG is C++20 with
+C ABI of `include/togsim_runtime.h` ([The TOG ABI](tog-abi.md#the-tog-abi)). A TOG is C++20 with
 no API macros and no `extern "C"`; build it with
-`g++ -std=c++20 -shared -fPIC -I<TOGSim>/include my_tog.cpp -o tog.so`. The header's version
-constants are `togsim::API_MAJOR`, `API_MINOR`, `API_PATCH` (1, 0, 0), `togsim::API_VERSION`
-(`"1.0.0"`) and `togsim::ABI` (17, checked against `TOGSIM_ABI_VERSION`).
+`g++ -std=c++20 -shared -fPIC -I<TOGSim>/include my_tog.cpp -o tog.so`. The API and the
+C ABI have one version, 1.0.0 ([version numbers](compatibility.md#version-numbers)), defined once
+as `TOGSIM_VERSION_MAJOR`, `_MINOR`, `_PATCH` in `togsim_runtime.h`; togsim.hpp derives
+`togsim::API_MAJOR`, `API_MINOR`, `API_PATCH` (1, 0, 0), `togsim::API_VERSION` (`"1.0.0"`) and
+`togsim::VERSION` (the encoded `TOGSIM_VERSION`, `0x10000`) from it.
 
 ## A TOG
 
@@ -172,11 +174,12 @@ A rule broken at compile time stops the build; these messages need a word:
 TOGSim refuses some runs itself: [what gets a run refused](tog-abi.md#what-gets-a-run-refused), and
 [a record that is missing or not the TOG's](tog-abi.md#what-togsim-checks).
 
-## ABI 16 to 17
+## From the integer ABIs to 1.0.0
 
-API 1.0.0 with ABI 17 adds `Attribute`, `Gather`, `scalar`, `element`, `extent`, `Tog::attributes`
-and the second list of `register_tog`, and removes `Desc.indirect`: a gather or scatter names its
-offsets through `Desc.gather` instead of TOGSim reading them from index dumps. A TOG that never named
-`.indirect` builds unchanged; any TOG must be rebuilt, as ABI 16 is refused. The removal is
-incompatible, so by [the version rules](compatibility.md#version-numbers) the API would move; it
-was kept at 1.0.0 by decision, and the ABI number is what refuses an old TOG.
+Before 1.0.0 the C ABI had an integer version of its own, 1 to 17. 1.0.0 is the first version
+that is both, and it adds `Attribute`, `Gather`, `scalar`, `element`, `extent`, `Tog::attributes`
+and the second list of `register_tog`, and removes `Desc.indirect`: an indirect DMA (a gather or
+scatter) takes its offsets from a runtime attribute through `Desc.gather`; TOGSim reads no index
+dump, and the `indirect_access` path is gone. A TOG that never named `.indirect` builds unchanged;
+any TOG must be rebuilt, as one built against an integer ABI is refused at load
+([the message](tog-abi.md#what-gets-a-run-refused)).

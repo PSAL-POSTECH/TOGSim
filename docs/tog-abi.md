@@ -1,6 +1,6 @@
 # The TOG ABI
 
-`include/togsim_runtime.h`, C ABI 17 (`TOGSIM_ABI_VERSION`), is what TOGSim loads;
+`include/togsim_runtime.h`, the C ABI of TOGSim 1.0.0 (`TOGSIM_VERSION`), is what TOGSim loads;
 [togsim.hpp](tog-api.md) lowers every call to it. This page says what the calls model, the buffer
 and scratchpad rules, the files and tables, and the refusals.
 
@@ -12,7 +12,7 @@ the calls, `togsim_runtime_attribute` among them.
 
 ## How TOGSim runs a TOG
 
-1. TOGSim opens `tog.so`, checks the ABI version, reads the buffer and attribute tables and calls
+1. TOGSim opens `tog.so`, checks the version, reads the buffer and attribute tables and calls
    `togsim_kernel` **once**. Each `dispatch` only registers a work-item (its function, a copy of
    its arguments, its key) and binds it to a core: round-robin, in dispatch order, over the cores
    of the kernel's partition. Then it loads and checks the
@@ -132,8 +132,8 @@ directory that holds exactly:
 
 | File | Format (native little-endian) |
 |---|---|
-| `programs.bin` | `u32 magic 0x50415354` (`TSAP`), `u32 abi = 17`, `u64 n`, then `n` `u64` keys, ascending: the programs that ran. |
-| `attr_<key>_<id>.bin` | `u32 magic 0x41525354` (`TSRA`), `u32 abi = 17`, `i32 id`, `i32 rank`, `u64 key`, `i64 extents[rank]`, then `i64 values[product of extents]`, row-major. `<key>` and `<id>` are decimal, with no sign and no leading zero. |
+| `programs.bin` | `u32 magic 0x50415354` (`TSAP`), `u32 version = 0x10000`, `u64 n`, then `n` `u64` keys, ascending: the programs that ran. |
+| `attr_<key>_<id>.bin` | `u32 magic 0x41525354` (`TSRA`), `u32 version = 0x10000`, `i32 id`, `i32 rank`, `u64 key`, `i64 extents[rank]`, then `i64 values[product of extents]`, row-major. `<key>` and `<id>` are decimal, with no sign and no leading zero. |
 
 A record of extent 0 is present and holds no value: 0 trips is not a missing record. A record no
 body reads is allowed (a branch the functional run did not take is not taken in the TOG either).
@@ -157,7 +157,7 @@ the `LAUNCH_KERNEL`.
 | E1 | `it declares <n> runtime attribute(s) and was launched with no attribute_path` | No path, or `-`, for a TOG with attributes. |
 | E2 | `attribute_path <dir> does not open` | The path is no directory. |
 | E3 | `<dir> has no programs.bin: the functional run recorded no program` | |
-| E4 | `<file>: not a runtime attribute file of ABI 17` | Another magic or ABI, or a file shorter than its header. |
+| E4 | `<file>: not a runtime attribute file`, `<file> was recorded at TOG ABI 17, TOGSim is version 1.0.0` | Another magic or a file shorter than its header; or a version TOGSim does not accept ([the rule](compatibility.md#version-numbers)), here an integer ABI of before 1.0.0. |
 | E5 | `work-item key <k> was dispatched and <dir>/programs.bin does not list it`, `<dir>/programs.bin lists key <k>, which no work-item was dispatched under`, `<dir>/programs.bin lists key <k> out of ascending order or twice` | The keys the run recorded are not the keys the TOG dispatches. |
 | E6 | `<file> holds key <k> id <i>` | Its header names another record than its name. |
 | E7 | `<file> records attribute <i>, which the TOG does not declare` | |
@@ -322,11 +322,11 @@ runs the kernel.
 
 TOGSim has more refusals than a first TOG runs into; all exit 1. Its raw C ABI checks (version
 symbol, buffer table, semaphore counts, `ndim`) are ones a TOG built on togsim.hpp cannot fail
-([its refusals](tog-api.md#refusals)), except a `.so` built against another ABI:
+([its refusals](tog-api.md#refusals)), except a `.so` built against another version:
 
 | Message contains | Cause |
 |---|---|
-| `togsim: refusing TOG <so>: it was built against TOG ABI 16, TOGSim expects ABI 17; rebuild the TOG` | The TOG's `togsim_abi_version` is another number: it was compiled against another version of the header. |
+| `togsim: refusing TOG <so>: it was built against TOG ABI 16, TOGSim is version 1.0.0; rebuild the TOG` | The TOG's `togsim_abi_version` is an integer ABI of before 1.0.0, or (`... built against version 2.0.0 ...`) a version TOGSim does not accept: it was compiled against another version of the header. |
 | `togsim: refusing TOG <so>: it states no runtime attribute table (togsim_runtime_attribute_count / togsim_runtime_attribute_rank)` | A raw-ABI TOG that does not define the attribute table (togsim.hpp always does). |
 | `[TOGSim] TOG <so>: ...` of [the runtime attribute checks](#what-togsim-checks) | A record that is missing, malformed, stale or not the TOG's. |
 | `[Simulator] simulation wedged at cycle <n>: work remains but nothing is in flight` | A work-item waits for spad that is never freed, in a way the loader does not see ([known limitations](running.md#known-limitations)). |
