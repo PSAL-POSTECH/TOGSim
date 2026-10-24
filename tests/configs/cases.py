@@ -33,12 +33,12 @@ def every_config_is_listed(t):
 
 
 def breaks_convention(config):
-    """What the config `config` (a parsed YAML mapping) lacks of the convention: an isa list with exactly one vcix_*
-    and one zvl<N>b entry, vcix and a non-empty address_map as mappings, and systolic_array_unit named after the
-    vcix_* entry as TPUV6E_MXU is after vcix_tpuv6e. Empty when it follows it."""
+    """What the config `config` (a parsed YAML mapping) lacks of the convention: an isa list with exactly one
+    pytorchsim_* and one zvl<N>b entry, vcix and a non-empty address_map as mappings, and systolic_array_unit
+    named after the pytorchsim_* entry as TPUV6E_MXU is after pytorchsim_tpuv6e. Empty when it follows it."""
     isa = config.get("isa")
-    vcix = [entry for entry in isa if str(entry).startswith("vcix_")] if isinstance(isa, list) else []
-    lacks = [] if len(vcix) == 1 else [f"an isa list with exactly one vcix_* entry (isa: {isa})"]
+    accel = [entry for entry in isa if str(entry).startswith("pytorchsim_")] if isinstance(isa, list) else []
+    lacks = [] if len(accel) == 1 else [f"an isa list with exactly one pytorchsim_* entry (isa: {isa})"]
     entries = [str(entry) for entry in isa] if isinstance(isa, list) else []
     zvl = [entry for entry in entries if entry[:3] == "zvl" and entry[-1:] == "b" and entry[3:-1].isdigit()]
     if isinstance(isa, list) and len(zvl) != 1:
@@ -49,8 +49,8 @@ def breaks_convention(config):
     if config.get("address_map") == {}:
         lacks.append("address_map with its addresses (address_map: {})")
     unit = config.get("systolic_array_unit")
-    if "systolic_array_unit" in config and len(vcix) == 1 and unit != vcix[0][len("vcix_"):].upper() + "_MXU":
-        lacks.append(f"systolic_array_unit named after {vcix[0]} (systolic_array_unit: {unit!r})")
+    if "systolic_array_unit" in config and len(accel) == 1 and unit != accel[0][len("pytorchsim_"):].upper() + "_MXU":
+        lacks.append(f"systolic_array_unit named after {accel[0]} (systolic_array_unit: {unit!r})")
     return lacks
 
 
@@ -64,17 +64,17 @@ def follows_convention(name):
 
 
 def convention_names_what_is_missing(t):
-    """The check reads something: tpuv6e with each key taken away, or a second vcix_* entry, is named."""
+    """The check reads something: tpuv6e with each key taken away, or a second pytorchsim_* entry, is named."""
     v6e = yaml.safe_load((CONFIGS / "tpuv6e.yml").read_text())
     for key in ("isa", "vcix", "address_map", "systolic_array_unit"):
         lacks = breaks_convention({k: v for k, v in v6e.items() if k != key})
         if len(lacks) != 1 or key not in lacks[0]:
             raise Failure(f"expected tpuv6e without {key} to be named as lacking it alone, got {lacks}")
-    for what, broken in (("an isa with two vcix_* entries", {"isa": v6e["isa"] + ["vcix_tpuv4"]}),
+    for what, broken in (("an isa with two pytorchsim_* entries", {"isa": v6e["isa"] + ["pytorchsim_tpuv4"]}),
                          ("an isa without zvl<N>b", {"isa": [e for e in v6e["isa"] if not e.startswith("zvl")]}),
                          ("vcix: null", {"vcix": None}), ("an empty address_map", {"address_map": {}}),
                          ("systolic_array_unit: null", {"systolic_array_unit": None}),
-                         ("TPUV3_MXU beside vcix_tpuv6e", {"systolic_array_unit": "TPUV3_MXU"})):
+                         ("TPUV3_MXU beside pytorchsim_tpuv6e", {"systolic_array_unit": "TPUV3_MXU"})):
         if not breaks_convention({**v6e, **broken}):
             raise Failure(f"expected {what} to break the convention, it did not")
 
