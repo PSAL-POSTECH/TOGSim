@@ -86,6 +86,24 @@ This machine has no unit table, so its unit lines are the built-in `Systolic arr
 `Vector unit` and `Cross-lane unit`. With a unit table each unit of the table has its own line
 instead, `Core [i] : <unit> utilization(%): P, active_cycles: A, idle_cycles: I`.
 
+## The result file
+
+`--result <json>` writes the values the end-of-run lines print as one JSON object, unrounded, when
+the run ends. A program reads it instead of matching the lines. Its keys:
+
+| Key | Holds |
+|---|---|
+| `version` | TOGSim's version, as `TOGSIM_VERSION_STRING`. |
+| `total_cycles` | `Total execution cycles: N`. |
+| `wall_clock_s` | `Wall-clock time for simulation: S seconds`; `null` with `--tog_so`, which prints none. |
+| `core_cycles` | Each core's `Core [i] : Total_cycles: N`, keyed by `i`. |
+| `units` | Each unit line, `units["Core [i]"][<unit>]` and, with a unit table on more than one core, `units["Total"][<unit>]`: `utilization_pct`, `active_cycles`, `idle_cycles`. Without a unit table the units are `Systolic array [k]`, `Vector unit` and `Cross-lane unit`. |
+| `dma` | Each core's DMA line, keyed by `i`: `active_cycles`, `idle_cycles`, `dram_bw_gbps`, `responses`. |
+| `dram` | With Ramulator2, `channels` (each `[DRAM] channel c` line, keyed by `c`) and `combined`: `bandwidth_gbps`, `utilization_pct`, `reads`, `writes`. Empty channels and a `null` combined otherwise. |
+| `kernels` | Each `[Scheduler p] Kernel k has completed` line, in order: `scheduler`, `kernel_id`, `started`, `finished`. The line's TOG path and operation are left out: both are the placeholder `kernel`. |
+
+`tests/result/` pins that each value is the one its line prints.
+
 ## Lines a script may rely on
 
 These are part of the contract (the fourth of the

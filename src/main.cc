@@ -8,6 +8,7 @@
 #include "helper/CommandLineParser.h"
 #include "togsim_loader.h"        // load a compiled TOG (.so) and replay it
 #include "togsim_trace_bridge.h"  // ... into a TileGraph
+#include "Result.h"
 
 namespace fs = std::filesystem;
 
@@ -237,6 +238,9 @@ int main(int argc, char** argv) {
                     "capacity_per_cycle admitted) for --tog_so; prints each unit's utilization "
                     "in place of the systolic array and cross-lane lines");
   cmd_parser.add_command_line_option<std::string>(
+      "result", "Path for the run's results as JSON (the values the end-of-run lines print), "
+                "written when the run ends");
+  cmd_parser.add_command_line_option<std::string>(
       "attribute_path", "Directory of the functional run's runtime attribute records (programs.bin, "
                         "attr_<key>_<id>.bin) for --tog_so; required when the TOG declares attributes");
   try {
@@ -260,6 +264,9 @@ int main(int argc, char** argv) {
     cmd_oss << argv[i];
   }
   spdlog::info("[TOGSim] Command line: {}", cmd_oss.str());
+
+  std::string result_path;
+  cmd_parser.set_if_defined("result", &result_path);
 
   std::string level = "info";
   cmd_parser.set_if_defined("log_level", &level);
@@ -319,6 +326,7 @@ int main(int argc, char** argv) {
     spdlog::info("[TOGSim] Total cycles: {}", simulator->get_core_cycle());
     spdlog::info("Simulation finished");
     simulator->print_core_stat();
+    if (!result_path.empty()) result().write(result_path);
     return 0;
   }
 
@@ -359,5 +367,7 @@ int main(int argc, char** argv) {
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> duration = end - start;
   spdlog::info("Wall-clock time for simulation: {:2f} seconds", duration.count());
+  result().wall_clock(duration.count());
+  if (!result_path.empty()) result().write(result_path);
   return 0;
 }

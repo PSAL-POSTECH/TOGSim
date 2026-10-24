@@ -3,8 +3,8 @@
 ## Running TOGSim
 
 ```text
-build/bin/Simulator --config <yml> --tog_so <so> --cycle_table <tsv> [--unit_table <tsv>] [--attribute_path <dir>] [--log_level <level>]
-build/bin/Simulator --config <yml> --models_list <file> [--log_level <level>]
+build/bin/Simulator --config <yml> --tog_so <so> --cycle_table <tsv> [--unit_table <tsv>] [--attribute_path <dir>] [--result <json>] [--log_level <level>]
+build/bin/Simulator --config <yml> --models_list <file> [--result <json>] [--log_level <level>]
 ```
 
 | Flag | Meaning |
@@ -15,6 +15,7 @@ build/bin/Simulator --config <yml> --models_list <file> [--log_level <level>]
 | `--unit_table <tsv>` | The unit table of that TOG. Required unless the config sets `systolic_array_split: none`. |
 | `--attribute_path <dir>` | The [runtime attribute records](tog-abi.md#runtime-attributes) of that TOG. Required when the TOG declares attributes; refused with `--models_list`, where each `LAUNCH_KERNEL` names its own. |
 | `--models_list <file>` | Simulate a command stream (a file or a FIFO) instead of one TOG. |
+| `--result <json>` | Write the run's results to `<json>` when it ends: the values of the end-of-run lines, as data a program reads instead of the lines ([the file](output-lines.md#the-result-file)). A path that cannot be written is refused, exit 1. |
 | `--log_level <level>` | `info` (the default), `debug` or `trace`. Any other value is treated as `info`. |
 | `--help`, `-h` | Print the options. |
 

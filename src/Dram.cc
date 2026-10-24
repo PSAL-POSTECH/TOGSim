@@ -14,6 +14,7 @@
 #include "ramulator/base/factory.h"
 #include "ramulator/frontend/i_frontend.h"
 #include "ramulator/memory_system/i_memory_system.h"
+#include "Result.h"
 
 namespace {
 
@@ -423,6 +424,7 @@ void DramRamulator2::print_stat() {
     spdlog::info(
         "[DRAM] channel {} | {:.2f} GB/s avg., {:.2f}% of utilization | {} reads, {} writes",
         ch, bw.bandwidth_gbs, bw.util_avg_ch_pct, tr, tw);
+    result().dram_channel(ch, {bw.bandwidth_gbs, bw.util_avg_ch_pct, tr, tw});
   }
   const DramBwSnapshot bw_all = make_dram_bw_snapshot(
       tr_all + tw_all, cycles, _n_ch, _req_size, f_mhz, _config.dram_bandwidth_gbps_per_channel);
@@ -430,6 +432,7 @@ void DramRamulator2::print_stat() {
       "[DRAM] channels 0..{} combined | {:.2f} GB/s aggregate, {:.2f}% of utilization (avg. per channel) | "
       "{} reads, {} writes",
       _n_ch - 1, bw_all.bandwidth_gbs, bw_all.util_avg_ch_pct, tr_all, tw_all);
+  result().dram_combined({bw_all.bandwidth_gbs, bw_all.util_avg_ch_pct, tr_all, tw_all});
 }
 
 void DramRamulator2::print_cache_stats() {
