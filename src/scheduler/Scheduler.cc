@@ -1,4 +1,5 @@
 #include "Scheduler.h"
+#include "Result.h"
 
 Scheduler::Scheduler(SimulationConfig config, const cycle_type* core_cycle, const uint64_t* core_time, int id,
                      std::function<void()> kernel_ended)
@@ -84,6 +85,7 @@ void Scheduler::refresh_status() {
                  _tile_graph.at(0)->get_name(), *_core_cycle);
     spdlog::info("[Scheduler {}] Kernel {} execution summary - Started at: {} cycles, Total compute time: {} cycles",
                  _id, kernel_id, start_time, compute_time);
+    result().kernel({_id, kernel_id, (uint64_t)start_time, (uint64_t)*_core_cycle});
     _kernel_ended();
     _tile_graph.pop_front();
   }

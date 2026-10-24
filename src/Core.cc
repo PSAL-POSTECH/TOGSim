@@ -1,5 +1,6 @@
 #include "Core.h"
 #include "CoreTraceLog.h"
+#include "Result.h"
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <cmath>
@@ -602,13 +603,18 @@ void Core::print_stats() {
   }
   float dram_bw = _config.dram_req_size * _stat_tot_mem_response * _config.core_freq_mhz / (_core_cycle * 1000); // B/cycle
   spdlog::info("Core [{}] : DMA active_cycles: {}, DMA idle_cycles: {}, DRAM BW: {:.3f} GB/s ({} responses)", _id, _stat_tot_dma_cycle, _stat_tot_dma_idle_cycle, dram_bw, _stat_tot_mem_response);
+  result().dma(_id, {_stat_tot_dma_cycle, _stat_tot_dma_idle_cycle, dram_bw, _stat_tot_mem_response});
   if (!_unit_table) {
     spdlog::info("Core [{}] : Vector unit utilization(%): {:.2f}, active cycle: {}, idle_cycle: {}", _id,
       static_cast<float>(_stat_tot_vu_compute_cycle * 100) / _core_cycle, _stat_tot_vu_compute_cycle, _stat_tot_vu_compute_idle_cycle);
+    result().unit(fmt::format("Core [{}]", _id), "Vector unit",
+                  static_cast<float>(_stat_tot_vu_compute_cycle * 100) / _core_cycle, _stat_tot_vu_compute_cycle,
+                  _stat_tot_vu_compute_idle_cycle);
     _typed.print_cross_lane_stats(_core_cycle, true);
   }
   spdlog::info("Core [{}] : NUMA local memory: {} requests, remote memory: {} requests", _id, _stat_numa_local_access, _stat_numa_remote_access);
   spdlog::info("Core [{}] : Total_cycles: {}", _id, _core_cycle);
+  result().core_cycles(_id, _core_cycle);
   spdlog::info("Core [{}] : computes held at least once by the core's compute in flight: {}", _id, _stat_compute_stalls);
   if (!units_ok) {
     spdlog::error("[TOGSim] --unit_table: a unit admitted more than its capacity allows");

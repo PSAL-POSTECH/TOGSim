@@ -1,5 +1,6 @@
 #include "Simulator.h"
 #include "CoreTraceLog.h"
+#include "Result.h"
 
 #include <fstream>
 #include <sstream>
@@ -320,4 +321,5 @@ void Simulator::print_core_stat()
     }
   }
   spdlog::info("Total execution cycles: {}", _core_cycles);
+  result().total_cycles(_core_cycles);
 }
