@@ -134,12 +134,12 @@ matter; `examples/<name>/expected.txt` is that output.
 ## Running
 
 ```text
-build/bin/Simulator --config <yml> --tog_so <so> --cycle_table <tsv> [--unit_table <tsv>] [--log_level <level>]
-build/bin/Simulator --config <yml> --models_list <file> [--log_level <level>]
+build/bin/Simulator --config <yml> --tog_so <so> --cycle_table <tsv> [--unit_table <tsv>] [--result <json>] [--log_level <level>]
+build/bin/Simulator --config <yml> --models_list <file> [--result <json>] [--log_level <level>]
 ```
 
 The first form simulates one TOG; the second a command stream that launches several. The
-result is the last line of the log, `Total execution cycles: N`; the lines above it give the
+result is the last line of the log, `Total execution cycles: N` (and, with `--result`, a JSON file of the end-of-run values); the lines above it give the
 utilization of each unit per core and the DMA and DRAM bandwidth. `--log_level trace` prints when
 each instruction was issued and finished. A refused run exits non-zero with a line that names the
 cause.

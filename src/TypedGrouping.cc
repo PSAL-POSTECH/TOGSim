@@ -5,6 +5,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Instruction.h"
+#include "Result.h"
 
 namespace typed {
 
@@ -180,15 +181,22 @@ void Units::roll_stats() {
 void Units::print_array_stats(uint64_t cycles, bool total) const {
   const auto& active = total ? _stat_tot_sa_cycle : _stat_sa_cycle;
   const auto& idle = total ? _stat_tot_sa_idle_cycle : _stat_sa_idle_cycle;
-  for (uint32_t i = 0; i < _num_arrays; i++)
+  for (uint32_t i = 0; i < _num_arrays; i++) {
     spdlog::info("Core [{}] : Systolic array [{}] utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _core_id, i,
       static_cast<float>(active.at(i) * 100) / cycles, active.at(i), idle.at(i));
+    if (total)
+      result().unit(fmt::format("Core [{}]", _core_id), fmt::format("Systolic array [{}]", i),
+                    static_cast<float>(active.at(i) * 100) / cycles, active.at(i), idle.at(i));
+  }
 }
 
 void Units::print_cross_lane_stats(uint64_t cycles, bool total) const {
-  if (total)
+  if (total) {
     spdlog::info("Core [{}] : Cross-lane unit utilization(%): {:.2f}, active cycle: {}, idle_cycle: {}", _core_id,
       static_cast<float>(_stat_tot_xlu_cycle * 100) / cycles, _stat_tot_xlu_cycle, _stat_tot_xlu_idle_cycle);
+    result().unit(fmt::format("Core [{}]", _core_id), "Cross-lane unit",
+                  static_cast<float>(_stat_tot_xlu_cycle * 100) / cycles, _stat_tot_xlu_cycle, _stat_tot_xlu_idle_cycle);
+  }
   else
     spdlog::info("Core [{}] : Cross-lane unit Utilization(%): {:.2f}, active_cycles: {}, idle_cycles: {}", _core_id,
       static_cast<float>(_stat_xlu_cycle * 100) / cycles, _stat_xlu_cycle, _stat_xlu_idle_cycle);
