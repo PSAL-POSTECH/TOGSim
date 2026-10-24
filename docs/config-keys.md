@@ -83,7 +83,7 @@ what changing one does; this page is the full list.
 
 | Key | Required | Default | Meaning |
 |---|---|---|---|
-| `isa` | no | | The ISA the compiler targets, ending in the vcix extension `vcix_<model>`. Read by the compiler, not by TOGSim. |
+| `isa` | no | | The ISA the compiler targets, ending in the accelerator `pytorchsim_<model>`. Read by the compiler, not by TOGSim. |
 | `vcix` | no | | The vcix model's own keys, passed to it as they are. Read by the compiler, not by TOGSim. |
 | `address_map` | no | | Where the spad and DRAM sit in the address space. Read by the compiler, not by TOGSim. |
 
@@ -112,7 +112,7 @@ that needs more sets `num_cores` (and `partition`) over one of them. All 7 use
 - Every shipped config states `isa`, `vcix` and `address_map` and names its array unit: `TPUV3_MXU` on the
   `tpuv3` ones, `TPUV4_MXU` on the `tpuv4` ones. `tpuv3` states its model's (vcix-accelerator `libtpuv3.so`) keys,
   each tpuv6e's value, none measured on a v3 (its comments say which); the other `tpuv3` ones and `tpuv4` (no
-  `vcix_tpuv4` model yet) have `vcix: {}`.
+  `pytorchsim_tpuv4` model yet) have `vcix: {}`.
 - `tpuv3_half` is `tpuv3` with half the DRAM channels.
 - `examples/minimal.yml` is not one of the 7: it is a `dram_type: simple` machine that needs no
   other file and no unit table.

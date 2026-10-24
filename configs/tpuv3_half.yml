@@ -1,4 +1,4 @@
-# tpuv3 with half the DRAM channels. The array unit TPUV3_MXU and the ISA's vcix_tpuv3 name a vcix model and compiler support
+# tpuv3 with half the DRAM channels. The array unit TPUV3_MXU and the ISA's pytorchsim_tpuv3 name a vcix model and compiler support
 # that do not exist yet; vcix holds that model's keys once it states them.
 num_cores: 1
 core_freq_mhz: 940
@@ -9,7 +9,7 @@ systolic_array_unit: TPUV3_MXU
 vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 128
 
-isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, vcix_tpuv3, spad-vector-memory]
+isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, pytorchsim_tpuv3, spad-vector-memory]
 vcix: {}
 address_map: {spad_vaddr: 0x40000000, dram_base: 0x80000000, dram_size: 17179869184}
 
