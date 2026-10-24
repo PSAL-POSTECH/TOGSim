@@ -110,8 +110,9 @@ that needs more sets `num_cores` (and `partition`) over one of them. All 7 use
   vectors (8 sublanes x 32 bit), and `systolic_array_split: round_robin` over the array unit
   `TPUV6E_MXU` (`systolic_array_unit`). It prints statistics every 200 cycles; the others every 10000.
 - Every shipped config states `isa`, `vcix` and `address_map` and names its array unit: `TPUV3_MXU` on the
-  `tpuv3` ones, `TPUV4_MXU` on the `tpuv4` ones. Their vcix models (`vcix_tpuv3`, `vcix_tpuv4`) do not exist yet,
-  so their `vcix` is `{}`.
+  `tpuv3` ones, `TPUV4_MXU` on the `tpuv4` ones. `tpuv3` states its model's (vcix-accelerator `libtpuv3.so`) keys,
+  each tpuv6e's value, none measured on a v3 (its comments say which); the other `tpuv3` ones and `tpuv4` (no
+  `vcix_tpuv4` model yet) have `vcix: {}`.
 - `tpuv3_half` is `tpuv3` with half the DRAM channels.
 - `examples/minimal.yml` is not one of the 7: it is a `dram_type: simple` machine that needs no
   other file and no unit table.
