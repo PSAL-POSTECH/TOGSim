@@ -22,16 +22,14 @@ namespace togsim {
 inline constexpr int API_MAJOR = TOGSIM_VERSION_MAJOR, API_MINOR = TOGSIM_VERSION_MINOR, API_PATCH = TOGSIM_VERSION_PATCH;
 inline constexpr char API_VERSION[] = TOGSIM_VERSION_STRING;
 inline constexpr int32_t VERSION = TOGSIM_VERSION;
-inline constexpr int32_t MAX_SPAD_BUFFERS = 1024;
+inline constexpr int32_t MAX_BUFFERS = 1024;
 inline constexpr int32_t MAX_RUNTIME_ATTRIBUTES = TOGSIM_MAX_RUNTIME_ATTRIBUTES;
 inline constexpr int32_t MAX_ATTRIBUTE_RANK = TOGSIM_MAX_ATTRIBUTE_RANK;
 }  // namespace togsim
 
-// The ABI's buffer table, filled from the TOG's buffers when the .so is loaded. Protected: TOGs load RTLD_GLOBAL,
-// and this .so's writes must land in its own table.
+// The ABI's attribute table, filled from the TOG's attributes when the .so is loaded. Protected: TOGs load
+// RTLD_GLOBAL, and this .so's writes must land in its own table.
 extern "C" {
-__attribute__((visibility("protected"))) int32_t togsim_spad_buffer_count = 0;
-__attribute__((visibility("protected"))) int64_t togsim_spad_buffer_bytes[togsim::MAX_SPAD_BUFFERS] = {};
 __attribute__((visibility("protected"))) int32_t togsim_runtime_attribute_count = 0;
 __attribute__((visibility("protected"))) int32_t togsim_runtime_attribute_rank[togsim::MAX_RUNTIME_ATTRIBUTES] = {};
 }
@@ -67,10 +65,9 @@ struct Elem {
 };
 constexpr Elem u8{8, 0}, i8{8, 1}, i16{16, 2}, f16{16, 3}, bf16{16, 4}, i32{32, 5}, f32{32, 6}, i64{64, 7}, f64{64, 8};
 
-// A spad buffer: its id (its entry in togsim_spad_buffer_bytes) and its bytes; 0 bytes is a dependency edge only.
+// A buffer: an id that orders the calls naming it. It has no size: a work-item's spad is its dispatch's `.spad`.
 struct Buf {
   int64_t id;
-  int64_t bytes;
 };
 
 // One to four extents or strides: {tm, tk}, or Dims(tm, tk).
@@ -245,7 +242,7 @@ struct Ops_ {
 inline std::vector<int64_t> ids_(const std::vector<Buf>& bufs) {
   std::vector<int64_t> ids;
   for (const Buf& b : bufs) {
-    if (b.id < 0) fail_("a buffer with a negative id");
+    if (b.id < 0 || b.id >= MAX_BUFFERS) fail_("a buffer id outside 0..1023");
     ids.push_back(b.id);
   }
   return ids;
@@ -508,66 +505,84 @@ void work_item_(EmitCtx* c, int64_t* iv, int32_t n) {
 }
 
 template <auto F, class A>
-void dispatch_(Kernel& k, const A* args, bool keyed, int64_t key) {
+void dispatch_(Kernel& k, const A* args, bool keyed, int64_t key, int64_t spad) {
+  if (spad < 0) fail_("a dispatch with a negative .spad");
   int64_t packed[sizeof(A) / sizeof(int64_t) + 1] = {};
   if (args) std::memcpy(packed, args, sizeof(A));
   togsim_dispatch(Ops_::ctx(k), work_item_<F>, args ? packed : nullptr,
-                  args ? (int32_t)(sizeof(A) / sizeof(int64_t)) : 0, Ops_::key(k, keyed, key));
+                  args ? (int32_t)(sizeof(A) / sizeof(int64_t)) : 0, Ops_::key(k, keyed, key), spad);
 }
 
+// A dispatch's key and its `.spad`, the most bytes per lane its work-item holds in the spad at once. Neither has a
+// default: a dispatch that leaves one out does not compile.
+struct Key {
+  int64_t value;
+  constexpr Key(int64_t v) : value(v) {}
+};
+struct Spad {
+  int64_t bytes_per_lane;
+  constexpr Spad(int64_t b) : bytes_per_lane(b) {}
+};
+
+// A dispatch under the kernel's next key, 0, 1, ...: {.spad = N, .args = Args{...}}, or {.spad = N} with no args.
+template <class A>
+struct Counted {
+  Spad spad;
+  A args;
+};
+template <>
+struct Counted<void> {
+  Spad spad;
+};
+
 // A dispatch that names its own key (its program's key, under which its attributes are recorded):
-// {.key = key, .args = Args{...}}. A TOG with runtime attributes dispatches only so.
+// {.key = key, .spad = N, .args = Args{...}}. A TOG with runtime attributes dispatches only so.
 template <class A>
 struct Keyed {
-  int64_t key;
+  Key key;
+  Spad spad;
   A args;
 };
 template <>
 struct Keyed<void> {
-  int64_t key;
+  Key key;
+  Spad spad;
 };
-template <class T>
-inline constexpr bool keyed_ = false;
-template <class A>
-inline constexpr bool keyed_<Keyed<A>> = true;
 
-// Runs one work-item, F with no arguments, under the kernel's next key: 0, 1, ...
+// The bytes per lane of `bytes` spread over `lanes` lanes, rounded up.
+constexpr int64_t per_lane(int64_t bytes, int64_t lanes) { return (bytes + lanes - 1) / lanes; }
+
+// Runs one work-item, F with `d.args` (a struct of int64_t fields) or none, under the kernel's next key.
 template <auto F>
-void dispatch(Kernel& k) {
-  static_assert(std::is_void_v<args_of_<F>>, "dispatch<f>(k): f takes arguments");
-  dispatch_<F, int64_t>(k, nullptr, false, 0);
+void dispatch(Kernel& k, const Counted<args_of_<F>>& d) {
+  if constexpr (std::is_void_v<args_of_<F>>) {
+    dispatch_<F, int64_t>(k, nullptr, false, 0, d.spad.bytes_per_lane);
+  } else {
+    static_assert(int64_fields_<args_of_<F>>(), "a work-item's arguments are a struct of int64_t fields");
+    dispatch_<F, args_of_<F>>(k, &d.args, false, 0, d.spad.bytes_per_lane);
+  }
 }
 
-// Runs one work-item, F with `args` (a struct of int64_t fields), under the kernel's next key.
-template <auto F, class A>
-  requires(!keyed_<A>)
-void dispatch(Kernel& k, const A& args) {
-  static_assert(std::is_same_v<args_of_<F>, A>, "dispatch<f>(k, args): f takes this struct");
-  static_assert(int64_fields_<A>(), "a work-item's arguments are a struct of int64_t fields");
-  dispatch_<F, A>(k, &args, false, 0);
-}
-
-// Runs one work-item under `key`: dispatch<f>(k, {.key = key, .args = Args{...}}), or {.key = key} with no args.
+// Runs one work-item under `d.key`.
 template <auto F>
 void dispatch(Kernel& k, const Keyed<args_of_<F>>& d) {
   if constexpr (std::is_void_v<args_of_<F>>) {
-    dispatch_<F, int64_t>(k, nullptr, true, d.key);
+    dispatch_<F, int64_t>(k, nullptr, true, d.key.value, d.spad.bytes_per_lane);
   } else {
     static_assert(int64_fields_<args_of_<F>>(), "a work-item's arguments are a struct of int64_t fields");
-    dispatch_<F, args_of_<F>>(k, &d.args, true, d.key);
+    dispatch_<F, args_of_<F>>(k, &d.args, true, d.key.value, d.spad.bytes_per_lane);
   }
 }
 
 using EntryFn_ = void (*)(EmitCtx*, int64_t*, int32_t);
 EntryFn_ entry_ = nullptr;
 
-// A TOG's buffer list: ids from 0 below MAX_SPAD_BUFFERS, each once, no negative size.
+// A TOG's buffer list: ids from 0 below MAX_BUFFERS, each once.
 constexpr bool buffers_ok_(const Buf* bufs, std::size_t n) {
   for (std::size_t i = 0; i < n; ++i) {
-    if (bufs[i].id < 0 || bufs[i].id >= MAX_SPAD_BUFFERS) fail_("a spad buffer id outside 0..1023");
-    if (bufs[i].bytes < 0) fail_("a spad buffer with a negative size");
+    if (bufs[i].id < 0 || bufs[i].id >= MAX_BUFFERS) fail_("a buffer id outside 0..1023");
     for (std::size_t j = 0; j < i; ++j)
-      if (bufs[j].id == bufs[i].id) fail_("two spad buffers with one id");
+      if (bufs[j].id == bufs[i].id) fail_("two buffers with one id");
   }
   return true;
 }
@@ -584,15 +599,9 @@ constexpr bool attributes_ok_(const Attribute* attrs, std::size_t n) {
   return true;
 }
 
-inline bool register_(EntryFn_ entry, const Buf* bufs, std::size_t n, const Attribute* attrs, std::size_t m) {
+inline bool register_(EntryFn_ entry, const Attribute* attrs, std::size_t m) {
   if (entry_) fail_("two TOGs registered in one .so");
   entry_ = entry;
-  int32_t count = 0;
-  for (std::size_t i = 0; i < n; ++i) {
-    togsim_spad_buffer_bytes[bufs[i].id] = bufs[i].bytes;
-    if (bufs[i].id + 1 > count) count = (int32_t)bufs[i].id + 1;
-  }
-  togsim_spad_buffer_count = count;
   for (std::size_t i = 0; i < m; ++i) togsim_runtime_attribute_rank[attrs[i].id] = attrs[i].rank;
   togsim_runtime_attribute_count = (int32_t)m;
   return true;
@@ -609,7 +618,7 @@ template <void (*Entry)(Kernel&)>
 bool register_tog(std::initializer_list<Buf> bufs, std::initializer_list<Attribute> attrs = {}) {
   buffers_ok_(bufs.begin(), bufs.size());
   attributes_ok_(attrs.begin(), attrs.size());
-  return register_(run_free_entry_<Entry>, bufs.begin(), bufs.size(), attrs.begin(), attrs.size());
+  return register_(run_free_entry_<Entry>, attrs.begin(), attrs.size());
 }
 
 template <class T>
@@ -633,11 +642,11 @@ bool register_struct_() {
   static_assert(buffers_ok_(T::buffers.data(), T::buffers.size()), "the TOG struct's buffers");
   constexpr const auto& attrs = attributes_of_<T>();
   static_assert(attributes_ok_(attrs.data(), attrs.size()), "the TOG struct's attributes");
-  return register_(run_struct_entry_<T>, T::buffers.data(), T::buffers.size(), attrs.data(), attrs.size());
+  return register_(run_struct_entry_<T>, attrs.data(), attrs.size());
 }
 
-// Derive the TOG's struct from Tog<itself>: loading the .so registers its entry and fills the buffer table from
-// its buffers, and the attribute table from its optional `attributes`. One TOG per .so, in one .cpp: the header
+// Derive the TOG's struct from Tog<itself>: loading the .so registers its entry, checks its buffers' ids and fills
+// the attribute table from its optional `attributes`. One TOG per .so, in one .cpp: the header
 // defines the ABI's symbols.
 template <class T>
 struct Tog {

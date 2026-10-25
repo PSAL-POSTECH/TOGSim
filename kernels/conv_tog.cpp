@@ -35,10 +35,15 @@ struct Conv : Tog<Conv> {
 #endif
   static constexpr int64_t IC_PIECES = (TILE_IC + SA_WIDTH - 1) / SA_WIDTH;
   static constexpr int64_t W_PIECES = (TILE_W + SA_WIDTH - 1) / SA_WIDTH;
-  static constexpr Buf ACC{.id = 0, .bytes = f32(TILE_OC, TILE_H, TILE_W)},
-                       W_TILE{.id = 1, .bytes = f32(IC_PIECES, TILE_OC, SA_WIDTH)},
-                       X_TILE{.id = 2, .bytes = f32(TILE_H, W_PIECES, SA_WIDTH, TILE_IC)};
+#ifdef LANES
+  static constexpr int64_t N_LANES = LANES;
+#else
+  static constexpr int64_t N_LANES = 128;
+#endif
+  static constexpr Buf ACC{.id = 0}, W_TILE{.id = 1}, X_TILE{.id = 2};
   static constexpr std::array buffers{ACC, W_TILE, X_TILE};
+  static constexpr int64_t SPAD = per_lane(f32(TILE_OC, TILE_H, TILE_W) + f32(IC_PIECES, TILE_OC, SA_WIDTH) +
+                                           f32(TILE_H, W_PIECES, SA_WIDTH, TILE_IC), N_LANES);
   static constexpr Node ACC_INIT{.id = 0, .count = 2}, MATMUL{.id = 1, .count = 2};
   static constexpr int32_t AXIS_O_C = 0, AXIS_O_H = 1, AXIS_O_W = 2, AXIS_I_C = 3;
   static constexpr const char* CONV_NAMES = "I_C I_H I_W O_C O_H O_W K_H K_W S_H S_W D_H D_W P_T P_L P_B P_R";
@@ -59,10 +64,11 @@ struct Conv : Tog<Conv> {
     for (int64_t oc0 = 0; oc0 < O_C; oc0 += TILE_OC)
       for (int64_t oh0 = 0; oh0 < O_H; oh0 += TILE_H)
         for (int64_t ow0 = 0; ow0 < O_W; ow0 += TILE_W)
-          dispatch<&Conv::tile>(k, TileArgs{.oc0 = oc0, .oh0 = oh0, .ow0 = ow0, .I_C = I_C, .I_H = I_H, .I_W = I_W,
-                                            .O_C = O_C, .O_H = O_H, .O_W = O_W, .K_H = K_H, .K_W = K_W, .S_H = S_H,
-                                            .S_W = S_W, .D_H = D_H, .D_W = D_W, .P_T = P_T, .P_L = P_L, .P_B = P_B,
-                                            .P_R = P_R});
+          dispatch<&Conv::tile>(k, {.spad = SPAD,
+                                    .args = TileArgs{.oc0 = oc0, .oh0 = oh0, .ow0 = ow0, .I_C = I_C, .I_H = I_H,
+                                                     .I_W = I_W, .O_C = O_C, .O_H = O_H, .O_W = O_W, .K_H = K_H,
+                                                     .K_W = K_W, .S_H = S_H, .S_W = S_W, .D_H = D_H, .D_W = D_W,
+                                                     .P_T = P_T, .P_L = P_L, .P_B = P_B, .P_R = P_R}});
   }
 
   // Refuse a shape whose last output along `axis` reads past the padded input: its loads would leave the tensor.

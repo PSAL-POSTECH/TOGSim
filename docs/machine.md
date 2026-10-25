@@ -33,7 +33,7 @@ default, and all 7 configs.
 | How fast is the core clock? | `core_freq_mhz` | Totals are in cycles of this clock. DRAM and the interconnect tick at their own `dram_freq_mhz` and `icnt_freq_mhz`. |
 | How many systolic arrays, how wide? | `num_systolic_array_per_core` (default 1), `vpu_num_lanes` | Used by the array split: how many arrays a compute tile's rows can be spread over, and how many rows one array takes before the compute is split. |
 | Is the array split on? | `systolic_array_split`: `round_robin` (default) or `none`; `systolic_array_unit` (required with the split: `TPUV3_MXU`, `TPUV4_MXU`, `TPUV6E_MXU` on the shipped configs) | With `round_robin` a unit table is required and computes get shorter ([tutorial step 4](tutorial.md#4-two-kinds-of-compute-unit-rows-and-the-array-split)). |
-| How large is the scratchpad? | `vpu_spad_size_kb_per_lane` x `vpu_num_lanes`, or `core_spad_size_kb` alone (default 0: unlimited) | Limits the buffers alive on a core, and whether one or two work-items are in flight. |
+| How large is the scratchpad? | `vpu_spad_size_kb_per_lane` (none: unlimited) | Refuses a dispatch whose `.spad` is more, and decides whether one or two work-items are in flight. |
 | Which DRAM model? | `dram_type`: `ramulator2` with `ramulator_config_path`, or `simple` with `dram_latency`; `dram_channels` | Ramulator2 models the device its file describes. `simple` answers every request after a fixed latency, optionally under a bandwidth cap. |
 | Is there an L2 cache in front of DRAM? | `l2d_type`: `nocache` (default) or `datacache` with `l2d_config` | A TOG marks no address cacheable. The totals of the hello, tiles, gemm and async_barrier examples on tpuv6e are the same with either value. |
 | Which interconnect between cores and DRAM? | `icnt_type`: `simple` with `icnt_latency_cycles`, or `booksim2` with `booksim_config_path`; `icnt_injection_ports_per_core` (default 1) | The ports per core are how many DRAM requests a core can send per cycle. |
@@ -92,7 +92,6 @@ Before and after, for the knobs the examples turn (all on tpuv6e, one key change
 |---|---|---|---|---|
 | tiles (8 work-items) | `num_cores: 1` to `2` | 8301 | 4824 | Four work-items per core. |
 | tiles | `num_cores: 1` to `4` | 8301 | 3086 | Two work-items per core. |
-| tiles | `vpu_spad_size_kb_per_lane: 1024` (131072 KB) to `core_spad_size_kb: 48` alone | 8301 | 14879 | `max_dispatch=1`: a work-item needs 32768 bytes, more than half the spad, so only one is in flight. |
 | tiles | `dram_channels: 32` to `16` | 8301 | 8705 | The first two computes start as before, at 1012 and 1612; the third at 2779 instead of 2665. |
 | gemm (512 rows) | `num_systolic_array_per_core: 2` to `1` | 2719 | 3231 | `compute_cycle=600` instead of 344. |
 | gemm (128 rows) | `vpu_num_lanes: 128` to `64` | 3231 | 3103 | `compute_cycle=536` instead of 600. |

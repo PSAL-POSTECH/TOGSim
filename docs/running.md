@@ -130,8 +130,7 @@ build/bin/Simulator --config configs/tpuv6e.yml \
 
 | Tag | Meaning |
 |---|---|
-| `TILE_SCHEDULED` | A work-item was handed to a core: `spad_footprint` in bytes, and `max_dispatch`, how many work-items that core keeps in flight (1 or 2). |
-| `SPAD_HOLD`, `SPAD_HOLD_END` | A core took, and gave back, the `bytes` it holds for a kernel's [held buffers](tog-abi.md#data-that-is-already-on-the-chip). |
+| `TILE_SCHEDULED` | A work-item was handed to a core: `spad`, the bytes per lane its dispatch states, and `max_dispatch`, how many work-items that core keeps in flight (1 or 2). |
 | `INST_ISSUED`, `INST_FINISHED` | An instruction started, finished. On a `COMP` line `compute_cycle` is its cycles after any array split, and `tile=N` the work-item index. |
 | `DMA_LATENCY` | The DMA engine took a DMA and holds it `cycles` before its first request (`dma_load_latency_cycles`, `dma_store_latency_cycles`). |
 | `ASYNC_DMA_ISSUE` | An asynchronous load has sent all its requests. |
@@ -151,10 +150,9 @@ A run that ends with a message: look the message up in the
 | Symptom | Likely cause |
 |---|---|
 | The log shows only `[TOGSim] the TOG failed to load or simulate`, or the run ends with `Aborted` and no reason | The reason went to stderr. Add `2>&1`. |
-| The total is too small | A consumer called before its producer (look for the `holds ... bytes for the kernel` line), or null `strides` ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)). |
+| The total is too small | A consumer called before its producer, or null `strides` ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)). |
 | A unit's utilization is lower than expected, or a compute is not split | The unit table has no rows for that `tile_id`. Look for the `[warning]` line that says so. |
 | A compute takes fewer cycles than the cycle table says | The array split shortened it. `compute_cycle` in the trace is the value after the split. |
-| The run never ends | Work-items wait for spad that is never freed, in an order the loader does not see ([known limitations](#known-limitations)). Raise `core_spad_size_kb`. |
 | The second kernel of a session behaves like the first | Its body function is not `static`. |
 | A changed config key has no effect | Misspelled keys are ignored. Compare with the echo at the top of the log. |
 | A DMA goes to a wrong address | `offset` is in elements, not bytes; an `arg_id` past `tog_tensors.txt` is placed at address 0, with a `[warning]` line. Read `dram=` on its trace line. |
@@ -165,15 +163,9 @@ A run that ends with a message: look the message up in the
 
 Behaviour of the simulator that a user runs into. Each was reproduced with this tree.
 
-- **A run can still stop for want of spad.** A work-item that needs more of the spad at once
-  than a core has is [refused](tog-abi.md#buffers-and-the-scratchpad) while its TOG is loaded (the
-  hello TOG and the tiles example in 16 KB). A stall that depends on the order of issue, or on
-  what another work-item holds, is not seen then. If no other work-item is queued for that core,
-  TOGSim stops with `simulation wedged at cycle N: ...` and exit 1: one work-item that loads an
-  8 KB buffer twice before its one reader, in a spad of 8 KB. If more work-items are queued, the
-  run never ends: three work-items whose 8 KB loads of later steps are taken ahead of a 56 KB
-  load, in 72 KB, and a work-item of 64 KB with two of 24 KB dispatched beside it, in 64 KB, were
-  each still running when stopped after 20 seconds.
+- **The spad is what a dispatch states.** TOGSim checks `.spad` against a lane's spad and admits
+  work-items by it, and nothing else: a `.spad` smaller than what the work-item really holds is
+  not seen ([the rule](tog-abi.md#buffers-and-the-scratchpad)).
 - **An unreadable `--models_list` file ends in exit 136**, not in a clean refusal: the log says
   `[TOGSim] Failed to open trace file: <path>` and the process dies printing the statistics of a
   run of zero cycles.
@@ -181,7 +173,8 @@ Behaviour of the simulator that a user runs into. Each was reproduced with this 
   single DRAM request ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)).
 - **A non-static body function in a session** makes a later kernel run the first kernel's body. A
   session whose second kernel has two computes in its body ran one compute for it.
-- **The spad between kernels is not modelled** ([held buffers](tog-abi.md#data-that-is-already-on-the-chip)).
+- **The spad between kernels is not modelled**: data a kernel leaves on the chip for the next one
+  counts in neither's `.spad` unless the emitter states it there.
 - **`--help` describes `--models_list` as `Path for the trace file (.trace)`**, and a failed open
   says `Failed to open trace file`. The file is the command stream.
 - **The log calls a work-item a tile** (`TILE_SCHEDULED`, `tile=N`), and the type of a body is

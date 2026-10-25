@@ -1,16 +1,17 @@
 // A GEMM-like tile: C = A x B over K reduction steps. Each step loads a 64x64 tile of A and of B and runs MAC in
 // place on ACC; EPILOGUE then turns ACC into OUT, which is stored. MAC is tile 0 of the cycle table, EPILOGUE 1.
+// Its dispatch states its spad: the four buffers, 4 x 16384 bytes over tpuv6e's 128 lanes.
 #include "togsim.hpp"
 using namespace togsim;
 
 struct Gemm : Tog<Gemm> {
   static constexpr int64_t T = 64, K = 2;
-  static constexpr Buf A{.id = 1, .bytes = f32(T, T)}, B{.id = 2, .bytes = f32(T, T)}, ACC{.id = 3, .bytes = f32(T, T)},
-                       OUT{.id = 4, .bytes = f32(T, T)};
+  static constexpr Buf A{.id = 1}, B{.id = 2}, ACC{.id = 3}, OUT{.id = 4};
   static constexpr std::array buffers{A, B, ACC, OUT};
+  static constexpr int64_t SPAD = per_lane(4 * f32(T, T), 128);
   static constexpr Node MAC{.id = 0, .count = 2}, EPILOGUE{.id = 1, .count = 2};
 
-  void entry(Kernel& k) const { dispatch<&Gemm::body>(k); }
+  void entry(Kernel& k) const { dispatch<&Gemm::body>(k, {.spad = SPAD}); }
 
   // A is T x (K*T) and B is (K*T) x T, so step k's tiles start at elements k*T and k*T*T. Reading and writing ACC
   // chains the MACs one after another.

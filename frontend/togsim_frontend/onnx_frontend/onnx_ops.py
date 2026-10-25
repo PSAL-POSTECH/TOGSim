@@ -11,7 +11,8 @@ POINTWISE = "pointwise"
 @dataclass(frozen=True)
 class KernelRef:
     """A kernel, kernels/<stem>_tog.cpp: `size_names` are its shape arguments in the order it reads them,
-    `tile_names` and `hw_names` the -D macros it is compiled with."""
+    `tile_names` and `hw_names` the -D macros it is compiled with: LANES spreads its dispatches' .spad over the
+    lanes."""
     stem: str
     tile_class: str
     size_names: tuple = ()
@@ -20,35 +21,35 @@ class KernelRef:
 
 #: op_type -> its kernel.
 OPS: dict[str, list[KernelRef]] = {
-    "Gemm":   [KernelRef("gemm", SYSTOLIC, ("M", "K", "N"), ("TM", "TN", "TK"))],
-    "MatMul": [KernelRef("gemm", SYSTOLIC, ("M", "K", "N"), ("TM", "TN", "TK"))],
+    "Gemm":   [KernelRef("gemm", SYSTOLIC, ("M", "K", "N"), ("TM", "TN", "TK"), ("LANES",))],
+    "MatMul": [KernelRef("gemm", SYSTOLIC, ("M", "K", "N"), ("TM", "TN", "TK"), ("LANES",))],
 
     "Conv": [KernelRef("conv", SYSTOLIC,
                        ("I_C", "I_H", "I_W", "O_C", "O_H", "O_W", "K_H", "K_W",
                         "S_H", "S_W", "D_H", "D_W", "P_T", "P_L", "P_B", "P_R"),
-                       ("TILE_M", "TILE_N", "TILE_K", "TILE_I_H"), ("SA",))],
+                       ("TILE_M", "TILE_N", "TILE_K", "TILE_I_H"), ("SA", "LANES"))],
 
     "Attention": [KernelRef("attention", SYSTOLIC, ("HEADS", "KV_HEADS", "SEQ"),
-                            ("Q_LEN", "KV_BLOCK", "DHEAD"))],
+                            ("Q_LEN", "KV_BLOCK", "DHEAD"), ("LANES",))],
     "MultiHeadAttention": [KernelRef("attention", SYSTOLIC, ("HEADS", "KV_HEADS", "SEQ"),
-                                     ("Q_LEN", "KV_BLOCK", "DHEAD"))],
+                                     ("Q_LEN", "KV_BLOCK", "DHEAD"), ("LANES",))],
 
-    "Softmax": [KernelRef("softmax", REDUCING, ("M", "N"), ("TM", "TN"))],
+    "Softmax": [KernelRef("softmax", REDUCING, ("M", "N"), ("TM", "TN"), ("LANES",))],
 
-    "LayerNormalization": [KernelRef("layernorm", REDUCING, ("M", "N"), ("TM", "TN", "TM_STATS"))],
+    "LayerNormalization": [KernelRef("layernorm", REDUCING, ("M", "N"), ("TM", "TN", "TM_STATS"), ("LANES",))],
 
-    "EmbedLayerNormalization": [KernelRef("embed_layernorm", REDUCING, ("SEQ", "DIM"), ("TSEQ", "TDIM"))],
+    "EmbedLayerNormalization": [KernelRef("embed_layernorm", REDUCING, ("SEQ", "DIM"), ("TSEQ", "TDIM"), ("LANES",))],
 
-    "GlobalAveragePool": [KernelRef("global_avgpool", REDUCING, ("C", "HW"), ("TC", "THW", "TC_SCALE"))],
+    "GlobalAveragePool": [KernelRef("global_avgpool", REDUCING, ("C", "HW"), ("TC", "THW", "TC_SCALE"), ("LANES",))],
 
-    "Relu":  [KernelRef("bias_act", POINTWISE, ("M", "N"), ("TM", "TN"))],
-    "Add":   [KernelRef("bias_act", POINTWISE, ("M", "N"), ("TM", "TN"))],
-    "Gelu":  [KernelRef("bias_gelu", POINTWISE, ("M", "N"), ("TM", "TN"))],
+    "Relu":  [KernelRef("bias_act", POINTWISE, ("M", "N"), ("TM", "TN"), ("LANES",))],
+    "Add":   [KernelRef("bias_act", POINTWISE, ("M", "N"), ("TM", "TN"), ("LANES",))],
+    "Gelu":  [KernelRef("bias_gelu", POINTWISE, ("M", "N"), ("TM", "TN"), ("LANES",))],
 
-    "MaxPool": [KernelRef("maxpool", POINTWISE, ("ROWS", "COLS"), ("TROW", "TCOL"))],
-    "AveragePool": [KernelRef("adaptive_avgpool", POINTWISE, ("ROWS", "COLS"), ("TROW", "TCOL"))],
+    "MaxPool": [KernelRef("maxpool", POINTWISE, ("ROWS", "COLS"), ("TROW", "TCOL"), ("LANES",))],
+    "AveragePool": [KernelRef("adaptive_avgpool", POINTWISE, ("ROWS", "COLS"), ("TROW", "TCOL"), ("LANES",))],
 
-    "Concat":  [KernelRef("concat", POINTWISE, ("A_ROWS", "B_ROWS", "D"), ("TROW", "TD"))],
+    "Concat":  [KernelRef("concat", POINTWISE, ("A_ROWS", "B_ROWS", "D"), ("TROW", "TD"), ("LANES",))],
     "Flatten": [KernelRef("flatten", POINTWISE, (), ())],
 }
 

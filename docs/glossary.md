@@ -11,7 +11,7 @@
 | data tile | The block of a tensor that one DMA moves, given by `offset`, `dims` and `strides`. |
 | tensor argument | An array of the kernel that lives in DRAM. A TOG names it by `Desc.ptr`; `tog_tensors.txt` gives its size. |
 | DMA | A transfer between DRAM and a core's scratchpad: a load (`MOVIN` in the log) or a store (`MOVOUT`). |
-| scratchpad (spad), buffer | The memory of a core that DMAs fill and drain. A TOG names its regions, the buffers, by small integer ids. |
+| scratchpad (spad), buffer | The memory of a core that DMAs fill and drain, `vpu_spad_size_kb_per_lane` on each lane. A dispatch states what its work-item holds of it (`.spad`, bytes per lane); a buffer is a small integer id that orders the calls naming it, with no size. |
 | semaphore, wait, barrier | Async loads signal a semaphore; a `wait`, a barrier (`MEMORY_BAR`) in the log, waits for their data. |
 | cycle table | `tile_id` to cycles: what each compute tile costs. You supply it. |
 | unit table | What each hardware unit (the systolic array, the vector unit, ...) took in during one run of each compute tile. You supply it. |

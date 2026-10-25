@@ -171,6 +171,8 @@ def test_a_node_whose_tile_ids_the_tables_do_not_cover_exits_3(tmp_path):
      "vpu_spad_size_kb_per_lane is -1, below 0"),
     ("vpu_num_lanes: 8\nisa: [v, zvl256b]\nvpu_spad_size_kb_per_lane: 32\ncore_spad_size_kb: 384\n",
      "core_spad_size_kb: 384 is not vpu_spad_size_kb_per_lane x vpu_num_lanes = 32 x 8 = 256"),
+    ("vpu_num_lanes: 8\nisa: [v, zvl256b]\ncore_spad_size_kb: 256\n",
+     "core_spad_size_kb: a work-item states its spad per lane"),
     ("vpu_num_lanes: 8\nisa: [v, zvl256b]\n", "needs systolic_array_unit"),
 ])
 @pytest.mark.parametrize("module", [FRONTEND, ACS])

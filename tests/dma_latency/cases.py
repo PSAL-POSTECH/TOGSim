@@ -21,8 +21,10 @@ def keys(load=None, store=None):
 
 
 def work_item(t, body, **machine):
-    """One work-item of work_item_tog.cpp, the calls `body` over a 16 KB load and a 16 KB result, compute 200."""
-    tog = t.tog(WORK_ITEM, (f"BODY={body}", "SIZES=0,16384,16384", "ITEMS=1"), tensors=(256 * MIB, 256 * MIB))
+    """One work-item of work_item_tog.cpp, the calls `body` over a 16 KB load and a 16 KB result (256 bytes on each
+    of tpuv6e's 128 lanes), compute 200."""
+    tog = t.tog(WORK_ITEM, (f"BODY={body}", "SIZES=0,16384,16384", "ITEMS=1", "SPAD=256"),
+                tensors=(256 * MIB, 256 * MIB))
     return t.simulate(tog, t.machine(systolic_array_split="none", **machine), cycles=[200]).expect_ok()
 
 

@@ -22,11 +22,11 @@ kernel       one TOG; its entry runs once
 
 | Resource of one core | Limit |
 |---|---|
-| work-items in flight | two, or one when a work-item's buffers need more than half the scratchpad |
+| work-items in flight | two, or one when twice the spad its dispatch states (`.spad`, bytes per lane) is more than a lane's scratchpad; a work-item enters only while its spad fits beside those in flight |
 | instructions issued | one per cycle |
 | DMA engine | one DMA at a time, loads ahead of stores; it sends `icnt_injection_ports_per_core` DRAM requests per cycle (32 on tpuv6e). A load's wait after its data (`dma_load_ready_cycles`) and a store's after its requests (`dma_store_ready_cycles`) do not occupy it. |
 | compute | one at a time, for the cycles the cycle table gives it |
-| scratchpad (spad) | `core_spad_size_kb`; a load waits until its buffer fits |
+| scratchpad (spad) | `vpu_spad_size_kb_per_lane`; a dispatch whose `.spad` is more is refused, and no instruction waits for spad |
 
 All cores share one DRAM and one interconnect.
 
@@ -55,7 +55,7 @@ Six terms carry the rest of these pages; the [glossary](glossary.md#glossary) ha
 | TOG | A shared object (`tog.so`) whose calls are one kernel's DMAs, computes and barriers. |
 | work-item | One `dispatch`: the unit of parallelism. The log calls it a tile: `TILE_SCHEDULED`, `tile=N`. |
 | DMA, data tile | A DMA is a transfer between DRAM and a core's scratchpad: a load (`MOVIN` in the log) or a store (`MOVOUT`). The block of a tensor it moves is a data tile. |
-| buffer | A region of the scratchpad, named by a small integer id. Buffers are what DMAs fill and drain, and what orders instructions. |
+| buffer | A small integer id that DMAs fill and drain and computes read and write: what orders instructions. It has no size; the dispatch states the work-item's spad. |
 | compute tile, `tile_id` | A kind of compute: a row of the cycle table. Many `compute` calls can name the same one. |
 | cycle table, unit table | Per `tile_id`: how many cycles the compute takes, and what each hardware unit did during it. You supply both. |
 
@@ -68,13 +68,14 @@ Six terms carry the rest of these pages; the [glossary](glossary.md#glossary) ha
 using namespace togsim;
 
 struct Hello : Tog<Hello> {
-  static constexpr Buf IN{.id = 1, .bytes = f32(64, 64)}, OUT{.id = 2, .bytes = f32(64, 64)};
+  static constexpr Buf IN{.id = 1}, OUT{.id = 2};
   static constexpr std::array buffers{IN, OUT};
+  static constexpr int64_t SPAD = per_lane(2 * f32(64, 64), 128);
   static constexpr Node STEP{.id = 0, .count = 1};
   static constexpr Desc SRC{.ptr = 0, .type = f32, .offset = 0, .dims = {64, 64}, .strides = {64, 1}};
   static constexpr Desc DST{.ptr = 1, .type = f32, .offset = 0, .dims = {64, 64}, .strides = {64, 1}};
 
-  void entry(Kernel& k) const { dispatch<&Hello::body>(k); }
+  void entry(Kernel& k) const { dispatch<&Hello::body>(k, {.spad = SPAD}); }
 
   void body(Item& w) const {
     load(w, {.src = SRC, .dst = IN});
@@ -86,12 +87,14 @@ struct Hello : Tog<Hello> {
 
 Read it from the top down:
 
-- **`buffers`** lists every spad buffer a call names: 1 and 2, each 64 x 64 elements of 4 bytes.
+- **`buffers`** lists every buffer id a call names: 1 and 2.
+- **`SPAD`** is what the dispatch states as `.spad`: the most bytes per lane the work-item holds
+  in the scratchpad at once, here IN and OUT, 2 x 16384 bytes over tpuv6e's 128 lanes, 256.
 - **`STEP`** is compute node 0 of 1. A compute takes row `id + count * variant` of the cycle
   table; with the default variant 0, row 0.
 - **`SRC`, `DST`** are DMA descriptors: tensor argument `ptr` (its line of `tog_tensors.txt`),
   64 x 64 `f32` elements from element 0, rows 64 apart: one contiguous block.
-- **`entry`** runs once and dispatches the one work-item, **`body`**: three instructions, a load
+- **`entry`** runs once and dispatches the one work-item, **`body`**, with its `.spad`: three instructions, a load
   into buffer 1, a compute from 1 into 2, a store of 2.
 
 [The TOGSim API](tog-api.md#togsim-api-v100) lists every call and field.
@@ -118,7 +121,7 @@ The script echoes each command after `+`. Its first run is the Quick start's run
 == hello
 + g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/hello/hello_tog.cpp -o examples/hello/tog.so
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv --log_level trace
-[trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [1][Core 0][TILE_SCHEDULED ] spad=256 max_dispatch=2
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false ...
 [trace] [1011][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
 [trace] [1012][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
@@ -132,7 +135,7 @@ Each trace line is `[cycle][Core c][TAG][INST_ID=n] OPCODE (fields)`:
 
 | Cycle | Line | What happened |
 |---|---|---|
-| 1 | `TILE_SCHEDULED spad_footprint=32768` | The work-item was handed to core 0. Its footprint is the two buffers, 2 x 16384 bytes. `max_dispatch=2`: this core keeps two work-items in flight. |
+| 1 | `TILE_SCHEDULED spad=256` | The work-item was handed to core 0, with the 256 bytes per lane its dispatch states. `max_dispatch=2`: twice that fits a lane's 1024 KB, so this core keeps two work-items in flight. |
 | 2 | `INST_ISSUED` `MOVIN` | The load starts. The DMA engine holds it 27 cycles (`dma_load_latency_cycles: 27` on tpuv6e), then sends 16384 bytes as 512 DRAM requests of 32 bytes. |
 | 1011 | `INST_FINISHED` `MOVIN` | The load completes 842 cycles after its last response arrived (`dma_load_ready_cycles: 842` on tpuv6e). The DMA engine is free during that wait. |
 | 1012 | `INST_ISSUED` `COMP` `compute_cycle=600` | The compute starts, with the 600 cycles of the cycle table. |
@@ -237,7 +240,7 @@ per cell of an M x N grid, in ordinary C++ loops:
   void entry(Kernel& k) const {
     const auto [M, N] = shape<2>(k, {.kernel = "tiles", .names = "M N", .example = {1, 1}});
     for (int64_t m = 0; m < M; m++)
-      for (int64_t n = 0; n < N; n++) dispatch<&Tiles::body>(k, Cell{.m = m, .n = n, .N = N});
+      for (int64_t n = 0; n < N; n++) dispatch<&Tiles::body>(k, {.spad = SPAD, .args = Cell{.m = m, .n = n, .N = N}});
   }
 ```
 
@@ -246,7 +249,7 @@ Three things are new:
 - **Shape arguments.** `shape<2>` reads the two integers of `tog_shape.txt`, a file beside
   `tog.so`. Here it contains `2 4`, so the kernel dispatches eight work-items. The same `tog.so`
   serves another grid when the file changes. Without the file the shape is `.example`.
-- **Arguments.** `dispatch` copies the `Cell` (`int64_t` fields) for the body: the only way a body
+- **Arguments.** `dispatch` copies the `Cell` (`int64_t` fields, its `.args`) for the body: the only way a body
   knows which work-item it is, here to find its data tile's offset. An offset or a trip count that
   depends on the kernel's data, not on its grid, is not an argument: the functional run records it
   as a [runtime attribute](tog-api.md#runtime-attributes), which the body reads.
@@ -272,10 +275,10 @@ one key changed. The first three:
 The run with `num_cores: 2`, where `tile=N` is the work-item's index in dispatch order:
 
 ```text
-[trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [1][Core 0][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [2][Core 1][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
-[trace] [2][Core 1][TILE_SCHEDULED ] spad_footprint=32768 max_dispatch=2
+[trace] [1][Core 0][TILE_SCHEDULED ] spad=256 max_dispatch=2
+[trace] [1][Core 0][TILE_SCHEDULED ] spad=256 max_dispatch=2
+[trace] [2][Core 1][TILE_SCHEDULED ] spad=256 max_dispatch=2
+[trace] [2][Core 1][TILE_SCHEDULED ] spad=256 max_dispatch=2
 [trace] [1009][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1018][Core 1][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=1)
 [trace] [1609][Core 0][INST_ISSUED    ][INST_ID=7] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=2)
@@ -293,7 +296,7 @@ Two things to take from these runs:
   `tile=` 0, 1, 2, 4, 5, 6, 7, 3. A TOG can order instructions inside a work-item, with buffers,
   and nothing across work-items.
 
-The script's last two runs shrink the scratchpad and halve the DRAM channels;
+The script's last run halves the DRAM channels;
 [Machine configuration](machine.md#changing-the-machine) reads them.
 
 ## 4. Two kinds of compute, unit rows and the array split
@@ -442,7 +445,7 @@ simulated. For example:
 exit 1
 ```
 
-The script prints 18 refusals; the [refusal table](tog-abi.md#what-gets-a-run-refused) lists each with its
+The script prints 17 refusals; the [refusal table](tog-abi.md#what-gets-a-run-refused) lists each with its
 cause and its fix.
 
 **Said, but not refused.** Two mistakes still run to the end with exit 0, and TOGSim names them in
@@ -460,20 +463,15 @@ takes 2437 cycles.
 ```
 
 **Valid, with another meaning.** `CONSUMER_FIRST` calls the store before the compute that writes
-its buffer, so the store drains [data already on the chip](tog-abi.md#data-that-is-already-on-the-chip).
-It is issued at cycle 3, an `[info]` line names the buffer, and a 16 KB spad refuses the TOG.
+its buffer: the store follows nothing, is issued at cycle 3, and nothing names it.
 
 ```text
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
-[info] [TOGSim] TOG examples/mistakes/CONSUMER_FIRST.so: core 0 holds 16384 bytes for the kernel: buffers 2, which its work-items read without having written them
-[trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false ...
-[trace] [3][Core 0][INST_ISSUED    ][INST_ID=1] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false ...
+[trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
+[trace] [3][Core 0][INST_ISSUED    ][INST_ID=1] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
 [trace] [1016][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [info] Core [0] : DMA active_cycles: 32, DMA idle_cycles: 1585, DRAM BW: 35.000 GB/s (1024 responses)
 [info] Total execution cycles: 1617
-+ build/bin/Simulator --config examples/mistakes/spad_16kb.gen.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
-[error] [TOGSim] TOG examples/mistakes/CONSUMER_FIRST.so: work-item 0 (key 0) needs 16384 bytes in the spad at once beside the 16384 bytes core 0 holds for the kernel (buffers 2, read without having been written), and a core's spad holds 16384 (core_spad_size_kb: 16)
-exit 1
 ```
 
 So when you bring up a new TOG, read its log once at `--log_level trace`: check that it has no

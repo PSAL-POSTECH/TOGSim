@@ -144,9 +144,6 @@ per TOG, while the TOG is loaded, or per config key, and the run exits 0. They a
 
 `examples/run.sh mistakes` shows the first two.
 
-An `[info]` line `[TOGSim] TOG <so>: core <c> holds <H> bytes for the kernel: buffers <ids>, ...`
-names the [held buffers](tog-abi.md#data-that-is-already-on-the-chip) of each core.
-
 ## Periodic and final statistics
 
 | Line | When | Meaning |
@@ -182,13 +179,12 @@ Some lines are spelled differently in the two places they appear: the final
 ## Trace lines
 
 `--log_level trace` adds one line per event, `[cycle][Core c][TAG][INST_ID=n] OPCODE (fields)`.
-`TILE_SCHEDULED`, `SPAD_HOLD`, `SPAD_HOLD_END`, `REQ_TO_MEM`, `REQ_TO_DRAM` and `DRAM_WRITE_ACK` lines
+`TILE_SCHEDULED`, `REQ_TO_MEM`, `REQ_TO_DRAM` and `DRAM_WRITE_ACK` lines
 have no `INST_ID`.
 
 | Tag | Printed when | Fields worth reading |
 |---|---|---|
-| `TILE_SCHEDULED` | A work-item is handed to a core. | `spad_footprint` in bytes; `max_dispatch`, the work-items that core keeps in flight (1 or 2). |
-| `SPAD_HOLD`, `SPAD_HOLD_END` | A core takes, and gives back, the bytes it holds for a kernel. | `bytes`. |
+| `TILE_SCHEDULED` | A work-item is handed to a core. | `spad`, the bytes per lane its dispatch states; `max_dispatch`, the work-items that core keeps in flight (1 or 2). |
 | `INST_ISSUED` | An instruction starts. | For a DMA: `dram` (its address), `size`, `stride`, `elem_bits`, `async`, `indirect`. For `COMP`: `compute_cycle` (after any array split), `tile` (the work-item index, not the `tile_id`). |
 | `INST_FINISHED` | An instruction is done. | |
 | `ASYNC_DMA_ISSUE` | An asynchronous load has sent all its requests. | |
@@ -219,7 +215,7 @@ are `MOVIN` (load), `MOVOUT` (store), `COMP` and `MEMORY_BAR`.
 | Status | When |
 |---|---|
 | 0 | The simulation finished (also `--help`). |
-| 1 | A refused TOG (another ABI, no spad buffer sizes, a broken semaphore contract, a `tile_id` the cycle table does not hold, a compute tile whose unit table rows exceed what a unit takes in its cycles, a work-item that needs more of the spad at once than a core has), no cycle table or one that cannot be opened, a failed check, a rejected unit table, a command-line error, no `--config`, a config file that cannot be opened or is not YAML, neither `--tog_so` nor `--models_list`, a `LAUNCH_KERNEL` that fails, a simulation that is stuck for want of spad in a way the loader did not see (`[Simulator] simulation wedged at cycle N: ...`). |
+| 1 | A refused TOG (another ABI, a broken semaphore contract, a `tile_id` the cycle table does not hold, a compute tile whose unit table rows exceed what a unit takes in its cycles, a dispatch whose `.spad` is negative or more than a lane's spad), no cycle table or one that cannot be opened, a failed check, a rejected unit table, a command-line error, no `--config`, a config file that cannot be opened or is not YAML, neither `--tog_so` nor `--models_list`, a `LAUNCH_KERNEL` that fails, a simulation that is stuck (`[Simulator] simulation wedged at cycle N: ...`). |
 | 134 | An exception nothing catches ends in `abort`: a config without a required key or with a value TOGSim does not implement, a BookSim2 config that cannot be opened. The reason is on stderr, as `what():  <reason>`. |
 | 136 | `--models_list` names a file that cannot be opened: the log says `[TOGSim] Failed to open trace file: <path>` and the process dies while printing the statistics of a run of zero cycles. |
 | 255 | `ramulator_config_path` names a file that does not exist; Ramulator2 prints `Config file ... does not exist!` on stderr. |

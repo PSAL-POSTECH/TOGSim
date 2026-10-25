@@ -285,11 +285,11 @@ def test_a_node_its_kernel_cannot_run_at_its_shape_is_listed_with_the_reason_and
     assert report["nodes_run"] == 0 and report["total_cycles"] == 0
 
 
-def spad_alone(directory, kb):
-    """The 8x8 config with a spad of `kb` stated by core_spad_size_kb alone."""
+def spad_per_lane(directory, kb):
+    """The 8x8 config with a lane's spad of `kb` KB (vpu_spad_size_kb_per_lane) and no core_spad_size_kb."""
     config = yaml.safe_load(CONFIG.read_text())
-    del config["vpu_spad_size_kb_per_lane"]
-    config["core_spad_size_kb"] = kb
+    config["vpu_spad_size_kb_per_lane"] = kb
+    config.pop("core_spad_size_kb", None)
     config["ramulator_config_path"] = os.path.normpath(CONFIG.parent / config["ramulator_config_path"])
     directory.mkdir(parents=True)
     (directory / CONFIG.name).write_text(yaml.safe_dump(config))
@@ -303,30 +303,19 @@ def togsim_runs(tog_dir, config):
                           capture_output=True).returncode == 0
 
 
-@pytest.mark.parametrize("op,shapes,attributes", [
-    ("Conv", [[1, 64, 16, 32], [256, 64, 3, 3]], dict(pads=[1, 1, 1, 1])),
-    ("Gemm", [[64, 64], [64, 256]], {}),
+@pytest.mark.parametrize("op,shapes,attributes,kb", [
+    ("Conv", [[1, 64, 16, 32], [256, 64, 3, 3]], dict(pads=[1, 1, 1, 1]), 48),
+    ("Gemm", [[64, 64], [64, 256]], {}, 13),
 ])
-def test_the_frontend_refuses_a_conv_or_gemm_on_the_spad_togsim_refuses_its_tog_on_and_no_larger(op, shapes,
-                                                                                                attributes, tmp_path):
-    """Of the largest tile, 384 and 104 KB: on a spad that size TOGSim replays it and the frontend lays it out, on
-    one KB less TOGSim refuses it and the frontend refuses the node."""
+def test_togsim_runs_a_conv_or_gemm_on_the_lane_its_dispatch_states_and_refuses_it_on_one_kb_less(
+        op, shapes, attributes, kb, tmp_path):
+    """Of the largest tile, 384 and 104 KB over the 8x8 config's 8 lanes: 48 and 13 KB a lane. The frontend lays the
+    node out whatever the spad; TOGSim replays it on that lane and refuses it on one KB less."""
     inputs = {f"in{i}": shape for i, shape in enumerate(shapes)}
     node = helper.make_node(op, list(inputs), ["out"], name=op.lower(), **attributes)
-    hw = read_hardware(str(CONFIG))
-    tog_dir = frontend.prepare_node(node, OPS[op][0], inputs, dataclasses.replace(hw, spad_bytes=0),
-                                    str(tmp_path / "unbounded"))
-    need = sum(emit.spad_buffer_bytes(f"{tog_dir}/tog.so"))
-    assert need == {"Conv": 384, "Gemm": 104}[op] * 1024
-    for kb, fits in ((need // 1024, True), (need // 1024 - 1, False)):
-        config = spad_alone(tmp_path / f"{kb}kb", kb)
-        assert togsim_runs(tog_dir, config) == fits
-        try:
-            frontend.prepare_node(node, OPS[op][0], inputs, read_hardware(str(config)), str(tmp_path / f"{kb}kb"))
-            refused = False
-        except ValueError as exc:
-            refused = f"{need} bytes, and a core's spad is {kb * 1024}: TOGSim refuses the TOG" in str(exc)
-        assert refused == (not fits)
+    tog_dir = frontend.prepare_node(node, OPS[op][0], inputs, read_hardware(str(CONFIG)), str(tmp_path / "tog"))
+    for lane, fits in ((kb, True), (kb - 1, False)):
+        assert togsim_runs(tog_dir, spad_per_lane(tmp_path / f"{lane}kb", lane)) == fits
 
 
 def test_a_fully_mapped_graph_exits_zero_and_refuses_nothing(tmp_path, capsys):

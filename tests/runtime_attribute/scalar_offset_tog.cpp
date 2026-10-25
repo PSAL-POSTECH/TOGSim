@@ -6,8 +6,9 @@ using namespace togsim;
 
 struct ScalarOffset : Tog<ScalarOffset> {
   static constexpr int64_t T = 16;
-  static constexpr Buf IN{.id = 1, .bytes = f32(T, T)}, OUT{.id = 2, .bytes = f32(T, T)};
+  static constexpr Buf IN{.id = 1}, OUT{.id = 2};
   static constexpr std::array buffers{IN, OUT};
+  static constexpr int64_t SPAD = per_lane(f32(T, T) + f32(T, T), 128);
   static constexpr Attribute OFF{.id = 0, .rank = 0};
 #if !defined(NO_ATTRIBUTES)
   static constexpr std::array attributes{OFF};
@@ -22,9 +23,9 @@ struct ScalarOffset : Tog<ScalarOffset> {
   void entry(Kernel& k) const {
     for (int64_t i = 0; i < 2; i++) {
 #if defined(COUNTED)
-      dispatch<&ScalarOffset::tile>(k, At{.i = i});
+      dispatch<&ScalarOffset::tile>(k, {.spad = SPAD, .args = At{.i = i}});
 #else
-      dispatch<&ScalarOffset::tile>(k, {.key = KEYS[i], .args = At{.i = i}});
+      dispatch<&ScalarOffset::tile>(k, {.key = KEYS[i], .spad = SPAD, .args = At{.i = i}});
 #endif
     }
   }

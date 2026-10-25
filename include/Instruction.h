@@ -134,32 +134,6 @@ class Instruction : public std::enable_shared_from_this<Instruction> {
     return _wait_keys;
   }
   uint64_t get_global_inst_id() const { return _global_inst_id; }
-  // The id the next instruction takes, and the way to hand ids back: a pass that builds instructions only to
-  // measure them (togsim_trace_bridge.cc, refuse_overflow) leaves the run the ids it would have had.
-  static uint64_t next_global_inst_id() { return _next_global_inst_id; }
-  static void rewind_global_inst_id(uint64_t id) { _next_global_inst_id = id; }
-
-  // A load fills buffer version `_sram_alloc_id` (-1: none); every reader names the versions it reads in
-  // `_sram_release_allocs`, and the last of them to be issued frees a version.
-  void set_sram_alloc(int64_t id) { _sram_alloc_id = id; }
-  int64_t get_sram_alloc() const { return _sram_alloc_id; }
-  // Keep the list ascending by version id. The Core frees each version regardless
-  // of order, but the invariant lets a builder that tags versions as they close be
-  // byte-comparable with one that walks the version map at the end.
-  void add_sram_release(int64_t id) {
-    auto& v = _sram_release_allocs;
-    v.insert(std::upper_bound(v.begin(), v.end(), id), id);
-  }
-  const std::vector<int64_t>& get_sram_release() const { return _sram_release_allocs; }
-  // bytes this instruction's buffer occupies in the spad. A DMA derives it from
-  // the tile it moves; a compute output gets it set explicitly by the bridge (the
-  // buffer's size is known from the DMA records that touch the same buffer).
-  void set_sram_footprint(size_t b) { _sram_footprint_override = b; }
-  size_t sram_footprint() const {
-    return _sram_footprint_override ? _sram_footprint_override
-                                    : _tile_numel * (_elem_bits / 8);
-  }
-
   cycle_type finish_cycle = 0;
   bool held_for_core = false;   // counted once in Core's compute-hold statistic
   uint32_t array_split = 1;     // N_eff: the arrays systolic_array_split spread it over
@@ -205,10 +179,6 @@ class Instruction : public std::enable_shared_from_this<Instruction> {
   bool _is_async_dma=false;
   std::vector<int64_t> _element_offsets;   // empty = dense (see set_element_offsets)
   std::shared_ptr<const TensorTiling> _tiling;   // null = row-major (see set_tensor_tiling)
-  // SRAM-capacity model (see the setters above).
-  int64_t _sram_alloc_id = -1;
-  std::vector<int64_t> _sram_release_allocs;
-  size_t _sram_footprint_override = 0;
   int _tile_group = -1;   // trace-only work-item id (see set_tile_group)
   int64_t _tile_id = -1;  // compute tile_id (see set_tile_id)
 };

@@ -116,7 +116,7 @@ std::unique_ptr<TileGraph> build_tog_tilegraph(Simulator* simulator,
                           attribute_path, "kernel",
                           std::vector<std::shared_ptr<const TensorTiling>>(tilings.begin(), tilings.end()),
                           unit_tile_base, simulator->unit_table(),
-                          (size_t)simulator->get_config().core_spad_size_kb * 1024);
+                          (size_t)simulator->get_config().spad_bytes_per_lane);
 }
 
 void launchKernel(Simulator* simulator, unsigned int kernel_id, std::string onnx_path, std::string attribute_path, const YAML::Node& config_yaml, cycle_type request_time=0, int partition_id=0, int device_id=0) {

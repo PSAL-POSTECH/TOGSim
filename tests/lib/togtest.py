@@ -18,8 +18,8 @@ MIB = 1 << 20
 TIMEOUT_S = 600
 TYPED_WARNING = "uses the typed grouping"
 EVENT = re.compile(r"\[(\d+)\]\[Core (\d+)\]\[(\w+) *\]\[INST_ID=(\d+)\] ([A-Z_]+)(?: \((.*)\))?$", re.M)
-SCHEDULED = re.compile(r"TILE_SCHEDULED *\] spad_footprint=(\d+) max_dispatch=(\d+)")
-CORE_LINE = re.compile(r"\[(\d+)\]\[Core (\d+)\]\[(TILE_SCHEDULED|SPAD_HOLD|SPAD_HOLD_END) *\] (.*)$", re.M)
+SCHEDULED = re.compile(r"TILE_SCHEDULED *\] spad=(\d+) max_dispatch=(\d+)")
+CORE_LINE = re.compile(r"\[(\d+)\]\[Core (\d+)\]\[(TILE_SCHEDULED) *\] (.*)$", re.M)
 SAID = re.compile(r"^(?:\[[^\]]*\] \[(?:error|critical)\] |\s*what\(\):\s*)(.*)$|^(togsim(?:\.hpp)?: .*)$", re.M)
 WARNED = re.compile(r"^\[[^\]]*\] \[warning\] (.*)$", re.M)
 VERSION, ENCODED_VERSION = "1.0.0", 0x10000
@@ -27,10 +27,10 @@ PROGRAMS_MAGIC, RECORD_MAGIC = 0x50415354, 0x41525354
 _built, _locks, _guard = {}, {}, threading.Lock()
 
 
-def spad_alone(kb):
-    """Machine keys for a spad of `kb` KB stated alone: tpuv6e's vpu_spad_size_kb_per_lane, which with its lanes
-    would make the spad 128 MB, left out (None: no core_spad_size_kb either, so no limit)."""
-    return dict(vpu_spad_size_kb_per_lane=None, core_spad_size_kb=kb)
+def spad_per_lane(kb):
+    """Machine keys for a spad of `kb` KB on each lane, what a dispatch's .spad is measured against (None: no spad
+    key, so no limit)."""
+    return dict(vpu_spad_size_kb_per_lane=kb, core_spad_size_kb=None)
 
 
 def no_core_dumps():
@@ -231,12 +231,12 @@ class Run:
                 for (core, inst), e in issued.items() if (core, inst) in finished]
 
     def scheduled(self):
-        """(spad_footprint, max_dispatch) of every TILE_SCHEDULED line, in log order."""
+        """(spad, max_dispatch) of every TILE_SCHEDULED line, in log order: the bytes per lane its dispatch states."""
         return [(int(m[1]), int(m[2])) for m in SCHEDULED.finditer(self.log)]
 
     def core_lines(self, tag):
-        """(cycle, core, fields) of every trace line `tag` of a core that names no instruction (TILE_SCHEDULED,
-        SPAD_HOLD, SPAD_HOLD_END), in log order; the fields are integers."""
+        """(cycle, core, fields) of every trace line `tag` of a core that names no instruction (TILE_SCHEDULED), in log
+        order; the fields are integers."""
         return [(int(m[1]), int(m[2]), {k: int(v) for k, v in (kv.split("=") for kv in m[4].split())})
                 for m in CORE_LINE.finditer(self.log) if m[3] == tag]
 

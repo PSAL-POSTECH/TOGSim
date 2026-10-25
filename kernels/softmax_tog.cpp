@@ -16,9 +16,14 @@ struct Softmax : Tog<Softmax> {
   static constexpr int64_t TILE_N = 64;
 #endif
   static constexpr int64_t TILE = f32(TILE_M, TILE_N);
-  static constexpr Buf SUM{.id = 0, .bytes = TILE}, X{.id = 1, .bytes = TILE}, MAX{.id = 2, .bytes = TILE},
-                       OUT{.id = 3, .bytes = TILE};
+#ifdef LANES
+  static constexpr int64_t N_LANES = LANES;
+#else
+  static constexpr int64_t N_LANES = 128;
+#endif
+  static constexpr Buf SUM{.id = 0}, X{.id = 1}, MAX{.id = 2}, OUT{.id = 3};
   static constexpr std::array buffers{SUM, X, MAX, OUT};
+  static constexpr int64_t SPAD = per_lane(TILE + TILE + TILE + TILE, N_LANES);
   static constexpr Node MAX_REDUCE{.id = 0, .count = 5}, MAX_WRITE{.id = 1, .count = 5},
                         SUM_REDUCE{.id = 2, .count = 5}, SUM_WRITE{.id = 3, .count = 5}, SOFTMAX{.id = 4, .count = 5};
   static constexpr int32_t AXIS_M = 0, AXIS_N = 1;
@@ -33,11 +38,13 @@ struct Softmax : Tog<Softmax> {
   // The max pass over every row tile, then the sum pass, then one work-item per output tile.
   void entry(Kernel& k) const {
     const auto [M, N] = shape<2>(k, {.kernel = "softmax", .names = "M N", .example = {128, 256}});
-    for (int64_t m0 = 0; m0 < M; m0 += TILE_M) dispatch<&Softmax::max>(k, RowArgs{.m0 = m0, .M = M, .N = N});
-    for (int64_t m0 = 0; m0 < M; m0 += TILE_M) dispatch<&Softmax::sum>(k, RowArgs{.m0 = m0, .M = M, .N = N});
+    for (int64_t m0 = 0; m0 < M; m0 += TILE_M) dispatch<&Softmax::max>(k, {.spad = SPAD,
+                                                                           .args = RowArgs{.m0 = m0, .M = M, .N = N}});
+    for (int64_t m0 = 0; m0 < M; m0 += TILE_M) dispatch<&Softmax::sum>(k, {.spad = SPAD,
+                                                                           .args = RowArgs{.m0 = m0, .M = M, .N = N}});
     for (int64_t m0 = 0; m0 < M; m0 += TILE_M)
       for (int64_t n0 = 0; n0 < N; n0 += TILE_N)
-        dispatch<&Softmax::quotient>(k, TileArgs{.m0 = m0, .n0 = n0, .M = M, .N = N});
+        dispatch<&Softmax::quotient>(k, {.spad = SPAD, .args = TileArgs{.m0 = m0, .n0 = n0, .M = M, .N = N}});
   }
 
   void max(Item& w, const RowArgs& a) const {

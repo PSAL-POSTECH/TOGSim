@@ -2,6 +2,7 @@
 // unit (tile 0, long), wait sem 3 again, then a vector compute (tile 1, short) reads A: it must follow f,
 // not the barrier. -DWRONG_COUNT re-waits expecting another count.
 #include "togsim_runtime.h"
+#define SPAD_PER_LANE (((8 * 16 * 4) + (8 * 16 * 4) + 127) / 128)
 
 static void tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
   (void)iv; (void)n_iv;
@@ -22,10 +23,8 @@ static void tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
 extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape_args) {
   (void)shape_args; (void)n_shape_args;
   int64_t iv[1] = {0};
-  togsim_dispatch(ctx, tile, iv, 1, 0);
+  togsim_dispatch(ctx, tile, iv, 1, 0, SPAD_PER_LANE);
 }
 
-extern "C" const int32_t togsim_spad_buffer_count = 3;
-extern "C" const int64_t togsim_spad_buffer_bytes[3] = {0, 8 * 16 * 4, 8 * 16 * 4};
 extern "C" const int32_t togsim_runtime_attribute_count = 0;
 extern "C" const int32_t togsim_runtime_attribute_rank[1] = {0};

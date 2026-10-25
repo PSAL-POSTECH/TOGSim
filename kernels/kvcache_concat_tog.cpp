@@ -26,11 +26,15 @@ struct KvcacheConcat : Tog<KvcacheConcat> {
   static constexpr int64_t KV_HEADS = 8;
 #endif
   static constexpr int64_t CACHE_DIM = HIDDEN_SIZE / HEADS * KV_HEADS, QKV_WIDTH = HIDDEN_SIZE + 2 * CACHE_DIM;
-  static constexpr Buf QKV{.id = 0, .bytes = f32(TILE_TOK, QKV_WIDTH)},
-                       QUERY{.id = 1, .bytes = f32(TILE_TOK, HIDDEN_SIZE)},
-                       KEY{.id = 2, .bytes = f32(TILE_TOK, CACHE_DIM)},
-                       VALUE{.id = 3, .bytes = f32(TILE_TOK, CACHE_DIM)};
+#ifdef LANES
+  static constexpr int64_t N_LANES = LANES;
+#else
+  static constexpr int64_t N_LANES = 128;
+#endif
+  static constexpr Buf QKV{.id = 0}, QUERY{.id = 1}, KEY{.id = 2}, VALUE{.id = 3};
   static constexpr std::array buffers{QKV, QUERY, KEY, VALUE};
+  static constexpr int64_t SPAD = per_lane(f32(TILE_TOK, QKV_WIDTH) + f32(TILE_TOK, HIDDEN_SIZE) +
+                                           f32(TILE_TOK, CACHE_DIM) + f32(TILE_TOK, CACHE_DIM), N_LANES);
   static constexpr Node SPLIT{.id = 0, .count = 1};
   static constexpr int32_t AXIS_TOKENS = 0;
 
@@ -43,7 +47,7 @@ struct KvcacheConcat : Tog<KvcacheConcat> {
     const auto [TOKENS, PAST] =
         shape<2>(k, {.kernel = "kvcache_concat", .names = "TOKENS PAST", .example = {128, 128}});
     for (int64_t t0 = 0; t0 < TOKENS; t0 += TILE_TOK)
-      dispatch<&KvcacheConcat::tile>(k, TileArgs{.t0 = t0, .TOKENS = TOKENS, .PAST = PAST});
+      dispatch<&KvcacheConcat::tile>(k, {.spad = SPAD, .args = TileArgs{.t0 = t0, .TOKENS = TOKENS, .PAST = PAST}});
   }
 
   void tile(Item& w, const TileArgs& a) const {

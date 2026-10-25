@@ -5,8 +5,9 @@ using namespace togsim;
 
 struct LoadComputeStore : Tog<LoadComputeStore> {
   static constexpr int64_t ROWS = 64, COLS = 64;
-  static constexpr Buf IN{.id = 1, .bytes = f32(ROWS, COLS)}, OUT{.id = 2, .bytes = f32(ROWS, COLS)};
+  static constexpr Buf IN{.id = 1}, OUT{.id = 2};
   static constexpr std::array buffers{IN, OUT};
+  static constexpr int64_t SPAD = per_lane(f32(ROWS, COLS) + f32(ROWS, COLS), 128);
   static constexpr Node STEP{.id = 0, .count = 1};
 
   struct At {
@@ -14,7 +15,7 @@ struct LoadComputeStore : Tog<LoadComputeStore> {
   };
 
   void entry(Kernel& k) const {
-    for (int64_t i = 0; i < 2; i++) dispatch<&LoadComputeStore::tile>(k, At{.i = i});
+    for (int64_t i = 0; i < 2; i++) dispatch<&LoadComputeStore::tile>(k, {.spad = SPAD, .args = At{.i = i}});
   }
 
   void tile(Item& w, const At& a) const {

@@ -16,9 +16,14 @@ struct Maxpool : Tog<Maxpool> {
   static constexpr int64_t TILE_COLS = 16;
 #endif
   static constexpr int64_t TILE = f32(TILE_ROWS, TILE_COLS);
-  static constexpr Buf TAP3{.id = 0, .bytes = TILE}, TAP0{.id = 1, .bytes = TILE}, TAP1{.id = 2, .bytes = TILE},
-                       TAP2{.id = 3, .bytes = TILE}, OUT{.id = 4, .bytes = TILE};
+#ifdef LANES
+  static constexpr int64_t N_LANES = LANES;
+#else
+  static constexpr int64_t N_LANES = 128;
+#endif
+  static constexpr Buf TAP3{.id = 0}, TAP0{.id = 1}, TAP1{.id = 2}, TAP2{.id = 3}, OUT{.id = 4};
   static constexpr std::array buffers{TAP3, TAP0, TAP1, TAP2, OUT};
+  static constexpr int64_t SPAD = per_lane(TILE + TILE + TILE + TILE + TILE, N_LANES);
   static constexpr Node MAX{.id = 0, .count = 1};
   static constexpr int32_t AXIS_ROWS = 0, AXIS_COLS = 1;
 
@@ -31,7 +36,7 @@ struct Maxpool : Tog<Maxpool> {
     const auto [ROWS, COLS] = shape<2>(k, {.kernel = "maxpool", .names = "ROWS COLS", .example = {1024, 16}});
     for (int64_t r0 = 0; r0 < ROWS; r0 += TILE_ROWS)
       for (int64_t c0 = 0; c0 < COLS; c0 += TILE_COLS)
-        dispatch<&Maxpool::tile>(k, TileArgs{.r0 = r0, .c0 = c0, .ROWS = ROWS, .COLS = COLS});
+        dispatch<&Maxpool::tile>(k, {.spad = SPAD, .args = TileArgs{.r0 = r0, .c0 = c0, .ROWS = ROWS, .COLS = COLS}});
   }
 
   void tile(Item& w, const TileArgs& a) const {

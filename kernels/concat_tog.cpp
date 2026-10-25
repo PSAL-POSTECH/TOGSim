@@ -15,8 +15,14 @@ struct Concat : Tog<Concat> {
 #else
   static constexpr int64_t TILE_D = 16;
 #endif
-  static constexpr Buf A{.id = 0, .bytes = f32(TILE_ROWS, TILE_D)}, B{.id = 1, .bytes = f32(TILE_ROWS, TILE_D)};
+#ifdef LANES
+  static constexpr int64_t N_LANES = LANES;
+#else
+  static constexpr int64_t N_LANES = 128;
+#endif
+  static constexpr Buf A{.id = 0}, B{.id = 1};
   static constexpr std::array buffers{A, B};
+  static constexpr int64_t SPAD = per_lane(f32(TILE_ROWS, TILE_D) + f32(TILE_ROWS, TILE_D), N_LANES);
 
   struct TileArgs {
     int64_t d0, A_ROWS, B_ROWS, D;
@@ -27,7 +33,8 @@ struct Concat : Tog<Concat> {
     const auto [A_ROWS, B_ROWS, D] =
         shape<3>(k, {.kernel = "concat", .names = "A_ROWS B_ROWS D", .example = {128, 128, 256}});
     for (int64_t d0 = 0; d0 < D; d0 += TILE_D)
-      dispatch<&Concat::tile>(k, TileArgs{.d0 = d0, .A_ROWS = A_ROWS, .B_ROWS = B_ROWS, .D = D});
+      dispatch<&Concat::tile>(k, {.spad = SPAD,
+                                  .args = TileArgs{.d0 = d0, .A_ROWS = A_ROWS, .B_ROWS = B_ROWS, .D = D}});
   }
 
   void tile(Item& w, const TileArgs& a) const {

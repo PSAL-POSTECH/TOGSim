@@ -2,9 +2,8 @@
 // any work-item), or by a work-item at an id the TOG does not declare (-DUNDECLARED), or a DMA that gives another
 // count of element offsets than it has elements (-DSHORT_OFFSETS).
 #include "togsim_runtime.h"
+#define SPAD_PER_LANE ((64 + 127) / 128)
 
-extern "C" const int32_t togsim_spad_buffer_count = 2;
-extern "C" const int64_t togsim_spad_buffer_bytes[2] = {0, 64};
 extern "C" const int32_t togsim_runtime_attribute_count = 1;
 extern "C" const int32_t togsim_runtime_attribute_rank[1] = {0};
 
@@ -31,5 +30,5 @@ extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape
   const int64_t* extents;
   togsim_runtime_attribute(ctx, 0, &rank, &extents);
 #endif
-  togsim_dispatch(ctx, tile, nullptr, 0, 0);
+  togsim_dispatch(ctx, tile, nullptr, 0, 0, SPAD_PER_LANE);
 }

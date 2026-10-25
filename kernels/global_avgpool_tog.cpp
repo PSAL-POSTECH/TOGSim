@@ -22,10 +22,15 @@ struct GlobalAvgpool : Tog<GlobalAvgpool> {
 #else
   static constexpr int64_t TILE_C_SCALE = 128;
 #endif
-  static constexpr Buf X{.id = 0, .bytes = f32(TILE_C, TILE_HW)},
-                       SUM{.id = 1, .bytes = f32(std::max(TILE_C, TILE_C_SCALE))},
-                       OUT{.id = 2, .bytes = f32(TILE_C_SCALE)};
+#ifdef LANES
+  static constexpr int64_t N_LANES = LANES;
+#else
+  static constexpr int64_t N_LANES = 128;
+#endif
+  static constexpr Buf X{.id = 0}, SUM{.id = 1}, OUT{.id = 2};
   static constexpr std::array buffers{X, SUM, OUT};
+  static constexpr int64_t SPAD = per_lane(f32(TILE_C, TILE_HW) + f32(std::max(TILE_C, TILE_C_SCALE)) +
+                                           f32(TILE_C_SCALE), N_LANES);
   static constexpr Node REDUCE{.id = 0, .count = 3}, WRITE{.id = 1, .count = 3}, SCALE{.id = 2, .count = 3};
   static constexpr int32_t AXIS_C = 0, AXIS_HW = 1, AXIS_C_SCALE = 2;
 
@@ -39,8 +44,10 @@ struct GlobalAvgpool : Tog<GlobalAvgpool> {
   // The sum pass over every TC-channel tile, then the scale pass over every TC_SCALE-channel tile.
   void entry(Kernel& k) const {
     const auto [C, HW] = shape<2>(k, {.kernel = "global_avgpool", .names = "C HW", .example = {256, 64}});
-    for (int64_t c0 = 0; c0 < C; c0 += TILE_C) dispatch<&GlobalAvgpool::sum>(k, SumArgs{.c0 = c0, .C = C, .HW = HW});
-    for (int64_t c0 = 0; c0 < C; c0 += TILE_C_SCALE) dispatch<&GlobalAvgpool::scale>(k, ScaleArgs{.c0 = c0, .C = C});
+    for (int64_t c0 = 0; c0 < C; c0 += TILE_C)
+      dispatch<&GlobalAvgpool::sum>(k, {.spad = SPAD, .args = SumArgs{.c0 = c0, .C = C, .HW = HW}});
+    for (int64_t c0 = 0; c0 < C; c0 += TILE_C_SCALE)
+      dispatch<&GlobalAvgpool::scale>(k, {.spad = SPAD, .args = ScaleArgs{.c0 = c0, .C = C}});
   }
 
   void sum(Item& w, const SumArgs& a) const {

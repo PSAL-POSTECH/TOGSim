@@ -68,7 +68,7 @@ std::string item_name(const EmitCtx* ctx) {
 extern "C" {
 
 void togsim_dispatch(EmitCtx* ctx, togsim_tile_fn fn, int64_t* iv, int32_t n_iv,
-                     int64_t key) {
+                     int64_t key, int64_t spad_bytes_per_lane) {
   // Register the work-item; LazyTog::run_item runs its body later, on demand.
   // Round-robin over THIS partition's cores only -- a work-item on another
   // partition's core would sit in this partition's scheduler forever.
@@ -77,6 +77,7 @@ void togsim_dispatch(EmitCtx* ctx, togsim_tile_fn fn, int64_t* iv, int32_t n_iv,
   w.core = ctx->cores.empty() ? 0 : ctx->cores[ctx->rr++ % (int32_t)ctx->cores.size()];
   if (iv && n_iv > 0) w.iv.assign(iv, iv + n_iv);
   w.key = key;
+  w.spad = spad_bytes_per_lane;
   ctx->items.push_back(std::move(w));
 }
 
@@ -371,14 +372,6 @@ bool LazyTog::open(const char* so_path, const int64_t* shape_args, int32_t n_sha
             so_path, togsim::version_name((uint32_t)*abi).c_str(), TOGSIM_VERSION_STRING);
     return false;
   }
-  auto n_bufs = (const int32_t*)dlsym(_lib, "togsim_spad_buffer_count");
-  auto bytes = (const int64_t*)dlsym(_lib, "togsim_spad_buffer_bytes");
-  if (!n_bufs || *n_bufs < 0 || (*n_bufs > 0 && !bytes)) {
-    fprintf(stderr, "togsim: refusing TOG %s: it states no spad buffer sizes "
-            "(togsim_spad_buffer_count / togsim_spad_buffer_bytes)\n", so_path);
-    return false;
-  }
-  if (bytes) _spad_bytes.assign(bytes, bytes + *n_bufs);
   auto n_attrs = (const int32_t*)dlsym(_lib, "togsim_runtime_attribute_count");
   auto ranks = (const int32_t*)dlsym(_lib, "togsim_runtime_attribute_rank");
   if (!n_attrs || !ranks || *n_attrs < 0 || *n_attrs > TOGSIM_MAX_RUNTIME_ATTRIBUTES) {
@@ -402,6 +395,7 @@ bool LazyTog::open(const char* so_path, const int64_t* shape_args, int32_t n_sha
 size_t LazyTog::num_items() const { return _ctx->items.size(); }
 uint64_t LazyTog::num_tile_ids() const { return _ctx->n_tiles > 0 ? (uint64_t)_ctx->n_tiles : 0; }
 int64_t LazyTog::item_key(size_t i) const { return _ctx->items.at(i).key; }
+int64_t LazyTog::item_spad(size_t i) const { return _ctx->items.at(i).spad; }
 
 const std::vector<TraceRec>& LazyTog::run_item(size_t i) {
   _ctx->trace.clear();

@@ -1,13 +1,13 @@
-// A 16 KB load buffer filled by four 4 KB pieces, reloaded once after a consuming read,
-// and a 16 KB output drained by four 4 KB stores: each buffer counts 16 KB (one version),
-// so a work-item's spad footprint is 32 KB. Two work-items share the spad.
+// A 16 KB load buffer filled by four 4 KB pieces, reloaded once after a consuming read, and a 16 KB output drained by
+// four 4 KB stores. Each dispatch states both buffers, 32 KB over 128 lanes.
 #include "togsim.hpp"
 using namespace togsim;
 
 struct PiecewiseFill : Tog<PiecewiseFill> {
   static constexpr int64_t ROWS = 64, COLS = 64, PIECE_ROWS = 16;
-  static constexpr Buf IN{.id = 1, .bytes = f32(ROWS, COLS)}, OUT{.id = 2, .bytes = f32(ROWS, COLS)};
+  static constexpr Buf IN{.id = 1}, OUT{.id = 2};
   static constexpr std::array buffers{IN, OUT};
+  static constexpr int64_t SPAD = per_lane(f32(ROWS, COLS) + f32(ROWS, COLS), 128);
   static constexpr Node STEP{.id = 0, .count = 1};
 
   struct At {
@@ -19,7 +19,7 @@ struct PiecewiseFill : Tog<PiecewiseFill> {
   }
 
   void entry(Kernel& k) const {
-    for (int64_t i = 0; i < 2; i++) dispatch<&PiecewiseFill::tile>(k, At{.i = i});
+    for (int64_t i = 0; i < 2; i++) dispatch<&PiecewiseFill::tile>(k, {.spad = SPAD, .args = At{.i = i}});
   }
 
   void tile(Item& w, const At& a) const {

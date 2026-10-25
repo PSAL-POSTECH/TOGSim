@@ -6,8 +6,9 @@ using namespace togsim;
 
 struct ArrayLoop : Tog<ArrayLoop> {
   static constexpr int64_t T = 16;
-  static constexpr Buf IN{.id = 1, .bytes = f32(T, T)}, OUT{.id = 2, .bytes = f32(T, T)};
+  static constexpr Buf IN{.id = 1}, OUT{.id = 2};
   static constexpr std::array buffers{IN, OUT};
+  static constexpr int64_t SPAD = per_lane(f32(T, T) + f32(T, T), 128);
   static constexpr Attribute N{.id = 0, .rank = 0}, BLOCKS{.id = 1, .rank = 1};
   static constexpr std::array attributes{N, BLOCKS};
   static constexpr Node STEP{.id = 0, .count = 1};
@@ -17,7 +18,7 @@ struct ArrayLoop : Tog<ArrayLoop> {
   };
 
   void entry(Kernel& k) const {
-    for (int64_t i = 0; i < 2; i++) dispatch<&ArrayLoop::tile>(k, {.key = i, .args = At{.i = i}});
+    for (int64_t i = 0; i < 2; i++) dispatch<&ArrayLoop::tile>(k, {.key = i, .spad = SPAD, .args = At{.i = i}});
   }
 
   void tile(Item& w, const At& a) const {

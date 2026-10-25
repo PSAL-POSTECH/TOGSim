@@ -2,6 +2,7 @@
 // ({0, 0, 1, 1} unless defined). The load names arg_id LOAD_ARG (0), the store STORE_ARG (1).
 // compute_type 0: the segment grouping.
 #include "togsim_runtime.h"
+#define SPAD_PER_LANE (((ROWS * COLS * 4) + (ROWS * COLS * 4) + 127) / 128)
 
 #ifndef TILE_IDS
 #define TILE_IDS {0, 0, 1, 1}
@@ -30,11 +31,9 @@ extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape
   (void)shape_args; (void)n_shape_args;
   for (int64_t i = 0; i < 4; i++) {
     int64_t iv[1] = {i};
-    togsim_dispatch(ctx, tile, iv, 1, i);
+    togsim_dispatch(ctx, tile, iv, 1, i, SPAD_PER_LANE);
   }
 }
 
-extern "C" const int32_t togsim_spad_buffer_count = 3;
-extern "C" const int64_t togsim_spad_buffer_bytes[3] = {0, ROWS * COLS * 4, ROWS * COLS * 4};
 extern "C" const int32_t togsim_runtime_attribute_count = 0;
 extern "C" const int32_t togsim_runtime_attribute_rank[1] = {0};

@@ -16,18 +16,19 @@ using namespace togsim;
 #define ATTRIBUTES {.id = 0, .rank = 0}
 #endif
 
-static constexpr Buf OUT{.id = 1, .bytes = 64};
+static constexpr Buf OUT{.id = 1};
+static constexpr int64_t SPAD = per_lane(64, 128);
 static constexpr Node STEP{.id = 0, .count = 1};
 
 #if defined(GENERATED)
 static void work_item(Item& w) { compute(w, {.node = STEP, .writes = {OUT}}); }
-static void tog_entry(Kernel& k) { dispatch<work_item>(k, {.key = 0}); }
+static void tog_entry(Kernel& k) { dispatch<work_item>(k, {.key = 0, .spad = SPAD}); }
 static const bool tog = register_tog<tog_entry>({OUT}, {Attribute ATTRIBUTES});
 #else
 struct Declared : Tog<Declared> {
   static constexpr std::array buffers{OUT};
   static constexpr std::array attributes{Attribute ATTRIBUTES};
-  void entry(Kernel& k) const { dispatch<&Declared::tile>(k, {.key = 0}); }
+  void entry(Kernel& k) const { dispatch<&Declared::tile>(k, {.key = 0, .spad = SPAD}); }
   void tile(Item& w) const { compute(w, {.node = STEP, .writes = {OUT}}); }
 };
 #endif

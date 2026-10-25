@@ -30,24 +30,25 @@ T get_config_value(ConfigReader& config, std::string key) {
   }
 }
 
-// The spad of one core in KB: vpu_spad_size_kb_per_lane x vpu_num_lanes when the config gives both, and a
-// core_spad_size_kb beside them must equal that product; without them core_spad_size_kb alone; else 0, no limit.
-static uint32_t core_spad_kb(ConfigReader& config) {
-  const bool per_lane = config["vpu_spad_size_kb_per_lane"] && config["vpu_num_lanes"];
-  const auto stated = config["core_spad_size_kb"] ? std::optional<uint32_t>(config["core_spad_size_kb"].as<uint32_t>())
-                                                  : std::nullopt;
-  if (!per_lane) return stated.value_or(0);
+// The spad of one lane in bytes, what a dispatch's .spad is measured against: vpu_spad_size_kb_per_lane x 1024, and
+// a core_spad_size_kb beside it must be that times vpu_num_lanes; core_spad_size_kb alone is refused; neither, 0.
+static uint64_t spad_bytes_per_lane(ConfigReader& config) {
+  const bool stated = (bool)config["core_spad_size_kb"];
+  if (!config["vpu_spad_size_kb_per_lane"]) {
+    if (stated)
+      throw std::runtime_error("core_spad_size_kb: a work-item states its spad per lane, so the spad is stated by "
+                               "vpu_spad_size_kb_per_lane (and vpu_num_lanes)");
+    return 0;
+  }
   const uint64_t kb_per_lane = config["vpu_spad_size_kb_per_lane"].as<uint32_t>();
-  const uint64_t lanes = config["vpu_num_lanes"].as<uint32_t>();
-  const uint64_t kb = kb_per_lane * lanes;
-  if (kb > UINT32_MAX)
-    throw std::runtime_error(fmt::format("vpu_spad_size_kb_per_lane x vpu_num_lanes = {} x {} = {} KB is more "
-                                         "than a spad TOGSim holds ({} KB)", kb_per_lane, lanes, kb, UINT32_MAX));
-  if (stated && *stated != kb)
+  if (!stated) return kb_per_lane * 1024;
+  const uint64_t core_kb = config["core_spad_size_kb"].as<uint32_t>();
+  const uint64_t lanes = config["vpu_num_lanes"] ? config["vpu_num_lanes"].as<uint32_t>() : 0;
+  if (core_kb != kb_per_lane * lanes)
     throw std::runtime_error(fmt::format("core_spad_size_kb: {} is not vpu_spad_size_kb_per_lane x vpu_num_lanes "
-                                         "= {} x {} = {}: state the spad once, by the lanes or by "
-                                         "core_spad_size_kb alone", *stated, kb_per_lane, lanes, kb));
-  return (uint32_t)kb;
+                                         "= {} x {} = {}: state the spad once, by the lanes", core_kb, kb_per_lane,
+                                         lanes, kb_per_lane * lanes));
+  return kb_per_lane * 1024;
 }
 
 // Keys of a machine config that other tools read and TOGSim does not: isa (the compiler's, and the frontend's vector
@@ -87,7 +88,7 @@ SimulationConfig initialize_config(const YAML::Node& yaml,
   parsed_config.core_freq_mhz = get_config_value<uint32_t>(config, "core_freq_mhz");
   if (config["num_systolic_array_per_core"])
     parsed_config.num_systolic_array_per_core = config["num_systolic_array_per_core"].as<uint32_t>();
-  parsed_config.core_spad_size_kb = core_spad_kb(config);
+  parsed_config.spad_bytes_per_lane = spad_bytes_per_lane(config);
   if (config["sa_weight_buffer_depth"])
     parsed_config.sa_weight_buffer_depth = config["sa_weight_buffer_depth"].as<uint32_t>();
   parsed_config.core_print_interval = get_config_value<uint32_t>(config, "core_stats_print_period_cycles");

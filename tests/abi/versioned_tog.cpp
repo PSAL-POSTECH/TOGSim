@@ -3,6 +3,7 @@
 // -DNULL_STRIDES first loads a 4x4 f32 tile with no strides, -DNO_ATTRIBUTE_TABLE drops the attribute table.
 #define TOGSIM_HOST
 #include "togsim_runtime.h"
+#define SPAD_PER_LANE ((64 + 127) / 128)
 
 #if defined(STATED_VERSION)
 extern "C" const int32_t togsim_abi_version = STATED_VERSION;
@@ -29,11 +30,9 @@ extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape
 #endif
   (void)shape_args; (void)n_shape_args;
   int64_t iv[1] = {0};
-  togsim_dispatch(ctx, tile, iv, 1, 0);
+  togsim_dispatch(ctx, tile, iv, 1, 0, SPAD_PER_LANE);
 }
 
-extern "C" const int32_t togsim_spad_buffer_count = 2;
-extern "C" const int64_t togsim_spad_buffer_bytes[2] = {0, 64};
 #if !defined(NO_ATTRIBUTE_TABLE)
 extern "C" const int32_t togsim_runtime_attribute_count = 0;
 extern "C" const int32_t togsim_runtime_attribute_rank[1] = {0};

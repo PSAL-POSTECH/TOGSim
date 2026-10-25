@@ -23,10 +23,15 @@ struct Layernorm : Tog<Layernorm> {
   static constexpr int64_t TILE_M_STATS = 128;
 #endif
   static constexpr int64_t LARGER = f32(std::max(TILE_M, TILE_M_STATS), TILE_N), TILE = f32(TILE_M, TILE_N);
-  static constexpr Buf X{.id = 0, .bytes = LARGER}, WEIGHT{.id = 1, .bytes = TILE}, VAR{.id = 2, .bytes = LARGER},
-                       MEAN{.id = 3, .bytes = LARGER}, SKIP{.id = 4, .bytes = LARGER}, BIAS{.id = 5, .bytes = TILE},
-                       OUT{.id = 6, .bytes = TILE};
+#ifdef LANES
+  static constexpr int64_t N_LANES = LANES;
+#else
+  static constexpr int64_t N_LANES = 128;
+#endif
+  static constexpr Buf X{.id = 0}, WEIGHT{.id = 1}, VAR{.id = 2}, MEAN{.id = 3}, SKIP{.id = 4}, BIAS{.id = 5},
+                       OUT{.id = 6};
   static constexpr std::array buffers{X, WEIGHT, VAR, MEAN, SKIP, BIAS, OUT};
+  static constexpr int64_t SPAD = per_lane(LARGER + TILE + LARGER + LARGER + LARGER + TILE + TILE, N_LANES);
   static constexpr Node REDUCE{.id = 0, .count = 4}, WRITE_MEAN{.id = 1, .count = 4}, WRITE_VAR{.id = 2, .count = 4},
                         NORM{.id = 3, .count = 4};
   static constexpr int32_t AXIS_M = 0, AXIS_N = 1, AXIS_M_STATS = 2;
@@ -42,10 +47,10 @@ struct Layernorm : Tog<Layernorm> {
   void entry(Kernel& k) const {
     const auto [M, N] = shape<2>(k, {.kernel = "layernorm", .names = "M N", .example = {128, 256}});
     for (int64_t m0 = 0; m0 < M; m0 += TILE_M_STATS)
-      dispatch<&Layernorm::stats>(k, StatsArgs{.m0 = m0, .M = M, .N = N});
+      dispatch<&Layernorm::stats>(k, {.spad = SPAD, .args = StatsArgs{.m0 = m0, .M = M, .N = N}});
     for (int64_t m0 = 0; m0 < M; m0 += TILE_M)
       for (int64_t n0 = 0; n0 < N; n0 += TILE_N)
-        dispatch<&Layernorm::norm>(k, NormArgs{.m0 = m0, .n0 = n0, .M = M, .N = N});
+        dispatch<&Layernorm::norm>(k, {.spad = SPAD, .args = NormArgs{.m0 = m0, .n0 = n0, .M = M, .N = N}});
   }
 
   void stats(Item& w, const StatsArgs& a) const {

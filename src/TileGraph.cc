@@ -31,7 +31,7 @@ const std::shared_ptr<Tile> TileSubGraph::peek_tile() {
   std::shared_ptr<Tile> ret = std::make_shared<Tile>(Tile::Status::EMPTY);
   if (_ready_tile_queue.empty())
     return ret;
-  return _ready_tile_queue.top();
+  return _ready_tile_queue.front();
 }
 
 std::shared_ptr<Tile> TileSubGraph::get_tile() {
@@ -39,7 +39,7 @@ std::shared_ptr<Tile> TileSubGraph::get_tile() {
     std::shared_ptr<Tile> ret = std::make_shared<Tile>(Tile::Status::EMPTY);
     return ret;
   } else {
-    std::shared_ptr<Tile> ret = _ready_tile_queue.top();
+    std::shared_ptr<Tile> ret = _ready_tile_queue.front();
     _ready_tile_queue.pop();
     return ret;
   }
