@@ -26,10 +26,9 @@ struct SimulationConfig {
   uint32_t core_freq_mhz;
   uint32_t core_print_interval = 0;
   uint32_t num_systolic_array_per_core = 1;
-  // Per-core spad capacity (KB) for the DMA throttle: a load that would overflow it waits for a
-  // consumer to free a tile. vpu_spad_size_kb_per_lane x vpu_num_lanes when the config gives both,
-  // else the config's core_spad_size_kb (core_spad_kb in Common.cc); 0 = no limit.
-  uint32_t core_spad_size_kb = 0;
+  // A lane's spad in bytes (spad_bytes_per_lane in Common.cc), against which a dispatch's .spad is measured: a
+  // work-item enters a core while the spad it states fits beside those in flight; 0 = no limit.
+  uint64_t spad_bytes_per_lane = 0;
   std::optional<std::vector<uint64_t>> tog_tensor_tile;
   // DEPRECATED typed grouping. SA weight-buffer depth: weight tiles a systolic array holds; a
   // preload stalls until a slot frees (its matmuls finished). 2 = weight double-buffer

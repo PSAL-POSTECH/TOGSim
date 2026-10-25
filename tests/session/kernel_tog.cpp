@@ -10,8 +10,9 @@ struct SessionKernel : Tog<SessionKernel> {
   static constexpr int64_t N = 2;
 #endif
   static constexpr int64_t ROWS = 64, COLS = 64;
-  static constexpr Buf IN{.id = 1, .bytes = f32(ROWS, COLS)}, OUT{.id = 2, .bytes = f32(ROWS, COLS)};
+  static constexpr Buf IN{.id = 1}, OUT{.id = 2};
   static constexpr std::array buffers{IN, OUT};
+  static constexpr int64_t SPAD = per_lane(f32(ROWS, COLS) + f32(ROWS, COLS), 128);
   static constexpr Node STEP{.id = 0, .count = 1};
 
   struct At {
@@ -19,7 +20,7 @@ struct SessionKernel : Tog<SessionKernel> {
   };
 
   void entry(Kernel& k) const {
-    for (int64_t i = 0; i < N; i++) dispatch<&SessionKernel::tile>(k, At{.i = i});
+    for (int64_t i = 0; i < N; i++) dispatch<&SessionKernel::tile>(k, {.spad = SPAD, .args = At{.i = i}});
   }
 
   void tile([[maybe_unused]] Item& w, [[maybe_unused]] const At& a) const {

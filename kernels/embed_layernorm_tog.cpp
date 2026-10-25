@@ -15,8 +15,14 @@ struct EmbedLayernorm : Tog<EmbedLayernorm> {
 #else
   static constexpr int64_t TILE_DIM = 64;
 #endif
-  static constexpr Buf IDS{.id = 0, .bytes = i64(TILE_SEQ, TILE_DIM)}, ROW{.id = 1, .bytes = f32(TILE_SEQ, TILE_DIM)};
+#ifdef LANES
+  static constexpr int64_t N_LANES = LANES;
+#else
+  static constexpr int64_t N_LANES = 128;
+#endif
+  static constexpr Buf IDS{.id = 0}, ROW{.id = 1};
   static constexpr std::array buffers{IDS, ROW};
+  static constexpr int64_t SPAD = per_lane(i64(TILE_SEQ, TILE_DIM) + f32(TILE_SEQ, TILE_DIM), N_LANES);
   static constexpr Node GATHER{.id = 0, .count = 1};
   static constexpr int32_t AXIS_SEQ = 0, AXIS_DIM = 1;
 
@@ -29,7 +35,8 @@ struct EmbedLayernorm : Tog<EmbedLayernorm> {
     const auto [SEQ, DIM] = shape<2>(k, {.kernel = "embed_layernorm", .names = "SEQ DIM", .example = {128, 256}});
     for (int64_t s0 = 0; s0 < SEQ; s0 += TILE_SEQ)
       for (int64_t d0 = 0; d0 < DIM; d0 += TILE_DIM)
-        dispatch<&EmbedLayernorm::tile>(k, TileArgs{.s0 = s0, .d0 = d0, .SEQ = SEQ, .DIM = DIM});
+        dispatch<&EmbedLayernorm::tile>(k, {.spad = SPAD,
+                                            .args = TileArgs{.s0 = s0, .d0 = d0, .SEQ = SEQ, .DIM = DIM}});
   }
 
   void tile(Item& w, const TileArgs& a) const {

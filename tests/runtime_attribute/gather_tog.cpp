@@ -5,14 +5,14 @@
 using namespace togsim;
 
 struct Gathers : Tog<Gathers> {
-  static constexpr Buf ROWBUF{.id = 1, .bytes = f32(8, 16)}, ELEMBUF{.id = 2, .bytes = f32(4, 8)},
-                       OUT{.id = 3, .bytes = f32(8, 16)};
+  static constexpr Buf ROWBUF{.id = 1}, ELEMBUF{.id = 2}, OUT{.id = 3};
   static constexpr std::array buffers{ROWBUF, ELEMBUF, OUT};
+  static constexpr int64_t SPAD = per_lane(f32(8, 16) + f32(4, 8) + f32(8, 16), 128);
   static constexpr Attribute ROWS{.id = 0, .rank = 2}, ELEMS{.id = 1, .rank = 2};
   static constexpr std::array attributes{ROWS, ELEMS};
   static constexpr Node STEP{.id = 0, .count = 1};
 
-  void entry(Kernel& k) const { dispatch<&Gathers::tile>(k, {.key = 0}); }
+  void entry(Kernel& k) const { dispatch<&Gathers::tile>(k, {.key = 0, .spad = SPAD}); }
 
   void tile(Item& w) const {
     for (int64_t t = 0; t < 2; ++t) {

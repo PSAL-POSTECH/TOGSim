@@ -34,7 +34,7 @@ class Core {
   virtual bool running();
   // True if this core has work actively in flight (DMA / compute pipeline / queues)
   // that will produce a future finish event -- i.e. running() minus "tiles waiting".
-  // Used by the frozen-state (spad-too-small) guard.
+  // Used by the frozen-state guard.
   bool has_inflight();
   virtual bool can_issue(const std::shared_ptr<Tile>& op);
   int max_dispatch(const std::shared_ptr<Tile>& op) const;
@@ -86,12 +86,8 @@ class Core {
   void record_unit_window(const std::shared_ptr<Instruction>& inst);
   // Credit every recorded window's share of [lo, hi) into _stat_unit_spread; drop windows ended by hi.
   void credit_unit_windows(cycle_type lo, cycle_type hi);
-  // A consumer leaves the buffer versions it read; the last reader of a version to be issued frees its bytes.
-  void release_sram(const std::shared_ptr<Instruction>& inst);
-  void release_sram(const std::shared_ptr<Tile>& tile);
-  // Occupy inst's buffer-version footprint on issue; false if it would overflow
-  // the spad this cycle (the caller stalls it). True for untracked insts.
-  bool try_occupy_sram(const std::shared_ptr<Instruction>& inst);
+  // A work-item ended: the spad it took when it entered is free again.
+  void release_spad(const std::shared_ptr<Tile>& tile);
   // The cycles a compute runs: its table cycles, shortened under systolic_array_split by
   // spreading its array unit's rows over the arrays (see SimulationConfig::systolic_array_split).
   cycle_type split_compute_cycles(const std::shared_ptr<Instruction>& inst) const;
@@ -162,11 +158,9 @@ class Core {
   std::queue<mem_fetch*> _response_queue;
   uint32_t _waiting_write_reqs;
 
-  // The spad: bytes in use, the limit (0: none), and each buffer version's bytes.
-  size_t _sram_used = 0;
-  size_t _sram_capacity = 0;
-  std::unordered_map<int64_t, size_t> _sram_allocs;
-  std::unordered_map<int64_t, int> _sram_readers;
+  // A lane's spad: the bytes the work-items in flight state, and the limit (0: none).
+  size_t _spad_used = 0;
+  size_t _spad_capacity = 0;
   std::multimap<cycle_type, DueAction> _due_events;
   uint64_t _dma_ready_pending = 0;   // DMAs whose data is done and whose ready latency is still running
 };

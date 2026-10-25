@@ -1,6 +1,7 @@
 // One work-item: a 16 KB load, one compute that names tile id TILE_ID (1 unless defined) and a 16 KB store.
 // compute_type 0: the segment grouping. NO_COMPUTE: the load is stored as it is, and no tile id is named.
 #include "togsim_runtime.h"
+#define SPAD_PER_LANE (((ROWS * COLS * 4) + (ROWS * COLS * 4) + 127) / 128)
 
 #ifndef TILE_ID
 #define TILE_ID 1
@@ -24,10 +25,8 @@ static void tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
 extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape_args) {
   (void)shape_args; (void)n_shape_args;
   int64_t iv[1] = {0};
-  togsim_dispatch(ctx, tile, iv, 1, 7);
+  togsim_dispatch(ctx, tile, iv, 1, 7, SPAD_PER_LANE);
 }
 
-extern "C" const int32_t togsim_spad_buffer_count = 3;
-extern "C" const int64_t togsim_spad_buffer_bytes[3] = {0, ROWS * COLS * 4, ROWS * COLS * 4};
 extern "C" const int32_t togsim_runtime_attribute_count = 0;
 extern "C" const int32_t togsim_runtime_attribute_rank[1] = {0};

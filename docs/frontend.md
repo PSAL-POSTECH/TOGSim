@@ -72,11 +72,11 @@ a config is accepted when all of these hold:
 - `SA * vpu_num_lanes`, the columns of one matmul instruction, divides a tile's columns: it
   divides 64 (and so 256).
 
-The spad is not one of them: a node cuts a tile no larger than itself, and is held against the
-spad on its own ([Nodes that do not run](#nodes-that-do-not-run)). The frontend reads a core's
-spad as TOGSim does: `vpu_spad_size_kb_per_lane` x `vpu_num_lanes` when the config gives both
-(a `core_spad_size_kb` beside them that is not their product is exit `4`, as TOGSim refuses it),
-else `core_spad_size_kb` alone, else no limit.
+The spad is not one of them: a kernel's dispatches state their spad per lane (its buffers'
+bytes over `vpu_num_lanes`, which the frontend passes as `-DLANES`), and TOGSim refuses a TOG
+whose dispatch states more than `vpu_spad_size_kb_per_lane` while it loads it: exit `6`. A
+`core_spad_size_kb` alone, or beside the lanes other than `vpu_spad_size_kb_per_lane` x
+`vpu_num_lanes`, is exit `4`, as TOGSim refuses it.
 
 Of `configs/`, `tpuv3_8x8.yml` is accepted. The 32-lane and 128-lane configs are refused: one matmul instruction is 1024 and 16384 columns there, wider than the
 tile. ACS on its own (`python3 -m togsim_frontend.acs`) is not bound by
@@ -91,12 +91,10 @@ is grouped, is not over two spatial axes, has a kernel larger than its padded in
 output extent by its attributes is not the one ONNX shape inference recorded; a Conv whose
 `strides` or `dilations` are not two integers of at least 1, whose `pads` are not four of at least
 0, or whose `auto_pad` is not one ONNX defines; a node with an input that has an extent of 0; a
-Gemm, MatMul or Conv whose tile's spad buffers (accumulator, weights and input, all held at once
-by its matmul) are more than a core's spad, as TOGSim refuses a TOG with a work-item that needs
-more of the spad [at once](tog-abi.md#buffers-and-the-scratchpad) than a core has (the largest
-Conv tile takes 384 KB, the 8x8 config's spad is 256 KB); a node whose kernel names a tile id
-the tables ACS wrote do not cover. A node TOGSim did not run to the end is not one of them:
-that is exit `6`. Metadata operators (Reshape, Transpose, ...) have
+node whose kernel names a tile id the tables ACS wrote do not cover. A node TOGSim did not run to
+the end is not one of them: that is exit `6`, and so is a node whose kernel's dispatch states more
+spad than a lane has (the largest Conv tile takes 384 KB, 48 KB on each of the 8x8 config's 8
+lanes of 32 KB). Metadata operators (Reshape, Transpose, ...) have
 no work and are counted as no-ops.
 
 ## Convolutions

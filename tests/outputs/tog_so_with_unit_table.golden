@@ -15,7 +15,7 @@ dma_store_ready_cycles: N
 vpu_num_lanes: N
 vpu_spad_size_kb_per_lane: N
 isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, pytorchsim_tpuv6e, spad-vector-memory]
-vcix: {tpu_mxu_queue_entries: N, tpu_mxu_delay_cycles: N, tpu_mxu_registers: N, tpu_mxu_issue_slots: N, tpu_mxu_word_a_cycle: N, tpu_xlu_queue_entries: N, tpu_xlu_latency_cycles: N, tpu_xlu_elements_per_cycle: N, tpu_xlu_issue_per_cycle: N, tpu_sfu_latency_cycles: N, tpu_sfu_queue_registers: N}
+vcix: {tpu_mxu_queue_entries: N, tpu_mxu_delay_cycles: N, tpu_mxu_registers: N, tpu_mxu_issue_slots: N, tpu_mxu_word_a_cycle: N, tpu_xlu_queue_entries: N, tpu_xlu_latency_cycles: N, tpu_xlu_move_latency_cycles: N, tpu_xlu_elements_per_cycle: N, tpu_xlu_issue_per_cycle: N, tpu_sfu_latency_cycles: N, tpu_sfu_queue_registers: N}
 address_map: {spad_vaddr: <hex>, dram_base: <hex>, dram_size: N}
 dram_type: ramulator2
 dram_channels: N
@@ -72,7 +72,7 @@ icnt_injection_ports_per_core: N
 [trace] [N][Core N][REQ_TO_DRAM    ] MOVOUT dram=<hex> channel=N
 [trace] [N][Core N][REQ_TO_MEM     ] MOVIN dram=<hex> channel=N
 [trace] [N][Core N][REQ_TO_MEM     ] MOVOUT dram=<hex> channel=N
-[trace] [N][Core N][TILE_SCHEDULED ] spad_footprint=N max_dispatch=N
+[trace] [N][Core N][TILE_SCHEDULED ] spad=N max_dispatch=N
 # after the run, in order
 [info] [TOGSim] Total cycles: N
 [info] Simulation finished

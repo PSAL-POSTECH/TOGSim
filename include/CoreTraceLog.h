@@ -31,8 +31,7 @@ std::string format_instruction_detail_line(Instruction& inst);
 std::string format_dma_latency_line(Instruction& inst, uint32_t cycles);
 
 void trace_tile_scheduled(cycle_type core_cycle, uint32_t core_id, const std::string& tag15,
-                          size_t spad_footprint, int max_dispatch);
-void trace_spad_hold(cycle_type core_cycle, uint32_t core_id, const std::string& tag15, size_t bytes);
+                          size_t spad, int max_dispatch);
 /** One memory request of a DMA at `tag` (REQ_TO_MEM, REQ_TO_DRAM, DRAM_WRITE_ACK): MOVIN or MOVOUT, `dram` and `channel`. */
 void trace_memory_request(cycle_type core_cycle, int core_id, const char* tag, bool write, uint64_t addr,
                           uint32_t channel);

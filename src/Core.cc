@@ -15,7 +15,7 @@ Core::Core(uint32_t id, SimulationConfig config)
       _dma(id, config.dram_req_size, config.l2d_type != L2CacheType::NOCACHE) {
   _stat_inst_count.resize(static_cast<size_t>(Opcode::COUNT), 0);
   _stat_tot_skipped_inst.resize(static_cast<size_t>(Opcode::COUNT), 0);
-  _sram_capacity = (size_t)config.core_spad_size_kb * 1024;  // 0 = throttle disabled
+  _spad_capacity = config.spad_bytes_per_lane;  // 0 = no limit
 }
 
 // The cycles a compute runs and the arrays it is spread over are its tile's window in the unit table
@@ -68,85 +68,36 @@ void Core::process_due_events() {
   }
 }
 
-// A reader of buffer versions is issued: a version whose last reader this is gives its bytes back.
-void Core::release_sram(const std::shared_ptr<Instruction>& inst) {
-  if (!_sram_capacity) return;
-  for (int64_t id : inst->get_sram_release()) {
-    auto readers = _sram_readers.find(id);
-    if (readers == _sram_readers.end() || --readers->second > 0) continue;
-    _sram_readers.erase(readers);
-    auto it = _sram_allocs.find(id);
-    if (it == _sram_allocs.end()) continue;
-    _sram_used -= it->second;
-    _sram_allocs.erase(it);
-    _issue_dirty = true;   // freed spad bytes -> re-arm
-  }
-}
-
-// A work-item ended: the bytes of its versions that no reader freed leave the spad, and so does its kernel's
-// hold when it is the kernel's last work-item on this core.
-void Core::release_sram(const std::shared_ptr<Tile>& tile) {
-  const std::shared_ptr<SpadHold>& hold = tile->get_spad_hold();
-  if (hold && hold->left && --hold->left == 0 && hold->taken) {
-    _sram_used -= hold->bytes;
-    _issue_dirty = true;
-    core_trace_log::trace_spad_hold(_core_cycle, _id, TraceLogTag::pad15(TraceLogTag::kSpadHoldEnd), hold->bytes);
-  }
-  if (!_sram_capacity) return;
-  for (int64_t id = tile->spad_version_first(); id < tile->spad_version_end(); id++) {
-    auto it = _sram_allocs.find(id);
-    if (it == _sram_allocs.end()) continue;
-    _sram_used -= it->second;
-    _sram_allocs.erase(it);
-    _issue_dirty = true;
-  }
-}
-
-bool Core::try_occupy_sram(const std::shared_ptr<Instruction>& inst) {
-  if (!_sram_capacity || inst->get_sram_alloc() < 0) return true;   // untracked
-  size_t F = inst->sram_footprint();
-  if (_sram_used + F > _sram_capacity) return false;                // would overflow -> stall
-  _sram_used += F;
-  _sram_allocs[inst->get_sram_alloc()] += F;                        // accumulate version footprint
-  return true;
-}
-
-// Two work-items in flight when two of `op` fit the spad beside its kernel's hold (twice the larger of its
-// footprint and what it needs at once), else one.
+// Two work-items in flight when twice the spad `op` states fits a lane's spad, else one.
 int Core::max_dispatch(const std::shared_ptr<Tile>& op) const {
-  if (!_sram_capacity) return 2;
-  const size_t held = op->get_spad_hold() ? op->get_spad_hold()->bytes : 0;
-  const size_t room = _sram_capacity > held ? _sram_capacity - held : 0;
-  return 2 * std::max(op->get_spad_footprint(), op->get_spad_at_once()) > room ? 1 : 2;
+  if (!_spad_capacity) return 2;
+  return 2 * op->get_spad() > _spad_capacity ? 1 : 2;
 }
 
-// A work-item enters while fewer than max_dispatch(op) are in flight. They are all of one kernel: a partition's
-// kernels run one after another (TileGraph::is_finished), so a kernel's hold has ended before the next one enters.
+// A work-item enters while fewer than max_dispatch(op) are in flight and its spad fits beside theirs.
 bool Core::can_issue(const std::shared_ptr<Tile>& op) {
-  return (int)_tiles.size() < max_dispatch(op);
+  if ((int)_tiles.size() >= max_dispatch(op)) return false;
+  return !_spad_capacity || _spad_used + op->get_spad() <= _spad_capacity;
 }
 
-// The first work-item of a kernel to reach the core takes the bytes the kernel holds on it.
+// A work-item takes the spad it states when it enters; release_spad gives it back when it ends.
 void Core::issue(std::shared_ptr<Tile> op) {
-  const std::shared_ptr<SpadHold>& hold = op->get_spad_hold();
-  if (_sram_capacity && hold && hold->bytes && !hold->taken) {
-    hold->taken = true;
-    _sram_used += hold->bytes;
-    core_trace_log::trace_spad_hold(_core_cycle, _id, TraceLogTag::pad15(TraceLogTag::kSpadHold), hold->bytes);
-  }
+  _spad_used += op->get_spad();
   if (op->get_instructions().size())
     core_trace_log::trace_tile_scheduled(_core_cycle, _id,
                                          TraceLogTag::pad15(TraceLogTag::kTileScheduled),
-                                         op->get_spad_footprint(), max_dispatch(op));
+                                         op->get_spad(), max_dispatch(op));
   for (const auto& inst : op->get_instructions()) {
     inst->set_owner_dirty(&_issue_dirty);   // dep-resolved enqueues re-arm THIS core
-    if (_sram_capacity)
-      for (int64_t id : inst->get_sram_release()) _sram_readers[id]++;
     if (inst->is_ready())
       op->enqueue_ready(inst);
   }
   _tiles.push_back(std::move(op));
   _issue_dirty = true;   // new dispatch -> re-arm
+}
+
+void Core::release_spad(const std::shared_ptr<Tile>& tile) {
+  _spad_used -= tile->get_spad();
 }
 
 std::shared_ptr<Tile> Core::pop_finished_tile() {
@@ -307,12 +258,11 @@ void Core::cycle() {
     bool held_compute = false;
     auto& instructions = _tiles[i]->get_ready_instructions();
     // Resume after the prefix already known to be blocked (Tile::scan_from).
-    for (auto it=_tiles[i]->scan_from(_sram_used, _typed.weight_free()); it!=instructions.end();) {
+    for (auto it=_tiles[i]->scan_from(_typed.weight_free()); it!=instructions.end();) {
       auto& inst = *it;
 
       switch (inst->get_opcode()) {
         case Opcode::MOVIN:
-          if (!try_occupy_sram(inst)) break;
           if (core_trace_log::trace_enabled()) core_trace_log::trace_instruction_line(_core_cycle,
                                                    _id,
                                                    TraceLogTag::pad15(TraceLogTag::kInstructionIssued),
@@ -324,7 +274,6 @@ void Core::cycle() {
           issued = true;
           break;
         case Opcode::MOVOUT:
-          release_sram(inst);   // store issued -> free the tiles it drained
           if (core_trace_log::trace_enabled()) core_trace_log::trace_instruction_line(_core_cycle,
                                                    _id,
                                                    TraceLogTag::pad15(TraceLogTag::kInstructionIssued),
@@ -343,8 +292,6 @@ void Core::cycle() {
               inst->held_for_core = true;
               break;
             }
-            // a fresh-output compute occupies its spad bytes on issue; stall if full.
-            if (!try_occupy_sram(inst)) break;
             if (typed::is_typed(ct) && !_typed.admit(inst)) break;   // no free weight slot -> stall (retry)
             inst->set_compute_cycle(split_compute_cycles(inst));
             auto& target_pipeline = typed::is_typed(ct) ? _typed.pipeline(inst) : _vu_compute_pipeline;
@@ -363,7 +310,6 @@ void Core::cycle() {
               if (auto token = _typed.token_to_free(inst))
                 _due_events.emplace(inst->finish_cycle, DueAction{DueAction::FreeWeightSlot, token, nullptr});
 
-            release_sram(inst);   // free the tiles it read (before the skip path)
             if (inst->get_compute_cycle() == 0) {
               inst->finish_instruction();
               count_unit_admitted(inst);
@@ -426,8 +372,8 @@ void Core::cycle() {
         instructions.erase(it);
         break;
       }
-      // Did not issue -> blocked on spad or a weight slot (the only two stalls).
-      _tiles[i]->note_blocked(it, _sram_used, _typed.weight_free());
+      // Did not issue -> blocked on a weight slot (the only stall).
+      _tiles[i]->note_blocked(it, _typed.weight_free());
       it++;
     }
     if (held_compute) _tiles[i]->drop_scan_cursor();
@@ -445,7 +391,7 @@ void Core::cycle() {
     for (int i=0; i<_tiles.size() && !issued; i++) {
       if (_tiles[i]->all_insts_finshed()) {
         _tiles[i]->set_status(Tile::Status::FINISH);
-        release_sram(_tiles[i]);
+        release_spad(_tiles[i]);
         _finished_tiles.push(std::move(_tiles[i]));
         _tiles.erase(_tiles.begin() + i); // FIXME. Inefficient data structure
         /* Let's retry */

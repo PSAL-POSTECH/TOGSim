@@ -2,6 +2,7 @@
 // (tile 0) and a vector compute (tile 1) that do not depend on each other: they ran side by side on the XLU
 // and VPU; a core runs one at a time.
 #include "togsim_runtime.h"
+#define SPAD_PER_LANE (((ROWS * COLS * 4) + (ROWS * COLS * 4) + (ROWS * COLS * 4) + 127) / 128)
 
 #define ROWS 64
 #define COLS 64
@@ -21,11 +22,9 @@ extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape
   (void)shape_args; (void)n_shape_args;
   for (int64_t i = 0; i < 2; i++) {
     int64_t iv[1] = {i};
-    togsim_dispatch(ctx, xlu_tile, iv, 1, i);
+    togsim_dispatch(ctx, xlu_tile, iv, 1, i, SPAD_PER_LANE);
   }
 }
 
-extern "C" const int32_t togsim_spad_buffer_count = 4;
-extern "C" const int64_t togsim_spad_buffer_bytes[4] = {0, ROWS * COLS * 4, ROWS * COLS * 4, ROWS * COLS * 4};
 extern "C" const int32_t togsim_runtime_attribute_count = 0;
 extern "C" const int32_t togsim_runtime_attribute_rank[1] = {0};

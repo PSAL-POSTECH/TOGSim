@@ -24,23 +24,15 @@ class TileSubGraph {
   const std::shared_ptr<Tile> peek_tile();
   std::shared_ptr<Tile> get_tile();
   int get_id() { return _id; }
-  // The id the next subgraph takes, and the way to hand ids back (see Instruction::rewind_global_inst_id).
-  static int next_id() { return _next_id; }
-  static void rewind_id(int id) { _next_id = id; }
   void set_core_id(int core_id) { _core_id = core_id; }
   int get_core_id() { return _core_id; }
   void init_cache_plan(std::shared_ptr<IntervalTree<unsigned long long,int>> plan) { _cache_plan = plan; }
   bool is_cacheable(unsigned long long start, unsigned long long end) { return _cache_plan->findOverlapping(start, end).size() != 0; }
   void set_progress(std::shared_ptr<KernelProgress> progress) { _progress = std::move(progress); }
   KernelProgress& progress() { return *_progress; }
-  struct CompareReadyTile {
-    bool operator()(const std::shared_ptr<Tile>& a, const std::shared_ptr<Tile>& b) const {
-      return a->get_required_sram_size() > b->get_required_sram_size();
-    }
-  };
 
  protected:
-  std::priority_queue<std::shared_ptr<Tile>, std::vector<std::shared_ptr<Tile>>, CompareReadyTile> _ready_tile_queue;
+  std::queue<std::shared_ptr<Tile>> _ready_tile_queue;
   std::set<std::shared_ptr<Tile>> _tile_set;
   int _id;
   int _core_id = -1;

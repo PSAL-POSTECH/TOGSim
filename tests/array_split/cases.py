@@ -4,7 +4,7 @@ from pathlib import Path
 
 from togtest import MIB, Case
 
-TOG = Path(__file__).resolve().parents[1] / "spad_footprint" / "state_stored_each_trip_tog.cpp"
+TOG = Path(__file__).resolve().parents[1] / "cycles" / "state_stored_each_trip_tog.cpp"
 UNITS = [(0, "TPUV6E_MXU", "rows", 1, 512), (0, "Vpu", "cycles", 1, 50)]
 REFUSED = {
     "refused.unit_table_without_array_unit": dict(
@@ -29,7 +29,7 @@ REFUSED = {
 
 
 def replay(t, cycles=600, units=UNITS, **machine):
-    """A segment TOG of tests/spad_footprint/ (compute_type 0, two work-items of four computes) on tpuv6e (2 arrays
+    """A segment TOG of tests/cycles/ (compute_type 0, two work-items of four computes) on tpuv6e (2 arrays
     per core, 128 lanes) with `machine` set: its one tile runs `cycles`, `units` is the unit table."""
     return t.simulate(t.tog(TOG, tensors=(MIB, MIB)), t.machine(**machine), [cycles], units)
 

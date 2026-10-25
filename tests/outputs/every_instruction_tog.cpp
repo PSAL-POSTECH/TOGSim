@@ -2,6 +2,7 @@
 // and its barrier, a sync load, a compute, a store, and a scatter whose element offsets are all 0.
 // Two work-items; compute_type 0 only.
 #include "togsim_runtime.h"
+#define SPAD_PER_LANE (((ROWS * COLS * 4) + (ROWS * COLS * 4) + (ROWS * COLS * 4) + (ROWS * 4) + 127) / 128)
 
 #define ROWS 64
 #define COLS 64
@@ -26,11 +27,9 @@ extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape
   (void)shape_args; (void)n_shape_args;
   for (int64_t i = 0; i < 2; i++) {
     int64_t iv[1] = {i};
-    togsim_dispatch(ctx, tile, iv, 1, i);
+    togsim_dispatch(ctx, tile, iv, 1, i, SPAD_PER_LANE);
   }
 }
 
-extern "C" const int32_t togsim_spad_buffer_count = 5;
-extern "C" const int64_t togsim_spad_buffer_bytes[5] = {0, ROWS * COLS * 4, ROWS * COLS * 4, ROWS * COLS * 4, ROWS * 4};
 extern "C" const int32_t togsim_runtime_attribute_count = 0;
 extern "C" const int32_t togsim_runtime_attribute_rank[1] = {0};

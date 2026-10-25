@@ -14,7 +14,7 @@ from togsim_frontend.onnx_frontend import emit
 from togsim_frontend.onnx_frontend import run as frontend
 from togsim_frontend.onnx_frontend import shapes
 from togsim_frontend.onnx_frontend import tiling
-from togsim_frontend.onnx_frontend.config import core_spad_kb, read_hardware, vector_length
+from togsim_frontend.onnx_frontend.config import check_spad, read_hardware, vector_length
 from togsim_frontend.onnx_frontend.onnx_ops import OPS, resolve
 from togsim_frontend.onnx_frontend.tiling import Hardware, check_systolic, systolic_tile, unsupported
 
@@ -23,9 +23,9 @@ GEMM = OPS["Gemm"][0]
 
 
 def test_tile_constants_reach_the_compiler_as_macros_not_as_source_edits():
-    """The macros are gemm's tile; the shape arguments come in the order gemm reads them, M K N."""
-    values = {"M": 512, "K": 64, "N": 256, "TM": 32, "TN": 256, "TK": 64}
-    assert emit.defines(GEMM, values) == ["TM=32", "TN=256", "TK=64"]
+    """The macros are gemm's tile and lanes; the shape arguments come in the order gemm reads them, M K N."""
+    values = {"M": 512, "K": 64, "N": 256, "TM": 32, "TN": 256, "TK": 64, "LANES": 8}
+    assert emit.defines(GEMM, values) == ["TM=32", "TN=256", "TK=64", "LANES=8"]
     assert emit.shape_args(GEMM, values) == [512, 64, 256]
 
 
@@ -191,10 +191,9 @@ def test_the_systolic_tile_is_the_same_on_every_machine():
 
 
 def test_a_machine_the_tiles_are_whole_matmul_instructions_on_is_supported():
-    """Whatever its spad: a node's tile is held against that, and it is no larger than the node."""
+    """Whatever its spad: TOGSim holds a node's tile against that, and it is no larger than the node."""
     assert unsupported(HW) == []
     assert unsupported(Hardware(sa=4, vlane=16, vlen_bits=256, array_unit="TPUV3_MXU")) == []
-    assert unsupported(Hardware(sa=8, vlane=8, vlen_bits=256, array_unit="TPUV3_MXU", spad_bytes=1024)) == []
 
 
 def test_a_machine_is_refused_for_each_fact_the_tiles_do_not_fit():
@@ -223,83 +222,34 @@ def test_an_unsupported_machine_is_an_error_before_anything_is_read_or_run(tmp_p
     assert not (tmp_path / "out").exists()
 
 
-def stated_spad_bytes(tmp_path, stem, macros):
-    """What kernels/<stem>_tog.cpp compiled with `macros` states in togsim_spad_buffer_bytes, buffer by buffer."""
-    so = emit.compile_so(str(paths.kernel_source(stem)), str(paths.include_dir()), str(tmp_path / f"{stem}.so"), macros)
-    return emit.spad_buffer_bytes(so)
-
-
-#: The spad TOGSim gives a core of each config here, in KB. TOGSim states it nowhere a program reads it but its log,
-#: so it is written out: vpu_spad_size_kb_per_lane x vpu_num_lanes, as each config gives both.
-SPAD_KB = {**{f"{name}.yml": 128 * 128 for name in (
-               "tpuv3_booksim", "tpuv3", "tpuv3_half", "tpuv4")},
-           "tpuv6e.yml": 1024 * 128,
-           "tpuv3_32x32.yml": 32 * 32, "tpuv3_8x8.yml": 32 * 8}
-
-
-def test_the_frontend_reads_the_spad_of_each_config_here_as_togsim_does():
-    configs = sorted((paths.root() / "configs").glob("*.yml"))
-    assert {c.name: read_hardware(str(c)).spad_bytes // 1024 for c in configs} == SPAD_KB
-
-
-def test_the_spad_is_its_lanes_and_a_core_spad_size_kb_beside_them_may_only_restate_it():
-    """TOGSim's rule (core_spad_kb, src/Common.cc), on the machines its tests/spad_capacity run."""
+def test_a_core_spad_size_kb_is_refused_alone_and_may_only_restate_the_lanes():
+    """TOGSim's rule (spad_bytes_per_lane, src/Common.cc): a dispatch states its spad per lane."""
     lanes = {"vpu_num_lanes": 3, "vpu_spad_size_kb_per_lane": 16}
-    assert core_spad_kb(lanes) == core_spad_kb({**lanes, "core_spad_size_kb": 48}) == 48
+    check_spad(lanes)
+    check_spad({**lanes, "core_spad_size_kb": 48})
     with pytest.raises(ValueError, match="core_spad_size_kb: 47 is not vpu_spad_size_kb_per_lane x vpu_num_lanes = "
                                          "16 x 3 = 48: state the spad once"):
-        core_spad_kb({**lanes, "core_spad_size_kb": 47})
-    assert core_spad_kb({"vpu_num_lanes": 256, "core_spad_size_kb": 48}) == 48
-    assert core_spad_kb({"vpu_spad_size_kb_per_lane": 16, "core_spad_size_kb": 48}) == 48
-    assert core_spad_kb({"vpu_num_lanes": 256}) == 0
-    with pytest.raises(ValueError, match="65536 x 65536 = 4294967296 KB is more than a spad TOGSim holds"):
-        core_spad_kb({"vpu_num_lanes": 65536, "vpu_spad_size_kb_per_lane": 65536})
+        check_spad({**lanes, "core_spad_size_kb": 47})
+    with pytest.raises(ValueError, match="core_spad_size_kb: a work-item states its spad per lane"):
+        check_spad({"vpu_num_lanes": 256, "core_spad_size_kb": 48})
+    check_spad({"vpu_num_lanes": 256})
 
 
-def test_a_conv_or_gemm_holds_every_buffer_its_kernel_states_and_the_largest_conv_tile_takes_384_kb(tmp_path):
-    """Its accumulator, weights and input, all read by its matmul; the others are not held against the spad."""
-    conv = stated_spad_bytes(tmp_path, "conv", ["TILE_M=32", "TILE_N=256", "TILE_K=64", "TILE_I_H=8", "SA=8"])
-    gemm = stated_spad_bytes(tmp_path, "gemm", ["TM=32", "TN=256", "TK=64"])
-    assert sum(conv) == 393216 and sum(gemm) == 106496
-    hw = Hardware(sa=8, vlane=8, vlen_bits=256, array_unit="TPUV3_MXU", spad_bytes=393216)
-    assert tiling.spad_refusal("conv", conv, hw) is None and tiling.spad_refusal("gemm", gemm, hw) is None
-    small = Hardware(sa=8, vlane=8, vlen_bits=256, array_unit="TPUV3_MXU", spad_bytes=393216 - 1024)
-    assert tiling.spad_refusal("conv", conv, small) == ("a work-item of kernel conv holds its 3 spad buffers at once, "
-                                                        "393216 bytes, and a core's spad is 392192: TOGSim refuses the "
-                                                        "TOG")
-    assert tiling.spad_refusal("conv", conv, HW) is None
-    assert tiling.spad_refusal("attention", [1 << 30], small) is None
-
-
-def test_a_node_whose_tile_the_spad_does_not_hold_is_refused_and_one_of_fewer_channels_is_not(tmp_path):
-    """On the 8x8 config's 256 KB, a Conv of 256 output channels cuts the 384 KB tile; of 128, a tile of 224 KB."""
-    hw = read_hardware(str(paths.root() / "configs" / "tpuv3_8x8.yml"))
-    assert hw.spad_bytes == 256 * 1024
-    for channels, refused in ((256, True), (128, False)):
-        node = helper.make_node("Conv", ["x", "w"], ["y"], name="conv", pads=[1, 1, 1, 1])
-        shapes_of = {"x": [1, 64, 16, 32], "w": [channels, 64, 3, 3]}
-        if refused:
-            with pytest.raises(ValueError, match="node 'conv': a work-item of kernel conv holds its 3 spad buffers at "
-                                                 "once, 393216 bytes, and a core's spad is 262144"):
-                frontend.prepare_node(node, CONV, shapes_of, hw, str(tmp_path))
-        else:
-            assert os.path.isdir(frontend.prepare_node(node, CONV, shapes_of, hw, str(tmp_path)))
+def test_every_kernel_that_dispatches_is_compiled_with_the_lanes():
+    """LANES spreads a kernel's .spad over the machine's lanes; flatten dispatches nothing."""
+    for refs in OPS.values():
+        for kernel in refs:
+            assert ("LANES" in kernel.hw_names) == (kernel.stem != "flatten"), kernel.stem
 
 
 def test_the_second_pass_of_layernorm_and_global_avgpool_keeps_the_128_row_tile_of_its_kernel(tmp_path):
     """The statistics pass and the scale pass run a tile of their own, TM_STATS and TC_SCALE. The frontend names it
-    to predict its short last tile, and names the kernel's default: the kernel states the spad it does without it."""
+    to predict its short last tile, and names the kernel's default."""
     layernorm, avgpool = OPS["LayerNormalization"][0], OPS["GlobalAveragePool"][0]
     node = helper.make_node("LayerNormalization", ["x"], ["y"], name="ln")
     assert shapes.constants(node, layernorm, {"x": [64, 256]}, HW)["TM_STATS"] == tiling.SECOND_PASS_ROWS == 128
     node = helper.make_node("GlobalAveragePool", ["x"], ["y"], name="gap")
     assert shapes.constants(node, avgpool, {"x": [1, 64, 16, 16]}, HW)["TC_SCALE"] == 128
-    for stem, tile, second in (("layernorm", ["TM=8", "TN=64"], "TM_STATS=128"),
-                               ("global_avgpool", ["TC=8", "THW=64"], "TC_SCALE=128")):
-        assert stated_spad_bytes(tmp_path / "named", stem, tile + [second]) == \
-            stated_spad_bytes(tmp_path / "default", stem, tile)
-        assert stated_spad_bytes(tmp_path / "other", stem, tile + [second[:-3] + "64"]) != \
-            stated_spad_bytes(tmp_path / "default", stem, tile)
 
 
 def test_the_array_dimension_is_vpu_num_lanes_unless_sa_is_given(tmp_path):

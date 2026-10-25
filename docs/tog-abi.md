@@ -4,34 +4,32 @@
 [togsim.hpp](tog-api.md) lowers every call to it. This page says what the calls model, the buffer
 and scratchpad rules, the files and tables, and the refusals.
 
-togsim.hpp exports the six symbols TOGSim looks up: `togsim_kernel` (the TOG's `entry`),
-`togsim_spad_buffer_count` and `togsim_spad_buffer_bytes[]` (from `buffers`; 0 for an id that is
-no buffer), `togsim_runtime_attribute_count` and `togsim_runtime_attribute_rank[]` (from
-`attributes`, by id; a count of 0 when there are none) and `togsim_abi_version`. TOGSim defines
+togsim.hpp exports the four symbols TOGSim looks up: `togsim_kernel` (the TOG's `entry`),
+`togsim_runtime_attribute_count` and `togsim_runtime_attribute_rank[]` (from `attributes`, by id;
+a count of 0 when there are none) and `togsim_abi_version`. TOGSim defines
 the calls, `togsim_runtime_attribute` among them.
 
 ## How TOGSim runs a TOG
 
-1. TOGSim opens `tog.so`, checks the version, reads the buffer and attribute tables and calls
+1. TOGSim opens `tog.so`, checks the version, reads the attribute table and calls
    `togsim_kernel` **once**. Each `dispatch` only registers a work-item (its function, a copy of
-   its arguments, its key) and binds it to a core: round-robin, in dispatch order, over the cores
+   its arguments, its key, its spad) and binds it to a core: round-robin, in dispatch order, over the cores
    of the kernel's partition. Then it loads and checks the
    [runtime attribute records](#runtime-attributes).
-2. TOGSim then calls each work-item's body to record its instructions. It calls each body **three
-   times** over the run: twice up front, to find the buffers and to plan the spad, and once more
-   when it builds the work-item's instructions.
+2. TOGSim then calls each work-item's body to record its instructions. It calls each body **twice**
+   over the run: once up front, to check it, and once more when it builds the work-item's
+   instructions.
 3. The recorded instructions run on the modeled core as [the model](tutorial.md#the-model) says: each as soon
    as the instructions it depends on are done and the resource it needs is free.
 
 Two rules follow, and nothing checks them:
 
 - **A body must be pure.** It may read only its `Item`, its arguments and its runtime attributes,
-  and must make the same calls every time. A counter, a static variable or I/O in a body happens three times.
+  and must make the same calls every time. A counter, a static variable or I/O in a body happens twice.
 - **Call order is not execution order.** An instruction depends only on instructions that were
   called *before* it in the same work-item and wrote a buffer it reads; a load depends on nothing.
-  Write the producer before the consumer: otherwise the consumer reads
-  [data already on the chip](#data-that-is-already-on-the-chip). Two instructions that share no
-  buffer are not ordered at all.
+  Write the producer before the consumer: otherwise the consumer waits for nothing, as if its data
+  were on the chip already. Two instructions that share no buffer are not ordered at all.
 
 ## DMAs
 
@@ -69,53 +67,21 @@ afterwards waits for it.
 
 ## Buffers and the scratchpad
 
-Buffer ids do two jobs. They are the edges of the dependency graph, and they are what occupies
-the scratchpad.
+Buffer ids are the edges of the dependency graph, and nothing else: a buffer has no size.
 
 - **Buffer ids are local to a work-item.** The same id in two work-items is two unrelated
-  buffers: no instruction waits for an instruction of another work-item, and each work-item's
-  buffers take their own space in the spad.
-- Give every buffer a DMA fills or drains, and every [held](#data-that-is-already-on-the-chip)
-  buffer, a size in `buffers`.
-- A work-item's `spad_footprint` (printed on its `TILE_SCHEDULED` line) is the sum of the sizes of
-  its own distinct buffers, counting only buffers that some DMA of the TOG moves. A buffer that
-  only computes touch, like the gemm accumulator, is not counted.
-- A work-item's own buffer occupies the spad from the load, or the compute, that first writes it
-  until the last of its readers is issued: a store, or a compute that reads it without writing it.
-  A compute that reads and writes the same buffer keeps it alive. A buffer that nothing reads
-  keeps its bytes until its work-item ends.
-- The machine's `core_spad_size_kb` is the spad of one core. A core keeps two work-items in flight
-  when two of them fit, else one (`max_dispatch` on the `TILE_SCHEDULED` line). Without the key
-  the spad is unlimited.
-- `core_spad_size_kb` must hold what a work-item needs **at once**: the most that one of its
-  instructions finds in the spad when it is issued, whatever the order of issue. That is the bytes
-  the instruction occupies itself (a load its data tile, a compute a buffer it writes first), plus
-  the bytes of every buffer that was filled by an instruction it waits for and that it, or an
-  instruction that waits for it, reads, and of every buffer nothing reads whose fill does not wait
-  for it. An instruction is issued only while that fits, so a work-item that needs more would never end: its TOG is
-  [refused](#what-gets-a-run-refused) while it is loaded, before anything is simulated. The hello
-  TOG holds its two buffers together at the compute, 32768 bytes: it runs in a spad of 32 KB
-  and is refused in a smaller one.
-- A work-item that names more bytes than the spad without holding them together is not refused:
-  its loads wait for the spad, and some such runs stall or never end
-  ([known limitations](running.md#known-limitations)).
-
-### Data that is already on the chip
-
-A TOG states the transfers that happen. When data is on the chip already, the TOG has no load for
-it, and an instruction reads a buffer that nothing in its work-item wrote: a **held buffer**.
-TOGSim does not decide that a load can be left out; the emitter of the TOG does.
-
-- A held buffer has the size `buffers` gives its id, and a read of it waits
-  for nothing.
-- The core that runs the work-item holds those bytes once, from the kernel's first work-item there
-  until its last one there ends. A later write to the id in the same work-item takes no more.
-- A kernel that holds `H` bytes is refused and scheduled as the same kernel without those reads in
-  a spad `H` bytes smaller. It has its core to itself: no other kernel's work-items run there
-  beside it.
-- The spad between kernels is not modelled: a kernel accounts only what it reads as held, while it
-  runs. A copy node is a TOG of its own that only loads, launched before the kernels that read the
-  data as held.
+  buffers: no instruction waits for an instruction of another work-item.
+- **A dispatch states its work-item's spad.** `.spad` is the most bytes per lane the work-item
+  holds in the scratchpad at once, whatever it holds: the compiler's measure of it (its ELF's
+  `.spad` section), not something TOGSim infers from the DMAs. It is printed on the work-item's
+  `TILE_SCHEDULED` line.
+- The machine's `vpu_spad_size_kb_per_lane` is the spad of one lane. A dispatch whose `.spad` is
+  more, or negative, is [refused](#what-gets-a-run-refused) while the TOG is loaded, before
+  anything is simulated. Without the key the spad is unlimited.
+- A work-item enters a core while its `.spad` fits beside the `.spad` of the work-items in
+  flight there; it takes it when it enters and gives it back when it ends. A core keeps two
+  work-items in flight when twice the `.spad` fits a lane, else one (`max_dispatch` on the
+  `TILE_SCHEDULED` line). No instruction waits for spad.
 
 ## Runtime attributes
 
@@ -142,7 +108,7 @@ not run.
 
 A gather or scatter is a DMA with `Desc.gather`: togsim.hpp passes `togsim_dma` one element offset
 per element of the tile, row-major, read from its attribute's row, and TOGSim adds each, times the
-element's bytes, to that element's address. `tests/spad_footprint/indirect_store_tog.cpp` and
+element's bytes, to that element's address. `tests/cycles/indirect_store_tog.cpp` and
 `tests/runtime_attribute/gather_tog.cpp` are worked examples.
 
 ### What TOGSim checks
@@ -292,8 +258,8 @@ needs a unit table that has rows of its array unit**. To run without one, set
 
 | Message | Exit | Cause | Fix |
 |---|---|---|---|
-| `[TOGSim] spad buffer 2 is DMA'd but the TOG states no size for it (togsim_spad_buffer_bytes has 2 entries)` | 1 | A DMA moves a buffer whose id is past the table or has size 0. | Add its size. |
 | `togsim.hpp: no TOG registered: derive the TOG's struct from togsim::Tog<itself>` | 1 | The TOG's struct does not derive from `togsim::Tog<itself>` (generated code: no `register_tog`). | Derive it. |
+| `[TOGSim] TOG <so>: work-item 0 (key 0) states 1048577 bytes per lane of spad, and a lane's spad holds 1048576 (vpu_spad_size_kb_per_lane: 1024)` | 1 | A dispatch's `.spad` is more than [a lane's spad](#buffers-and-the-scratchpad). | State what the work-item holds, or raise `vpu_spad_size_kb_per_lane`. |
 | `togsim.hpp: a work-item returned with a semaphore whose loads it did not wait` | 1 | A load signaled a semaphore that no `wait` followed. | Wait for it, or make the load synchronous. |
 | `togsim.hpp: a wait on a semaphore no load signaled since its last wait` | 1 | A `wait` with no load on its semaphore since the last one. | Wait on the loads' semaphore, once per round of loads. |
 | `[TOGSim] TOG <so>: work-item 0 (key 0) computes tile id 1, which the cycle table does not hold (it has 1 tile ids, 0 to 0)` | 1 | A `togsim_compute` names a `tile_id` at or beyond the number of rows of the cycle table. | Add the row, or fix the `tile_id`. |
@@ -306,8 +272,7 @@ needs a unit table that has rows of its array unit**. To run without one, set
 | `[TOGSim] systolic_array_split: the unit table has no array unit TPUV6E_MXU` | 1 | The first unit table that has rows has none for the array unit. | Add a row of it, or turn the split off. |
 | `[TOGSim] <dir>/tog_tensors.txt is absent: the TOG's tensor arguments have no addresses` | 1 | No `tog_tensors.txt` beside `tog.so`. | Create it. |
 | `togsim: dlopen failed: valid.so: cannot open shared object file: No such file or directory` | 1 | `--tog_so` has no `/` in it, so the loader searches the library path, not the current directory. | Write `./valid.so`. |
-| `[TOGSim] TOG <so>: work-item 0 (key 0) needs 32768 bytes in the spad at once, and a core's spad holds 16384 (core_spad_size_kb: 16)` | 1 | A work-item holds more bytes in the spad [at once](#buffers-and-the-scratchpad) than `core_spad_size_kb`. | Raise it to at least those bytes, or free a buffer before the next is filled. |
-| `[TOGSim] TOG <so>: work-item 0 (key 0) needs 16384 bytes in the spad at once beside the 16384 bytes core 0 holds for the kernel (buffers 2, read without having been written), and a core's spad holds 16384 (core_spad_size_kb: 16)` | 1 | The same, beside [held buffers](#data-that-is-already-on-the-chip). | Raise it, or write the producer of those ids before their reader. |
+| `what():  core_spad_size_kb: a work-item states its spad per lane, so the spad is stated by vpu_spad_size_kb_per_lane (and vpu_num_lanes)` | 134 | The config states the spad by `core_spad_size_kb` alone. | State `vpu_spad_size_kb_per_lane` ([keys](config-keys.md)). |
 | `Config file <path>/configs/ramulator2_configs/HBM3_TPUv6e.yaml does not exist!` | 255 | A shipped config was copied out of `configs/`; its `../configs/...` path no longer resolves. | Make the path absolute ([how](machine.md#changing-the-machine)). |
 | `what():  Config key num_cores not found` | 134 | The machine config lacks a required key. | Add it ([keys](config-keys.md)). |
 
@@ -315,13 +280,12 @@ A message that starts with `togsim: dlopen failed:` and names an undefined symbo
 calls a function that neither it nor TOGSim defines.
 
 In a session a refusal is the error of the command that met it, `[TOGSim] Error processing command
-<n> (type: LAUNCH_KERNEL): ...`. The spad refusal is always the launch's. When the config sets
-`core_spad_size_kb` the work-items are built once while the TOG is loaded, so a broken semaphore
-contract is the launch's error too; without a spad size it is the error of the `DEVICE_SYNC` that
-runs the kernel.
+<n> (type: LAUNCH_KERNEL): ...`. The spad refusal is always the launch's. A work-item is built
+only when it runs, so a broken semaphore contract is the error of the `DEVICE_SYNC` that runs the
+kernel.
 
 TOGSim has more refusals than a first TOG runs into; all exit 1. Its raw C ABI checks (version
-symbol, buffer table, semaphore counts, `ndim`) are ones a TOG built on togsim.hpp cannot fail
+symbol, semaphore counts, `ndim`, a negative `.spad`) are ones a TOG built on togsim.hpp cannot fail
 ([its refusals](tog-api.md#refusals)), except a `.so` built against another version:
 
 | Message contains | Cause |
@@ -329,7 +293,7 @@ symbol, buffer table, semaphore counts, `ndim`) are ones a TOG built on togsim.h
 | `togsim: refusing TOG <so>: it was built against TOG ABI 16, TOGSim is version 1.0.0; rebuild the TOG` | The TOG's `togsim_abi_version` is an integer ABI of before 1.0.0, or (`... built against version 2.0.0 ...`) a version TOGSim does not accept: it was compiled against another version of the header. |
 | `togsim: refusing TOG <so>: it states no runtime attribute table (togsim_runtime_attribute_count / togsim_runtime_attribute_rank)` | A raw-ABI TOG that does not define the attribute table (togsim.hpp always does). |
 | `[TOGSim] TOG <so>: ...` of [the runtime attribute checks](#what-togsim-checks) | A record that is missing, malformed, stale or not the TOG's. |
-| `[Simulator] simulation wedged at cycle <n>: work remains but nothing is in flight` | A work-item waits for spad that is never freed, in a way the loader does not see ([known limitations](running.md#known-limitations)). |
+| `[Simulator] simulation wedged at cycle <n>: work remains but nothing is in flight` | Work remains and nothing will move it. |
 | `--unit_table <file>: cannot open` | The unit table is not there. |
 | `unit <name> disagrees with line <n> on unit_of_work/capacity` | Two rows of one unit differ in `unit_of_work` or `capacity_per_cycle`. |
 | `second row for tile <id> unit <name>` | Two rows for the same `tile_id` and unit. |

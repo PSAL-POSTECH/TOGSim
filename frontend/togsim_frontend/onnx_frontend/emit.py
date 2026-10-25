@@ -2,7 +2,6 @@
 at compile time, its dimensions the shape arguments TOGSim hands togsim_kernel from tog_shape.txt."""
 from __future__ import annotations
 
-import ctypes
 import os
 import shutil
 import subprocess
@@ -38,13 +37,6 @@ def compile_so(cpp_path: str, include_dir: str, out_so: str, macros: list[str] =
          "-I", include_dir, *[f"-D{m}" for m in macros], cpp_path, "-o", out_so],
         check=True, capture_output=True, text=True, errors="replace")
     return out_so
-
-
-def spad_buffer_bytes(so: str) -> list[int]:
-    """What the compiled kernel `so` states in togsim_spad_buffer_bytes: the bytes TOGSim gives each spad buffer."""
-    lib = ctypes.CDLL(os.path.abspath(so), mode=os.RTLD_LAZY)
-    count = ctypes.c_int32.in_dll(lib, "togsim_spad_buffer_count").value
-    return list((ctypes.c_int64 * count).in_dll(lib, "togsim_spad_buffer_bytes")) if count else []
 
 
 def write_tog_dir(tog_dir: str, so: str, shape: list[int], tensors: list[int]) -> str:

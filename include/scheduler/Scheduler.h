@@ -27,13 +27,4 @@ class Scheduler {
   std::deque<std::unique_ptr<TileGraph>> _tile_graph;
   SimulationConfig _config;
   std::function<void()> _kernel_ended;
-
-  struct CompareTile {
-    bool operator()(const std::shared_ptr<Tile>& a, const std::shared_ptr<Tile>& b) const {
-      if (a->get_ready_counter() == b->get_ready_counter()) {
-        return a->get_required_sram_size() > b->get_required_sram_size();
-      }
-      return a->get_ready_counter() > b->get_ready_counter();
-    }
-  };
 };

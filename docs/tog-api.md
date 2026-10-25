@@ -16,7 +16,7 @@ buffers{...}`, an optional `static constexpr std::array attributes{...}` and a
 `void entry(Kernel&) const`.
 [`examples/hello/hello_tog.cpp`](tutorial.md#1-load-compute-store) is a complete one.
 
-- `buffers` lists every spad buffer a call names.
+- `buffers` lists every buffer id a call names.
 - `attributes` lists every [runtime attribute](#runtime-attributes) a work-item reads.
 - `entry` runs once and dispatches the work-items. A work-item function is a member
   `void f(Item&) const` or `void f(Item&, const Args&) const`, or, in generated code, a free
@@ -26,7 +26,7 @@ buffers{...}`, an optional `static constexpr std::array attributes{...}` and a
   the runtime attributes the functional run recorded for its key; nothing else reaches it.
 - One TOG per `.so`, in one `.cpp`: the header defines the ABI's symbols, so a second `.cpp` that
   includes it does not link.
-- TOGSim calls a work-item body three times, so it must be pure, and its calls are ordered only
+- TOGSim calls a work-item body twice, so it must be pure, and its calls are ordered only
   by their buffers ([the rules](tog-abi.md#how-togsim-runs-a-tog)).
 
 ## Types
@@ -34,7 +34,7 @@ buffers{...}`, an optional `static constexpr std::array attributes{...}` and a
 | Type | Fields | What it is |
 |---|---|---|
 | `Elem` | `.bits`, `.kind` | An element type: `u8 i8 i16 f16 bf16 i32 f32 i64 f64`. The ABI sees only `bits`; `kind` tells f16 from bf16 and i32 from f32. `f32(64, 64)` is the bytes of 64 x 64 of them. |
-| `Buf` | `.id`, `.bytes` | A spad buffer: its id, below 1024, and its size. 0 bytes is a dependency edge only. A list of buffers is written `{A, B}`. |
+| `Buf` | `.id` | A buffer: an id below 1024 that orders the calls naming it. It has no size. A list of buffers is written `{A, B}`. |
 | `Dims` | | One to four extents or strides: `{64, 64}`, or `Dims(64, 64)`, the form generated code builds. |
 | `Desc` | `.ptr`, `.type`, `.offset`, `.dims`, `.strides`, `.gather` | A DMA descriptor: `dims` elements of `type` from kernel argument `ptr` (its line of `tog_tensors.txt`), `strides` elements apart, from `offset` elements in. `gather` (default none) makes it a gather or scatter. |
 | `Attribute` | `.id`, `.rank` | A [runtime attribute](#runtime-attributes): an `int64_t` scalar (`rank` 0) or array the functional run recorded per work-item key. Its extents are in each record, not here. |
@@ -42,7 +42,8 @@ buffers{...}`, an optional `static constexpr std::array attributes{...}` and a
 | `Node` | `.id`, `.count` | A compute node: node `id` of the kernel's `count`. |
 | `Semaphore` | | A semaphore that async loads signal, owned by the `Item` that made it. `Semaphore()` is none. |
 | `Args` | your own | A work-item's arguments: a struct of `int64_t` fields only, copied into the ABI's `iv`. |
-| `Keyed<Args>` | `.key`, `.args` | A dispatch that names its own key. The key names the work-item in messages and selects its [runtime attribute records](tog-abi.md#runtime-attributes); it does not choose a core. `Keyed<void>` has `.key` only. A TOG with attributes dispatches only so. |
+| `Counted<Args>` | `.spad`, `.args` | A dispatch under the kernel's next key, 0, 1, ... `.spad` is the most bytes per lane its work-item holds in the [scratchpad](tog-abi.md#buffers-and-the-scratchpad) at once. `Counted<void>` has `.spad` only. |
+| `Keyed<Args>` | `.key`, `.spad`, `.args` | A dispatch that names its own key. The key names the work-item in messages and selects its [runtime attribute records](tog-abi.md#runtime-attributes); it does not choose a core. `Keyed<void>` has `.key` and `.spad`. A TOG with attributes dispatches only so. `.key` and `.spad` have no default: a dispatch without either does not compile. |
 | `Kernel` | | What `entry` gets; `shape` and `dispatch` take it. Not copyable. |
 | `Item` | | One run of one work-item body. Not copyable. |
 
@@ -56,15 +57,16 @@ buffers{...}`, an optional `static constexpr std::array attributes{...}` and a
 | `wait(w, {.sem = s})` | `togsim_memory_barrier` | Waits for every load that signaled `s` since its last wait. |
 | `compute(w, {.node, .variant, .reads, .writes})` | `togsim_compute` | One compute at [row](#rows-node-and-variant) `node.id + node.count * variant` of the cycle and unit tables. `.variant` defaults to 0, `.reads` and `.writes` to `{}`. |
 | `store(w, {.src, .dst, .also})` | `togsim_dma` | Spad to DRAM: buffer `src` into `dst`. `.also` (default `{}`) lists buffers it reads too (an indirect store's index) or must follow. |
-| `dispatch<&X::f>(k)`, `dispatch<&X::f>(k, Args{...})` | `togsim_dispatch` | One work-item, under the next key: 0, 1, ... |
-| `dispatch<&X::f>(k, {.key = key, .args = Args{...}})`, `{.key = key}` | `togsim_dispatch` | One work-item under `key`. A kernel uses keyed or counted dispatch, not both. |
+| `dispatch<&X::f>(k, {.spad = n, .args = Args{...}})`, `{.spad = n}` | `togsim_dispatch` | One work-item stating `n` bytes per lane of spad, under the next key: 0, 1, ... A negative `n` is refused. |
+| `dispatch<&X::f>(k, {.key = key, .spad = n, .args = Args{...}})`, `{.key = key, .spad = n}` | `togsim_dispatch` | One work-item under `key`. A kernel uses keyed or counted dispatch, not both. |
+| `per_lane(bytes, lanes)` | | `bytes` spread over `lanes` lanes, rounded up: a `.spad` from a byte count. |
 | `shape<N>(k, {.kernel, .names, .example, .extents})` | | The kernel's `N` shape arguments from `tog_shape.txt`, else `example`, as a `std::array<int64_t, N>`. The first `.extents` (default `N`) must be at least 1, the rest at least 0. `.kernel` and `.names` name them in messages. |
 | `extent({.dim, .at, .tile})` | | What is left of a `tile`-long step at `at` on an axis `dim` long. |
 | `short_axis({.axis, .extent, .tile})` | | Bit `axis` of a variant: set when the step is short of its tile. |
 | `int64_t v = scalar(w, A)` | `togsim_runtime_attribute` | The value of scalar attribute `A` (rank 0) recorded for `w`'s key. |
 | `int64_t v = element(w, A, i, ...)` | `togsim_runtime_attribute` | Element `i, ...` of array attribute `A`: one index per rank, each in `[0, extent)`. |
 | `int64_t n = extent(w, A, d)` | `togsim_runtime_attribute` | Extent `d` (`0 <= d < rank`) of `A` as `w`'s record has it. |
-| `static const bool tog = register_tog<entry>({A, B})` | | Generated code only, in place of `Tog<X>`: registers the free function `void entry(Kernel&)` and the buffer list. `register_tog<entry>({A, B}, {ATTR0, ATTR1})` registers an attribute list too. |
+| `static const bool tog = register_tog<entry>({A, B})` | | Generated code only, in place of `Tog<X>`: registers the free function `void entry(Kernel&)` and checks the buffer list. `register_tog<entry>({A, B}, {ATTR0, ATTR1})` registers an attribute list too. |
 
 ## Rows: Node and variant
 
@@ -117,18 +119,18 @@ initializers for run-time values, so a compiler registers a free entry function 
 run-time structs with parenthesized initialization, in field order:
 
 ```text
-static const togsim::Buf BUF1 = {.id = 1, .bytes = 65536};
+static const togsim::Buf BUF1 = {.id = 1};
 static const togsim::Node NODE1 = {.id = 1, .count = 3};
   togsim::Desc v34 = togsim::Desc(0, togsim::f32, v31, v32, v33);
   togsim::Load v35 = togsim::Load(v34, BUF2);
   togsim::load(v1, v35);
   togsim::compute(v1, {.node = NODE1, .variant = 1, .reads = {BUF0, BUF1, BUF2}, .writes = {BUF0, BUF3}});
-      togsim::Keyed<WorkItemArgs> v36 = togsim::Keyed<WorkItemArgs>(v35, v20);
+      togsim::Keyed<WorkItemArgs> v36 = togsim::Keyed<WorkItemArgs>(v35, 2048, v20);
       togsim::dispatch<tog_work_item>(v1, v36);
 static const bool tog = togsim::register_tog<tog_entry>({BUF0, BUF1, BUF2, BUF3});
 ```
 
-From PyTorchSim's gemm TOG; its work-item and entry are `static void tog_work_item(togsim::Item&,
+From PyTorchSim's gemm TOG (`2048`: its `.spad`); its work-item and entry are `static void tog_work_item(togsim::Item&,
 WorkItemArgs)` and `static void tog_entry(togsim::Kernel&)`, and its keys are program ids. A TOG
 with runtime attributes adds lines of this form (written for this page, not taken from a compiler's
 output):
@@ -148,6 +150,7 @@ At run time a broken rule prints `togsim.hpp: <message>` on stderr (`kernel <nam
 | Message | Cause |
 |---|---|
 | `two TOGs registered in one .so` | Two TOG structs, or a struct and a `register_tog`. |
+| `a dispatch with a negative .spad` | A `.spad` below 0. |
 | `a wait on a semaphore no load signaled since its last wait` | A wait with no new load on its semaphore: a first wait before any load, or a second with none between. |
 | `a semaphore this work-item did not make with semaphore() or load_async()` | `Semaphore()`, or a `Semaphore` another work-item made. |
 | `a work-item without arguments was dispatched with some`, `a work-item was dispatched with other arguments` | The work-item and its `Args` disagree. |
@@ -167,7 +170,8 @@ A rule broken at compile time stops the build; these messages need a word:
 | Message | Cause |
 |---|---|
 | `a TOG struct has a member void entry(togsim::Kernel&) const` | `entry` missing, or with another signature. |
-| `non-constant condition for static assertion`, quoting the broken rule's `fail_("...")` line | A `buffers` entry has an id outside 0..1023, a duplicate id or a negative size. |
+| `non-constant condition for static assertion`, quoting the broken rule's `fail_("...")` line | A `buffers` entry has an id outside 0..1023 or a duplicate id. |
+| `no matching function for call to 'dispatch<...>(togsim::{anonymous}::Kernel&, <brace-enclosed initializer list>)'` | A dispatch without `.spad` (or a keyed one without `.key`). |
 | `a work-item's arguments are a struct of int64_t fields` | `Args` is not an aggregate, or its size or alignment is not that of `int64_t` fields (an `int32_t` field, say). Field types are not checked: a lone `double` passes. |
 | `non-constant condition for static assertion`, quoting `fail_("an attribute id outside 0..63")`, `fail_("attribute ids are not 0..n-1 once each")` or `fail_("an attribute of rank outside 0..8")` | An `attributes` entry breaks a [declaration rule](#runtime-attributes). Through `register_tog` the same rules are checked when the `.so` is loaded, and print `togsim.hpp: <rule>`. |
 

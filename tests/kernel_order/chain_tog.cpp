@@ -21,8 +21,9 @@ struct Chain : Tog<Chain> {
   static constexpr bool STORES = true;
 #endif
   static constexpr int64_t ROWS = 64, COLS = 64;
-  static constexpr Buf LOADED{.id = 1, .bytes = f32(ROWS, COLS)}, OUT{.id = 2, .bytes = f32(ROWS, COLS)};
+  static constexpr Buf LOADED{.id = 1}, OUT{.id = 2};
   static constexpr std::array buffers{LOADED, OUT};
+  static constexpr int64_t SPAD = per_lane(f32(ROWS, COLS) + f32(ROWS, COLS), 128);
   static constexpr Node STEP{.id = 0, .count = 1};
 
   struct At {
@@ -30,7 +31,7 @@ struct Chain : Tog<Chain> {
   };
 
   void entry(Kernel& k) const {
-    for (int64_t i = 0; i < N; i++) dispatch<&Chain::tile>(k, At{.i = i});
+    for (int64_t i = 0; i < N; i++) dispatch<&Chain::tile>(k, {.spad = SPAD, .args = At{.i = i}});
   }
 
   static constexpr Desc tile_of(int32_t ptr, int64_t i) {

@@ -23,8 +23,10 @@ them; neither the simulator nor its build needs them.
   an asymmetric padding costs nothing extra. `O_H` and `O_W` are arguments, not derived: a shape
   whose last output would read past the padded input is refused (exit `1`). It has no group count.
 - **Tile.** The tile a work-item moves and computes is compile-time, a `-D` build option per
-  extent with a default (`gemm`: `-DTM=32 -DTN=256 -DTK=64`). It cannot be a shape argument: TOGSim
-  reads the buffer sizes before it runs the kernel's `entry`, and they follow from the tile.
+  extent with a default (`gemm`: `-DTM=32 -DTN=256 -DTK=64`).
+- **Spad.** Each dispatch states as `.spad` the bytes of all the kernel's buffers at its tile,
+  spread over `-DLANES` lanes (default 128, rounded up): what an ELF that allocates them
+  statically holds. `flatten` dispatches nothing and takes no `LANES`.
 - **Short last tiles.** A dimension the tile does not divide ends in a short tile: its DMAs move
   what is left of the dimension and no DMA leaves its tensor (conv clips its `SA`-wide loads the
   same way, so 3 input channels are loaded as 3). A short tile costs something else, so it computes

@@ -26,14 +26,7 @@ __attribute__((weak, used, visibility("default")))
 extern const int32_t togsim_abi_version = TOGSIM_VERSION;
 #endif
 
-// The TOG also defines, with external linkage, the byte size of every scratchpad buffer id
-// its read_bufs/write_bufs name: togsim_spad_buffer_bytes[id], 0 for an id that is no spad buffer
-// (a virtual dependency edge), and togsim_spad_buffer_count entries (the array may be absent at
-// 0). A buffer is as large as the compiler allocated it; TOGSim does not infer it from the DMAs.
-//   const int32_t togsim_spad_buffer_count;
-//   const int64_t togsim_spad_buffer_bytes[togsim_spad_buffer_count];
-
-// And the rank of every runtime attribute it reads, by id: ids 0 to togsim_runtime_attribute_count - 1,
+// The TOG also defines, with external linkage, the rank of every runtime attribute it reads, by id: ids 0 to togsim_runtime_attribute_count - 1,
 // at most TOGSIM_MAX_RUNTIME_ATTRIBUTES (0: the TOG reads none). Both symbols are required.
 //   const int32_t togsim_runtime_attribute_count;
 //   const int32_t togsim_runtime_attribute_rank[TOGSIM_MAX_RUNTIME_ATTRIBUTES];
@@ -53,7 +46,7 @@ typedef enum {
 // Emit a DMA. `offset` is an ELEMENT offset into tensor `arg_id`; null
 // `strides` => contiguous. `is_async` => it finishes at ISSUE and signals semaphore
 // `sem` with its element count; the barrier on `sem` gates consumers. `read_bufs`/
-// `write_bufs` name the spad buffers it depends on and fills: a store drains read_bufs[0], and
+// `write_bufs` name the buffer ids it depends on and fills: a store drains read_bufs[0], and
 // an indirect store's index buffer, read for addresses only, follows it. A store's `sem` is ignored (its waits are not lowered).
 // `element_offsets` (a gather or scatter): one ELEMENT offset per element of the tile, row-major
 // over `dims`, added to that element's address; `n_offsets` is the tile's element count. Null
@@ -94,8 +87,10 @@ typedef void (*togsim_tile_fn)(EmitCtx* ctx, int64_t* iv, int32_t n_iv);
 // TILE_BEGIN/TILE_END, and invoke it -- so the work-item scope IS the call. Core
 // choice is runtime-owned; the TOG never names num_cores or a core. `key` is
 // the work-item's program key in the functional run, under which its runtime attributes are recorded.
+// `spad_bytes_per_lane` is the most bytes per lane the work-item holds in the spad at once: what a core gives it
+// while it runs, and all TOGSim knows of its spad.
 void togsim_dispatch(EmitCtx* ctx, togsim_tile_fn fn,
-                     int64_t* iv, int32_t n_iv, int64_t key);
+                     int64_t* iv, int32_t n_iv, int64_t key, int64_t spad_bytes_per_lane);
 
 // Entry point the loader resolves in the TOG `.so`. `shape_args` carries
 // the runtime values for the kernel's symbolic dimensions (in a kernel-specific

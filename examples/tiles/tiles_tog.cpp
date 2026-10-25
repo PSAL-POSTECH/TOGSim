@@ -1,11 +1,13 @@
 // A tiled kernel: an M x N grid of work-items, M and N read from tog_shape.txt. Work-item (m, n) loads its own
 // 64x64 tile of tensor 0, computes on it (every work-item runs tile 0 of the cycle table) and stores it to tensor 1.
+// Each states its spad: IN and OUT, 2 x 16384 bytes over tpuv6e's 128 lanes.
 #include "togsim.hpp"
 using namespace togsim;
 
 struct Tiles : Tog<Tiles> {
-  static constexpr Buf IN{.id = 1, .bytes = f32(64, 64)}, OUT{.id = 2, .bytes = f32(64, 64)};
+  static constexpr Buf IN{.id = 1}, OUT{.id = 2};
   static constexpr std::array buffers{IN, OUT};
+  static constexpr int64_t SPAD = per_lane(2 * f32(64, 64), 128);
   static constexpr Node STEP{.id = 0, .count = 1};
 
   struct Cell {
@@ -17,7 +19,7 @@ struct Tiles : Tog<Tiles> {
   void entry(Kernel& k) const {
     const auto [M, N] = shape<2>(k, {.kernel = "tiles", .names = "M N", .example = {1, 1}});
     for (int64_t m = 0; m < M; m++)
-      for (int64_t n = 0; n < N; n++) dispatch<&Tiles::body>(k, Cell{.m = m, .n = n, .N = N});
+      for (int64_t n = 0; n < N; n++) dispatch<&Tiles::body>(k, {.spad = SPAD, .args = Cell{.m = m, .n = n, .N = N}});
   }
 
   void body(Item& w, const Cell& c) const {

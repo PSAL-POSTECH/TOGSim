@@ -2,6 +2,7 @@
 // issued later, arrives first. One barrier waits both, one compute reads the buffer.
 // -DWRONG_COUNT, -DUNSIGNALED_SEM or -DNO_WAIT breaks the contract: the barrier's count, its semaphore, or no barrier.
 #include "togsim_runtime.h"
+#define SPAD_PER_LANE ((((ROWS + 1) * 16 * 4) + (16 * 4) + 127) / 128)
 
 #define ROWS 256
 #define ROW_STRIDE 65536
@@ -26,10 +27,8 @@ static void tile(EmitCtx* ctx, int64_t* iv, int32_t n_iv) {
 extern "C" void togsim_kernel(EmitCtx* ctx, int64_t* shape_args, int32_t n_shape_args) {
   (void)shape_args; (void)n_shape_args;
   int64_t iv[1] = {0};
-  togsim_dispatch(ctx, tile, iv, 1, 0);
+  togsim_dispatch(ctx, tile, iv, 1, 0, SPAD_PER_LANE);
 }
 
-extern "C" const int32_t togsim_spad_buffer_count = 3;
-extern "C" const int64_t togsim_spad_buffer_bytes[3] = {0, (ROWS + 1) * 16 * 4, 16 * 4};
 extern "C" const int32_t togsim_runtime_attribute_count = 0;
 extern "C" const int32_t togsim_runtime_attribute_rank[1] = {0};

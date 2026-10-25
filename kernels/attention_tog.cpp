@@ -20,10 +20,15 @@ struct Attention : Tog<Attention> {
 #else
   static constexpr int64_t D = 64;
 #endif
-  static constexpr Buf K_TILE{.id = 0, .bytes = f32(TILE_KV, D)}, Q_TILE{.id = 1, .bytes = f32(TILE_Q, D)},
-                       V_TILE{.id = 2, .bytes = f32(TILE_KV, D)}, LOGIT{.id = 3, .bytes = f32(TILE_Q, TILE_KV)},
-                       STAT{.id = 4, .bytes = f32(TILE_Q)}, ACC{.id = 5, .bytes = f32(TILE_Q, D)};
+#ifdef LANES
+  static constexpr int64_t N_LANES = LANES;
+#else
+  static constexpr int64_t N_LANES = 128;
+#endif
+  static constexpr Buf K_TILE{.id = 0}, Q_TILE{.id = 1}, V_TILE{.id = 2}, LOGIT{.id = 3}, STAT{.id = 4}, ACC{.id = 5};
   static constexpr std::array buffers{K_TILE, Q_TILE, V_TILE, LOGIT, STAT, ACC};
+  static constexpr int64_t SPAD = per_lane(f32(TILE_KV, D) + f32(TILE_Q, D) + f32(TILE_KV, D) + f32(TILE_Q, TILE_KV) +
+                                           f32(TILE_Q) + f32(TILE_Q, D), N_LANES);
   static constexpr uint64_t NODES = 9;
   static constexpr Node QK{.id = 0, .count = NODES}, ROWMAX{.id = 1, .count = NODES}, SUB{.id = 2, .count = NODES},
                         EXP{.id = 3, .count = NODES}, ROWSUM{.id = 4, .count = NODES}, MAC{.id = 5, .count = NODES},
@@ -40,7 +45,9 @@ struct Attention : Tog<Attention> {
         shape<3>(k, {.kernel = "attention", .names = "HEADS KV_HEADS SEQ", .example = {8, 8, 128}});
     for (int64_t h = 0; h < KV_HEADS; ++h)
       for (int64_t q0 = 0; q0 < SEQ; q0 += TILE_Q)
-        dispatch<&Attention::tile>(k, TileArgs{.h = h, .q0 = q0, .heads_per_kv = HEADS / KV_HEADS, .seq = SEQ});
+        dispatch<&Attention::tile>(k, {.spad = SPAD,
+                                       .args = TileArgs{.h = h, .q0 = q0, .heads_per_kv = HEADS / KV_HEADS,
+                                                        .seq = SEQ}});
   }
 
   void tile(Item& w, const TileArgs& a) const {

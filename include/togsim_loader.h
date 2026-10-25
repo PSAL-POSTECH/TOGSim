@@ -45,6 +45,7 @@ struct WorkItem {
   std::vector<int64_t> iv;      // the enclosing parallel loop indices
   int32_t core = 0;             // round-robin binding, fixed when it is registered
   int64_t key = 0;              // its program's key: the records of its runtime attributes (togsim_dispatch)
+  int64_t spad = 0;             // the most bytes per lane it holds in the spad at once (togsim_dispatch)
 };
 
 // One record of a runtime attribute: what the functional run stored for one (key, id), row-major.
@@ -62,8 +63,8 @@ class LazyTog {
   LazyTog(const LazyTog&) = delete;
   LazyTog& operator=(const LazyTog&) = delete;
 
-  // dlopen the .so (refused unless its togsim_abi_version is a version TOGSim accepts and it states its spad buffer sizes
-  // and its runtime attribute table) and run togsim_kernel once: each togsim_dispatch only registers its work-item, so
+  // dlopen the .so (refused unless its togsim_abi_version is a version TOGSim accepts and it states its runtime
+  // attribute table) and run togsim_kernel once: each togsim_dispatch only registers its work-item, so
   // num_items() is known before any record is emitted. Then load the records under `attribute_path` (throws on any
   // record that is missing, malformed or not the TOG's; see docs/tog-abi.md).
   bool open(const char* so_path, const int64_t* shape_args, int32_t n_shape,
@@ -75,9 +76,8 @@ class LazyTog {
   size_t num_items() const;
   // How many tile ids the cycle table holds: a togsim_compute may name 0 to num_tile_ids() - 1.
   uint64_t num_tile_ids() const;
-  // The TOG's togsim_spad_buffer_bytes, indexed by buffer id (0: not a spad buffer).
-  const std::vector<int64_t>& spad_buffer_bytes() const { return _spad_bytes; }
   int64_t item_key(size_t i) const;   // work-item i's togsim_dispatch key
+  int64_t item_spad(size_t i) const;  // work-item i's togsim_dispatch spad_bytes_per_lane
   // Run work-item `i` and return its record stream (TILE_BEGIN, body,
   // TILE_END). The returned vector is a buffer reused by the next call.
   const std::vector<TraceRec>& run_item(size_t i);
@@ -87,7 +87,6 @@ class LazyTog {
   void* _lib = nullptr;
   std::vector<uint64_t> _bases;
   std::vector<int64_t> _cyc, _ovl;
-  std::vector<int64_t> _spad_bytes;
 };
 
 }  // namespace togsim

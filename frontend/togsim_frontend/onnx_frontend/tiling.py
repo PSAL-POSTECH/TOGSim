@@ -11,9 +11,6 @@ CONV_TILE_ROWS = 8
 ATTENTION_QUERIES, ATTENTION_KEYS = 8, 64
 #: The rows of the tile of a second pass: layernorm's statistics, global_avgpool's scale. What the kernels default to.
 SECOND_PASS_ROWS = 128
-#: The kernels a work-item of which holds every spad buffer it states at once, at its matmul: the accumulator, the
-#: weights and the input.
-HOLDS_EVERY_BUFFER = frozenset({"gemm", "conv"})
 
 
 @dataclass(frozen=True)
@@ -25,7 +22,6 @@ class Hardware:
     vlen_bits: int          # zvl<N>b of the config's isa
     array_unit: str | None
     elem_bits: int = 32
-    spad_bytes: int = 0     # a core's spad in bytes, as TOGSim reads the config (config.core_spad_kb); 0: no limit
 
     @property
     def lane_elems(self) -> int:
@@ -50,8 +46,8 @@ def systolic_tile(m: int, n: int, k: int, hw: Hardware) -> tuple[int, int, int]:
 
 def unsupported(hw: Hardware) -> list[str]:
     """Why the systolic tiles do not fit the machine `hw`, a line per fact; empty when they do. A tile is whole
-    matmul instructions, SA rows by SA * lanes columns over SA-deep weights. Whether its buffers fit the spad depends
-    on the node, which cuts a tile no larger than itself: spad_refusal."""
+    matmul instructions, SA rows by SA * lanes columns over SA-deep weights. Whether a tile fits the spad TOGSim
+    decides, by the .spad its kernel's dispatches state."""
     col_unit = hw.sa * hw.vlane
     why = []
     for what, rows, cols, depth in (("Gemm, MatMul or Conv", TILE_ROWS, TILE_COLS, TILE_DEPTH),
@@ -64,18 +60,6 @@ def unsupported(hw: Hardware) -> list[str]:
             why.append(f"the {cols} columns of a {what} tile are not a multiple of one matmul instruction's "
                        f"{col_unit} (SA * vpu_num_lanes = {hw.sa} * {hw.vlane})")
     return why
-
-
-def spad_refusal(stem: str, stated: list[int], hw: Hardware) -> str | None:
-    """Why TOGSim refuses kernel `stem` compiled to state the spad buffers `stated` on `hw`; None when it runs it. A
-    core admits a work-item while the spad holds it and what is in flight beside it, and runs it alone when it takes
-    more than half, so it refuses only a work-item that needs more of the spad at once than a core has. Of the kernels
-    in HOLDS_EVERY_BUFFER that is every buffer stated; of the others the frontend does not say."""
-    need = sum(stated)
-    if stem not in HOLDS_EVERY_BUFFER or not hw.spad_bytes or need <= hw.spad_bytes:
-        return None
-    return (f"a work-item of kernel {stem} holds its {len(stated)} spad buffers at once, {need} bytes, and a core's "
-            f"spad is {hw.spad_bytes}: TOGSim refuses the TOG")
 
 
 def check_systolic(n: int, hw: Hardware) -> None:

@@ -5,8 +5,7 @@
 #include <cstdint>
 using std::size_t;
 #include "togsim_runtime.h"
-extern const int32_t togsim_spad_buffer_count = 4;
-extern const int64_t togsim_spad_buffer_bytes[4] = {1048576, 262144, 262144, 0};
+#define SPAD_PER_LANE ((1048576 + 262144 + 262144 + 127) / 128)
 extern const int32_t togsim_runtime_attribute_count = 0;
 extern const int32_t togsim_runtime_attribute_rank[1] = {0};
 static void togsim_kernel_tile(EmitCtx* v1, int64_t* v2, int32_t v3) {
@@ -99,7 +98,7 @@ extern "C" void togsim_kernel(EmitCtx* v1, int64_t* v2, int32_t v3) {
       uint64_t v34 = (uint64_t) v32;
       uint64_t v35 = v33 | v34;
       int64_t v36 = (int64_t) v35;
-      togsim_dispatch(v1, togsim_kernel_tile, v17, 2, v36);
+      togsim_dispatch(v1, togsim_kernel_tile, v17, 2, v36, SPAD_PER_LANE);
     }
   }
   return;
