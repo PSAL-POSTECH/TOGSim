@@ -33,7 +33,7 @@ def rewait_with_wrong_count(t):
 
 def gemm512(t, grid=(1, 1), cycles=GEMM512_CYCLES, units=GEMM512_UNITS, **machine):
     """The gemm512 TOG as a `grid` of work-items on tpuv6e (2 arrays per core, 128 lanes) with `machine` set;
-    `cycles` are those of tiles 0-5, `units` the unit table (tile 5: 1024 TPUV6E_MXU rows, 201 Vpu cycles)."""
+    `cycles` are those of tiles 0-5, `units` the unit table (tile 5: 1024 TPUV6E_MXU.rows rows, 201 Vpu cycles)."""
     return t.simulate(t.tog("gemm512_tog.cpp", shape=grid), t.machine(**machine), cycles, units)
 
 
@@ -95,17 +95,17 @@ SPLIT = {
     "matmul_over_two_arrays": dict(
         matmul=1077, why="1589 - 1024 + 1024/2"),
     "one_subtile_is_not_split": dict(
-        matmul=1589, why="128 rows are one subtile, N_eff 1", units=admitted(MATMUL_TILE, "TPUV6E_MXU", 128)),
+        matmul=1589, why="128 rows are one subtile, N_eff 1", units=admitted(MATMUL_TILE, "TPUV6E_MXU.rows", 128)),
     "vector_unit_bounds_the_split": dict(
         matmul=1265, why="1589 - 1024 + 700, Vpu 700 > 1024/2", units=admitted(MATMUL_TILE, "Vpu", 700)),
     "shorter_matmul_over_two_arrays": dict(
         matmul=588, why="1100 - 1024 + 1024/2", cycles=matmul_cycles(1100)),
 }
 OVER_ONE_ARRAY = dict(
-    saying="computes tile id 5, whose unit table row admits 128 rows to TPUV6E_MXU, and the unit takes 100 in the "
+    saying="computes tile id 5, whose unit table row admits 128 rows to TPUV6E_MXU.rows, and the unit takes 100 in the "
            "tile's 100 cycles (1 per cycle)",
     exit=1, num_systolic_array_per_core=4, cycles=matmul_cycles(100),
-    units=admitted(MATMUL_TILE, "TPUV6E_MXU", 128, admitted(MATMUL_TILE, "Vpu", 100)))
+    units=admitted(MATMUL_TILE, "TPUV6E_MXU.rows", 128, admitted(MATMUL_TILE, "Vpu", 100)))
 SPLIT_REFUSED = {
     "refused.spread_exceeds_one_array": OVER_ONE_ARRAY,
     "refused.spread_exceeds_one_array.icnt_32_ports_at_1751_mhz": dict(
@@ -119,7 +119,7 @@ SPLIT_REFUSED = {
 
 def split(matmul, why, **given):
     """Every matmul (compute_type 1) states `matmul` as its compute_cycle: cc - B_sys + max(B_sys / N_eff, the other
-    units' B), B_sys the TPUV6E_MXU rows, N_eff = min(arrays, ceil(rows / lanes)) (Core::split_compute_cycles)."""
+    units' B), B_sys the TPUV6E_MXU.rows rows, N_eff = min(arrays, ceil(rows / lanes)) (Core::split_compute_cycles)."""
     def case(t):
         run = gemm512(t, **given).expect_ok()
         seen = sorted({c.cycles for c in run.computes() if c.compute_type == 1})

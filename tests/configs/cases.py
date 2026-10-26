@@ -35,7 +35,7 @@ def every_config_is_listed(t):
 def breaks_convention(config):
     """What the config `config` (a parsed YAML mapping) lacks of the convention: an isa list with exactly one
     pytorchsim_* and one zvl<N>b entry, vcix and a non-empty address_map as mappings, and systolic_array_unit
-    named after the pytorchsim_* entry as TPUV6E_MXU is after pytorchsim_tpuv6e. Empty when it follows it."""
+    named after the pytorchsim_* entry as TPUV6E_MXU.rows is after pytorchsim_tpuv6e. Empty when it follows it."""
     isa = config.get("isa")
     accel = [entry for entry in isa if str(entry).startswith("pytorchsim_")] if isinstance(isa, list) else []
     lacks = [] if len(accel) == 1 else [f"an isa list with exactly one pytorchsim_* entry (isa: {isa})"]
@@ -49,7 +49,8 @@ def breaks_convention(config):
     if config.get("address_map") == {}:
         lacks.append("address_map with its addresses (address_map: {})")
     unit = config.get("systolic_array_unit")
-    if "systolic_array_unit" in config and len(accel) == 1 and unit != accel[0][len("pytorchsim_"):].upper() + "_MXU":
+    named = accel[0][len("pytorchsim_"):].upper() + "_MXU.rows" if len(accel) == 1 else None
+    if "systolic_array_unit" in config and named and unit != named:
         lacks.append(f"systolic_array_unit named after {accel[0]} (systolic_array_unit: {unit!r})")
     return lacks
 
@@ -74,7 +75,7 @@ def convention_names_what_is_missing(t):
                          ("an isa without zvl<N>b", {"isa": [e for e in v6e["isa"] if not e.startswith("zvl")]}),
                          ("vcix: null", {"vcix": None}), ("an empty address_map", {"address_map": {}}),
                          ("systolic_array_unit: null", {"systolic_array_unit": None}),
-                         ("TPUV3_MXU beside pytorchsim_tpuv6e", {"systolic_array_unit": "TPUV3_MXU"})):
+                         ("TPUV3_MXU.rows beside pytorchsim_tpuv6e", {"systolic_array_unit": "TPUV3_MXU.rows"})):
         if not breaks_convention({**v6e, **broken}):
             raise Failure(f"expected {what} to break the convention, it did not")
 

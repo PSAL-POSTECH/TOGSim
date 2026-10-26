@@ -18,7 +18,7 @@ from togsim_frontend.onnx_frontend.config import check_spad, read_hardware, vect
 from togsim_frontend.onnx_frontend.onnx_ops import OPS, resolve
 from togsim_frontend.onnx_frontend.tiling import Hardware, check_systolic, systolic_tile, unsupported
 
-HW = Hardware(sa=8, vlane=8, vlen_bits=256, array_unit="TPUV3_MXU")
+HW = Hardware(sa=8, vlane=8, vlen_bits=256, array_unit="TPUV3_MXU.rows")
 GEMM = OPS["Gemm"][0]
 
 
@@ -185,7 +185,7 @@ def test_too_narrow_for_the_array_is_refused():
 def test_the_systolic_tile_is_the_same_on_every_machine():
     """At most 32 x 256 x 64, whatever the array: the machine decides whether that tile fits, not its size."""
     assert systolic_tile(512, 1024, 512, HW) == (32, 256, 64)
-    hw = Hardware(sa=4, vlane=4, vlen_bits=128, array_unit="TPUV3_MXU")
+    hw = Hardware(sa=4, vlane=4, vlen_bits=128, array_unit="TPUV3_MXU.rows")
     assert systolic_tile(512, 1024, 512, hw) == (32, 256, 64)
     assert systolic_tile(64, 128, 16, HW) == (32, 128, 16)
 
@@ -193,16 +193,16 @@ def test_the_systolic_tile_is_the_same_on_every_machine():
 def test_a_machine_the_tiles_are_whole_matmul_instructions_on_is_supported():
     """Whatever its spad: TOGSim holds a node's tile against that, and it is no larger than the node."""
     assert unsupported(HW) == []
-    assert unsupported(Hardware(sa=4, vlane=16, vlen_bits=256, array_unit="TPUV3_MXU")) == []
+    assert unsupported(Hardware(sa=4, vlane=16, vlen_bits=256, array_unit="TPUV3_MXU.rows")) == []
 
 
 def test_a_machine_is_refused_for_each_fact_the_tiles_do_not_fit():
     """SA has to divide a tile's rows and depth, and SA * lanes its columns."""
-    rows, = unsupported(Hardware(sa=16, vlane=4, vlen_bits=256, array_unit="TPUV3_MXU"))
+    rows, = unsupported(Hardware(sa=16, vlane=4, vlen_bits=256, array_unit="TPUV3_MXU.rows"))
     assert "8 rows of a Attention tile are not a multiple of the array's 16 rows" in rows
-    cols = unsupported(Hardware(sa=8, vlane=16, vlen_bits=256, array_unit="TPUV3_MXU"))
+    cols = unsupported(Hardware(sa=8, vlane=16, vlen_bits=256, array_unit="TPUV3_MXU.rows"))
     assert len(cols) == 1 and "64 columns of a Attention tile" in cols[0] and "128 (SA * vpu_num_lanes = 8 * 16)" in cols[0]
-    assert len(unsupported(Hardware(sa=256, vlane=256, vlen_bits=512, array_unit="TPUV3_MXU"))) == 5
+    assert len(unsupported(Hardware(sa=256, vlane=256, vlen_bits=512, array_unit="TPUV3_MXU.rows"))) == 5
 
 
 def test_of_the_configs_here_only_the_8x8_one_is_a_supported_machine():
@@ -254,7 +254,7 @@ def test_the_second_pass_of_layernorm_and_global_avgpool_keeps_the_128_row_tile_
 
 def test_the_array_dimension_is_vpu_num_lanes_unless_sa_is_given(tmp_path):
     config = tmp_path / "machine.yml"
-    config.write_text("vpu_num_lanes: 8\nisa: [v, zvl256b]\nsystolic_array_unit: TPUV3_MXU\n")
+    config.write_text("vpu_num_lanes: 8\nisa: [v, zvl256b]\nsystolic_array_unit: TPUV3_MXU.rows\n")
     assert read_hardware(str(config)).sa == 8 and read_hardware(str(config), 16).sa == 16
 
 
@@ -268,14 +268,14 @@ def test_the_array_unit_is_the_configs_and_the_split_needs_one(tmp_path):
     unsplit = read_hardware(str(config))
     assert unsplit.array_unit is None
     assert {row[1] for row in acs_cycles.build_units(lookup("gemm"), {"rows": 8}, unsplit)} == {"Vpu"}
-    assert read_hardware(str(paths.root() / "configs" / "tpuv4.yml")).array_unit == "TPUV4_MXU"
+    assert read_hardware(str(paths.root() / "configs" / "tpuv4.yml")).array_unit == "TPUV4_MXU.rows"
 
 
 @pytest.mark.parametrize("over,said", [
     ({"systolic_array_unit": ""}, "systolic_array_unit: '' is not a name"),
     ({"systolic_array_unit": None}, "systolic_array_unit: None is not a name"),
     ({"systolic_array_unit": 7}, "systolic_array_unit: 7 is not a name"),
-    ({"systolic_array_split": "none"}, "systolic_array_unit: TPUV6E_MXU is ignored without systolic_array_split"),
+    ({"systolic_array_split": "none"}, "systolic_array_unit: TPUV6E_MXU.rows is ignored without systolic_array_split"),
     ({"systolic_array_split": "sideways"}, r"systolic_array_split: sideways \(none \| round_robin\)"),
 ])
 def test_an_array_unit_or_split_togsim_refuses_is_refused(over, said, tmp_path):

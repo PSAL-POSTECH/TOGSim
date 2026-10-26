@@ -148,7 +148,7 @@ def tpuv6e_one_byte_over_refused(t):
     """configs/tpuv6e.yml as shipped states 1024 KB on each lane: a dispatch one byte over is refused, naming it."""
     so = tog(t, 1024 * KB + 1)
     run = t.simulate(so, REPO / "configs" / "tpuv6e.yml", cycles=[200],
-                     units=[(0, "TPUV6E_MXU", "rows", 1, 0), (0, "Vpu", "cycles", 1, 200)], timeout=TIMEOUT_S)
+                     units=[(0, "TPUV6E_MXU.rows", "rows", 1, 0), (0, "Vpu", "cycles", 1, 200)], timeout=TIMEOUT_S)
     expect_refused_before_the_run(run, refusal(0, 1024 * KB + 1, 1024 * KB), so)
 
 

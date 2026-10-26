@@ -16,7 +16,7 @@ MASKS = [
     (re.compile(r"(?<![\w.])\d+\.\d+"), "N.N"),
     (re.compile(r"(?<![A-Za-z_\d])\d+"), "N"),
 ]
-UNITS = [(0, "TPUV6E_MXU", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100), (0, "Issue", "micro-ops", 12, 24)]
+UNITS = [(0, "TPUV6E_MXU.rows", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100), (0, "Issue", "micro-ops", 12, 24)]
 
 
 def root_masks(*roots):

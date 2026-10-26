@@ -17,7 +17,7 @@ def launch(t, kernels, cores=1, sync_between=False, defines=()):
     for k in range(kernels):
         home = t.tog("chain_tog.cpp", (f"IN={k}", *defines), tensors=(MIB,) * (kernels + 1), into=f"k{k}").parent
         write_table(home / "tog_cycles.tsv", [(600, 0)])
-        write_table(home / "tog_units.tsv", [(0, "TPUV6E_MXU", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)])
+        write_table(home / "tog_units.tsv", [(0, "TPUV6E_MXU.rows", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)])
         lines.append(f"LAUNCH_KERNEL,{k},0,0,{home}/kernel,{home}/attributes,0\n")
         if sync_between or k == kernels - 1:
             lines.append("DEVICE_SYNC,0,0,0,-,-,0\n")

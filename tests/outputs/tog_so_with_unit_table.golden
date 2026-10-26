@@ -7,7 +7,7 @@ core_freq_mhz: N
 core_stats_print_period_cycles: N
 num_systolic_array_per_core: N
 systolic_array_split: round_robin
-systolic_array_unit: TPUV6E_MXU
+systolic_array_unit: TPUV6E_MXU.rows
 dma_load_latency_cycles: N
 dma_load_ready_cycles: N
 dma_store_latency_cycles: N
@@ -40,7 +40,7 @@ icnt_injection_ports_per_core: N
 [info] ========= Core stat =========
 [info] Core [N] : DMA active_cycles: N, DMA idle_cycles: N, DRAM BW: N.N GB/s (N responses)
 [info] Core [N] : Issue utilization(%): N.N, active_cycles: N, idle_cycles: N
-[info] Core [N] : TPUV6E_MXU utilization(%): N.N, active_cycles: N, idle_cycles: N
+[info] Core [N] : TPUV6E_MXU.rows utilization(%): N.N, active_cycles: N, idle_cycles: N
 [info] Core [N] : Total_cycles: N
 [info] Core [N] : Vpu utilization(%): N.N, active_cycles: N, idle_cycles: N
 [info] [DRAM] all N channels combined | N.N GB/s aggregate, N.N% of utilization (avg. per channel) | N reads, N writes (interval N cycles)
@@ -87,7 +87,7 @@ icnt_injection_ports_per_core: N
 [info] Core [N] : COMP     inst_count: N (GEMM: N, Vector: N, XLU: N)
 [info] Core [N] : MEMORY_BAR inst_count: N
 [info] ========= Core stat =========
-[info] Core [N] : TPUV6E_MXU utilization(%): N.N, active_cycles: N, idle_cycles: N
+[info] Core [N] : TPUV6E_MXU.rows utilization(%): N.N, active_cycles: N, idle_cycles: N
 [info] Core [N] : Vpu utilization(%): N.N, active_cycles: N, idle_cycles: N
 [info] Core [N] : Issue utilization(%): N.N, active_cycles: N, idle_cycles: N
 [info] Core [N] : DMA active_cycles: N, DMA idle_cycles: N, DRAM BW: N.N GB/s (N responses)

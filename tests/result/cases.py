@@ -6,7 +6,7 @@ import re
 
 from togtest import MIB, Case, write_table
 
-UNITS = [(0, "TPUV6E_MXU", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100), (0, "Issue", "micro-ops", 12, 24)]
+UNITS = [(0, "TPUV6E_MXU.rows", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100), (0, "Issue", "micro-ops", 12, 24)]
 UNIT = re.compile(r"\] (Core \[\d+\]|Total) : (.+?) [Uu]tilization\(%\): (\d+\.\d+), active[_ ]cycles?: (\d+), "
                   r"idle[_ ]cycles?: (\d+)$", re.M)
 DMA = re.compile(r"\] Core \[(\d+)\] : DMA active_cycles: (\d+), DMA idle_cycles: (\d+), DRAM BW: (\d+\.\d+) GB/s "
@@ -71,7 +71,7 @@ def tog_so_with_unit_table(t):
                                   t.table("units", UNITS), "--result", path]).expect_ok()
     got = read(run, path)
     expect_lines_held(run, got)
-    if set(got["units"].get("Core [0]", {})) != {"TPUV6E_MXU", "Vpu", "Issue"} or got["wall_clock_s"] is not None:
+    if set(got["units"].get("Core [0]", {})) != {"TPUV6E_MXU.rows", "Vpu", "Issue"} or got["wall_clock_s"] is not None:
         run.fail(f"expected Core [0]'s three units and no wall clock (--tog_so prints none); got {got}")
 
 
@@ -93,7 +93,7 @@ def session_of_two_kernels(t):
     for kernel_id, cycles in ((0, 600), (1, 900)):
         home = t.tog("../session/kernel_tog.cpp", ("ITEMS=2",), tensors=(MIB, MIB), into=f"k{kernel_id}").parent
         write_table(home / "tog_cycles.tsv", [(cycles, 0)])
-        write_table(home / "tog_units.tsv", [(0, "TPUV6E_MXU", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)])
+        write_table(home / "tog_units.tsv", [(0, "TPUV6E_MXU.rows", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)])
         homes.append(home)
     stream = t.work_dir / "commands.txt"
     stream.write_text("".join(f"LAUNCH_KERNEL,{k},0,0,{h}/kernel,{h}/attributes,0\nDEVICE_SYNC,0,0,0,-,-,0\n"

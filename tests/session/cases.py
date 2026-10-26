@@ -4,12 +4,12 @@ from togtest import MIB, TIMEOUT_S, Case, write_table
 KERNELS = {0: dict(cycles=600, rows=256), 1: dict(cycles=900, rows=512)}
 
 
-def units(kernel_id, array="TPUV6E_MXU"):
+def units(kernel_id, array="TPUV6E_MXU.rows"):
     """KERNELS[id]'s unit table: its rows of the machine's array unit `array`, and 100 cycles of the Vpu."""
     return [(0, array, "rows", 1, KERNELS[kernel_id]["rows"]), (0, "Vpu", "cycles", 1, 100)]
 
 
-def kernel(t, kernel_id, table=True, tog=True, array="TPUV6E_MXU", items=2, defines=()):
+def kernel(t, kernel_id, table=True, tog=True, array="TPUV6E_MXU.rows", items=2, defines=()):
     """<work dir>/k<id>/: tog.so (of `items` work-items), tog_tensors.txt, tog_cycles.tsv and tog_units.tsv of
     KERNELS[id] naming `array` (`table` may replace the unit table or, False, leave it out; `tog` False leaves tog.so
     out). Returns the directory."""
@@ -62,7 +62,7 @@ def two_partitions_side_by_side(t):
     """On tpuv3 with two cores, 32 DRAM channels and a partition per core (2 arrays, 128 lanes), kernel 0 goes to
     partition 0 and kernel 1 to partition 1 with no DEVICE_SYNC between: core 0 runs only kernel 0's computes
     (472 = 600 - 256 + 256/2), core 1 only kernel 1's (644), and the two cores' compute windows overlap."""
-    homes = [kernel(t, 0, array="TPUV3_MXU"), kernel(t, 1, array="TPUV3_MXU")]
+    homes = [kernel(t, 0, array="TPUV3_MXU.rows"), kernel(t, 1, array="TPUV3_MXU.rows")]
     machine = t.machine("tpuv3.yml", num_cores=2, dram_channels=32, num_partition=2, partition="{core_0: 0, core_1: 1}")
     run = session(t, machine, [launch(homes[0], 0, partition=0), launch(homes[1], 1, partition=1)]).expect_ok()
     ran = run.computes()
@@ -142,14 +142,14 @@ def array_unit_misspelled_after_an_empty_table_refused(t):
     """The first table with rows names the array unit by another name: refused as a first table would be."""
     misspelled = units(1, array="TPUV6_MXU")
     session(t, t.machine(), [launch(copy(t, 0), 0), launch(kernel(t, 1, table=misspelled), 1), SYNC]).expect_refused(
-        "systolic_array_split: the unit table has no array unit TPUV6E_MXU", exit=1)
+        "systolic_array_split: the unit table has no array unit TPUV6E_MXU.rows", exit=1)
 
 
 def restated_unit_disagrees_refused(t):
     """Kernel 1's table states the array unit with another capacity than kernel 0's."""
-    other = [(0, "TPUV6E_MXU", "rows", 2, 512), (0, "Vpu", "cycles", 1, 100)]
+    other = [(0, "TPUV6E_MXU.rows", "rows", 2, 512), (0, "Vpu", "cycles", 1, 100)]
     session(t, t.machine(), [launch(kernel(t, 0), 0), SYNC, launch(kernel(t, 1, table=other), 1), SYNC]).expect_refused(
-        "unit TPUV6E_MXU disagrees with line", exit=1)
+        "unit TPUV6E_MXU.rows disagrees with line", exit=1)
 
 
 CASES = [

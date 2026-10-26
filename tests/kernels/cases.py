@@ -36,10 +36,11 @@ CONV_NAMES = "I_C I_H I_W O_C O_H O_W K_H K_W S_H S_W D_H D_W P_T P_L P_B P_R"
 
 def replay(t, kernel, tensors, cycles, rows=None, shape=None, defines=(), log_level="info", **_):
     """`kernel` on tpuv6e under the default systolic_array_split, `tensors` the bytes of its tensor arguments: tile i
-    runs cycles[i], holds rows[i] TPUV6E_MXU rows (0 without an entry) and, a tile without any, the vector unit."""
+    runs cycles[i], holds rows[i] TPUV6E_MXU.rows rows (0 without an entry) and, a tile without any, the vector unit."""
     rows = rows or {}
     units = [row for i, c in enumerate(cycles or [0])
-             for row in ((i, "TPUV6E_MXU", "rows", 1, rows.get(i, 0)), (i, "Vpu", "cycles", 1, 0 if i in rows else c))]
+             for row in ((i, "TPUV6E_MXU.rows", "rows", 1, rows.get(i, 0)),
+                         (i, "Vpu", "cycles", 1, 0 if i in rows else c))]
     tog = t.tog(KERNELS / f"{kernel}_tog.cpp", defines, tensors=tensors, shape=shape)
     return t.simulate(tog, t.machine(), cycles or [0], units, log_level=log_level)
 
@@ -76,7 +77,7 @@ def replay_ids(t, kernel, tensors, ids, shape, defines=()):
     below it that is not listed has a line of zeros and no unit rows, which TOGSim warns about."""
     cycles = [TILE_ID_CYCLES + i if i in ids else 0 for i in range(max(ids, default=0) + 1)]
     units = [row for i in sorted(ids) or [0]
-             for row in ((i, "TPUV6E_MXU", "rows", 1, 0), (i, "Vpu", "cycles", 1, cycles[i]))]
+             for row in ((i, "TPUV6E_MXU.rows", "rows", 1, 0), (i, "Vpu", "cycles", 1, cycles[i]))]
     tog = t.tog(KERNELS / f"{kernel}_tog.cpp", defines, tensors=tensors, shape=shape)
     return t.simulate(tog, t.machine(), cycles, units, log_level="trace")
 
