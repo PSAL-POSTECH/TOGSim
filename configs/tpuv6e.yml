@@ -1,12 +1,12 @@
 # One TPU v6e TensorCore as libtpu drives it: two 256x256 matrix units (two in every LLO dump), vregs of 8 sublanes
 # x 128 lanes x 32 bit, VMEM 134217728 B (the compile's vmem_report) = 1024 KB x 128 lanes. The array unit is
-# TPUV6E_MXU, Coprocessor libtpuv6e.so's port; at 1751 MHz its two 16-bit rows a cycle give 918 TFLOP/s over both.
+# TPUV6E_MXU.rows, Coprocessor libtpuv6e.so's MXU rows; at 1751 MHz its two 16-bit rows a cycle give 918 TFLOP/s over both.
 num_cores: 1
 core_freq_mhz: 1751
 core_stats_print_period_cycles: 200
 num_systolic_array_per_core: 2
 systolic_array_split: round_robin
-systolic_array_unit: TPUV6E_MXU
+systolic_array_unit: TPUV6E_MXU.rows
 # A load's fixed cost, from tpu-perf-archive data/v6e/dma/pallas.csv (one v6e, 4 KiB f32 loads). Loads started
 # together and waited once grow 17.8 ns (31.1 cycles) a load from 1 to 16 (par 572..839 ns), so most of the cost is a
 # wait loads in flight pay together, not a hold of the engine. Each key is that measurement less what this

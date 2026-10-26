@@ -105,7 +105,7 @@ Three small files stand beside the source:
 |---|---|---|
 | `tog_tensors.txt` | `16384`<br>`16384` | The TOG has two tensor arguments of 16384 bytes each. |
 | `tog_cycles.tsv` | `600<TAB>0` | Compute tile 0 takes 600 cycles. |
-| `tog_units.tsv` | `0<TAB>TPUV6E_MXU<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | During one run of compute tile 0 the `TPUV6E_MXU` unit, the systolic array, took in 128 rows at 1 row per cycle, and the `Vpu` unit was busy for 100 cycles. |
+| `tog_units.tsv` | `0<TAB>TPUV6E_MXU.rows<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | During one run of compute tile 0 the `TPUV6E_MXU.rows` unit, the systolic array, took in 128 rows at 1 row per cycle, and the `Vpu` unit was busy for 100 cycles. |
 
 `tog_tensors.txt` must be in the directory of `tog.so` under that name. The two tables are named on
 the command line: `--cycle_table` is always required, `--unit_table` on every shipped config.
@@ -157,7 +157,7 @@ mkdir -p my_kernel
 cp examples/hello/hello_tog.cpp my_kernel/my_tog.cpp
 printf '16384\n16384\n' > my_kernel/tog_tensors.txt
 printf '600\t0\n' > my_kernel/tog_cycles.tsv
-printf '0\tTPUV6E_MXU\trows\t1\t128\n0\tVpu\tcycles\t1\t100\n' > my_kernel/tog_units.tsv
+printf '0\tTPUV6E_MXU.rows\trows\t1\t128\n0\tVpu\tcycles\t1\t100\n' > my_kernel/tog_units.tsv
 g++ -std=c++20 -shared -fPIC -O1 -Iinclude my_kernel/my_tog.cpp -o my_kernel/tog.so
 build/bin/Simulator --config configs/tpuv6e.yml \
   --tog_so my_kernel/tog.so --cycle_table my_kernel/tog_cycles.tsv \
@@ -326,11 +326,11 @@ Two `tile_id`s mean two rows in the cycle table and rows for both in the unit ta
 | File | Contents |
 |---|---|
 | `tog_cycles.tsv` | `600<TAB>0`<br>`150<TAB>0` |
-| `tog_units.tsv` | `0<TAB>TPUV6E_MXU<TAB>rows<TAB>1<TAB>512`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>50`<br>`1<TAB>Vpu<TAB>cycles<TAB>1<TAB>150` |
+| `tog_units.tsv` | `0<TAB>TPUV6E_MXU.rows<TAB>rows<TAB>1<TAB>512`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>50`<br>`1<TAB>Vpu<TAB>cycles<TAB>1<TAB>150` |
 
 **Unit rows and the array split.** So far the unit table only fed the utilization lines. It also
 changes how long a compute takes. A row says what one hardware unit did during one run of a
-compute tile: here compute tile 0 pushes 512 rows through the unit named `TPUV6E_MXU`, the systolic
+compute tile: here compute tile 0 pushes 512 rows through the unit named `TPUV6E_MXU.rows`, the systolic
 array, at one row per cycle, so 512 of its 600 cycles are array work; `Vpu`, the vector unit, is
 busy for 50 cycles.
 
@@ -359,7 +359,7 @@ The first run:
 [trace] [1054][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=344 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1399][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=344 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1744][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : TPUV6E_MXU utilization(%): 18.83, active_cycles: 512, idle_cycles: 2207
+[info] Core [0] : TPUV6E_MXU.rows utilization(%): 18.83, active_cycles: 512, idle_cycles: 2207
 [info] Core [0] : Vpu utilization(%): 9.19, active_cycles: 250, idle_cycles: 2469
 [info] Total execution cycles: 2719
 ```
@@ -455,7 +455,7 @@ takes 2437 cycles.
 | Mistake | Total | What happens | The warning |
 |---|---|---|---|
 | `TENSOR_PAST_LIST`: a `.ptr` `tog_tensors.txt` has no line for | 2437 | The tensor is placed at address 0, on top of tensor 0: `dram=0x0000000000000000` on the store's trace line. | `its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0` |
-| a unit table whose rows are all for `tile_id` 1, while the TOG computes `tile_id` 0 | 2437 | The compute adds nothing to any unit, and the array split leaves it whole: `TPUV6E_MXU utilization(%): 0.00`. | `the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units` |
+| a unit table whose rows are all for `tile_id` 1, while the TOG computes `tile_id` 0 | 2437 | The compute adds nothing to any unit, and the array split leaves it whole: `TPUV6E_MXU.rows utilization(%): 0.00`. | `the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units` |
 
 ```text
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TENSOR_PAST_LIST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace

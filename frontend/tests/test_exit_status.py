@@ -234,7 +234,7 @@ def test_a_simulator_that_is_absent_fails_or_reports_no_total_exits_6_with_no_re
 def test_a_config_the_simulator_itself_refuses_exits_6(tmp_path):
     """The three keys the frontend reads make a machine it accepts; the Simulator needs the rest of the config."""
     config = tmp_path / "machine.yml"
-    config.write_text("vpu_num_lanes: 8\nisa: [v, zvl256b]\nsystolic_array_unit: TPUV3_MXU\n")
+    config.write_text("vpu_num_lanes: 8\nisa: [v, zvl256b]\nsystolic_array_unit: TPUV3_MXU.rows\n")
     done = frontend(tmp_path, model(tmp_path, "Relu"), config=config)
     assert done.returncode == status.EXIT_TOOL_FAILED, done.stderr
     assert "TOGSim reported no cycle count (exit " in done.stderr

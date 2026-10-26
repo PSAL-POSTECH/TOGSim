@@ -37,7 +37,7 @@ struct SimulationConfig {
   // systolic_array_split: round_robin (default) -- a compute's array-unit rows spread over
   // min(N, ceil(rows / vpu_num_lanes)) arrays (needs --unit_table); none ignores N.
   bool systolic_array_split = true;
-  // systolic_array_unit: the name of the unit table's array unit (TPUV6E_MXU, ...; one per machine), required with the
+  // systolic_array_unit: the name of the unit table's array unit (TPUV6E_MXU.rows, ...; one per machine), required with the
   // split: the split reads that unit's rows, and a table without it is refused. TOGSim names no unit itself.
   std::string systolic_array_unit;
   uint32_t vpu_num_lanes = 0;

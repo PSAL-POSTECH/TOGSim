@@ -4,14 +4,14 @@
 [trace] [1054][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=344 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1399][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=344 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1744][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : TPUV6E_MXU utilization(%): 18.83, active_cycles: 512, idle_cycles: 2207
+[info] Core [0] : TPUV6E_MXU.rows utilization(%): 18.83, active_cycles: 512, idle_cycles: 2207
 [info] Core [0] : Vpu utilization(%): 9.19, active_cycles: 250, idle_cycles: 2469
 [info] Total execution cycles: 2719
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/gemm/tog.so --cycle_table examples/gemm/tog_cycles.tsv --log_level trace --unit_table examples/gemm/tog_units_128_rows.tsv
 [trace] [1054][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1655][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [2256][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : TPUV6E_MXU utilization(%): 7.92, active_cycles: 256, idle_cycles: 2975
+[info] Core [0] : TPUV6E_MXU.rows utilization(%): 7.92, active_cycles: 256, idle_cycles: 2975
 [info] Core [0] : Vpu utilization(%): 7.74, active_cycles: 250, idle_cycles: 2981
 [info] Total execution cycles: 3231
 # examples/gemm/one_array.gen.yml: configs/tpuv6e.yml with num_systolic_array_per_core: 1
@@ -19,7 +19,7 @@
 [trace] [1054][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1655][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [2256][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : TPUV6E_MXU utilization(%): 31.69, active_cycles: 1024, idle_cycles: 2207
+[info] Core [0] : TPUV6E_MXU.rows utilization(%): 31.69, active_cycles: 1024, idle_cycles: 2207
 [info] Core [0] : Vpu utilization(%): 7.74, active_cycles: 250, idle_cycles: 2981
 [info] Total execution cycles: 3231
 # examples/gemm/64_lanes.gen.yml: configs/tpuv6e.yml with vpu_num_lanes: 64
@@ -27,7 +27,7 @@
 [trace] [1054][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=536 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [1591][Core 0][INST_ISSUED    ][INST_ID=5] COMP (compute_type=0 compute_cycle=536 overlapping_cycle=0 sa=-1 tile=0)
 [trace] [2128][Core 0][INST_ISSUED    ][INST_ID=6] COMP (compute_type=0 compute_cycle=150 overlapping_cycle=0 sa=-1 tile=0)
-[info] Core [0] : TPUV6E_MXU utilization(%): 4.13, active_cycles: 128, idle_cycles: 2975
+[info] Core [0] : TPUV6E_MXU.rows utilization(%): 4.13, active_cycles: 128, idle_cycles: 2975
 [info] Core [0] : Vpu utilization(%): 8.06, active_cycles: 250, idle_cycles: 2853
 [info] Total execution cycles: 3103
 # examples/gemm/no_split.gen.yml: configs/tpuv6e.yml with systolic_array_split: none, no systolic_array_unit

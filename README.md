@@ -108,7 +108,7 @@ Three files go with it:
 |---|---|---|
 | `tog_tensors.txt`, beside `tog.so` | `16384`<br>`16384` | The byte size of each tensor argument. |
 | `tog_cycles.tsv`, `--cycle_table` | `600<TAB>0` | Row 0 (`STEP`, node 0) takes 600 cycles. |
-| `tog_units.tsv`, `--unit_table` | `0<TAB>TPUV6E_MXU<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | What each hardware unit did during one run of row 0. |
+| `tog_units.tsv`, `--unit_table` | `0<TAB>TPUV6E_MXU.rows<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | What each hardware unit did during one run of row 0. |
 
 [docs/tutorial.md](docs/tutorial.md) reads this TOG and its trace line by line, then builds up to
 asynchronous loads, many work-items, the array split and sessions.

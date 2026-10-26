@@ -16,7 +16,7 @@ GOLDEN = {
         machine=dict(systolic_array_split="none"), records={(0, 0): [0] * 64, (1, 0): [0] * 64}),
     "computes_split_over_two_arrays": dict(
         total=2993, tog="cycles/state_stored_each_trip_tog.cpp", cycles=[600], compute=344,
-        units=[(0, "TPUV6E_MXU", "rows", 1, 512), (0, "Vpu", "cycles", 1, 50)], machine=dict()),
+        units=[(0, "TPUV6E_MXU.rows", "rows", 1, 512), (0, "Vpu", "cycles", 1, 50)], machine=dict()),
 }
 
 
