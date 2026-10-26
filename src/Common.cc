@@ -52,8 +52,8 @@ static uint64_t spad_bytes_per_lane(ConfigReader& config) {
 }
 
 // Keys of a machine config that other tools read and TOGSim does not: isa (the compiler's, and the frontend's vector
-// length), vcix and address_map. Any other key nothing in initialize_config looks up is named in a warning.
-static const std::set<std::string> kReadElsewhere = {"isa", "vcix", "address_map"};
+// length), vcix, address_map and compiler. Any other key nothing in initialize_config looks up is named in a warning.
+static const std::set<std::string> kReadElsewhere = {"isa", "vcix", "address_map", "compiler"};
 
 SimulationConfig initialize_config(const YAML::Node& yaml,
                                      const std::string& config_file_path) {

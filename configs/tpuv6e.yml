@@ -50,3 +50,8 @@ icnt_type: simple
 icnt_latency_cycles: 10
 icnt_freq_mhz: 1751
 icnt_injection_ports_per_core: 32
+
+# Read by the compiler, not by TOGSim.
+compiler:
+  # Scratchpad kept for the kernels beside a resident operand: v6e XLA's scoped VMEM, 32 MiB of 128.
+  spad_scoped_kb_per_lane: 256
