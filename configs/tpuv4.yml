@@ -1,10 +1,10 @@
-# One TPU v4 TensorCore. The array unit TPUV4_MXU.rows and the ISA's pytorchsim_tpuv4 name a vcix model and compiler support
+# One TPU v4 TensorCore. The array unit TPUV4_MXU and the ISA's pytorchsim_tpuv4 name a vcix model and compiler support
 # that do not exist yet; vcix holds that model's keys once it states them.
 num_cores: 1
 core_freq_mhz: 1050
 core_stats_print_period_cycles: 10000
 num_systolic_array_per_core: 4
-systolic_array_unit: TPUV4_MXU.rows
+systolic_array_unit: TPUV4_MXU
 
 vpu_num_lanes: 128
 vpu_spad_size_kb_per_lane: 128

@@ -86,4 +86,5 @@ def read_hardware(config_path: str, sa: int | None = None,
         raise ValueError(f"{config_path}: systolic_array_unit: {unit} is ignored without systolic_array_split: "
                          f"round_robin")
 
-    return Hardware(sa=resolved, vlane=vlane, vlen_bits=vlen, array_unit=unit, elem_bits=elem_bits)
+    # Stopgap, as TOGSim's Common.cc: the config names the array's component, its unit is that component's rows.
+    return Hardware(sa=resolved, vlane=vlane, vlen_bits=vlen, array_unit=unit and f"{unit}.rows", elem_bits=elem_bits)

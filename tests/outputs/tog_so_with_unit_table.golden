@@ -7,7 +7,7 @@ core_freq_mhz: N
 core_stats_print_period_cycles: N
 num_systolic_array_per_core: N
 systolic_array_split: round_robin
-systolic_array_unit: TPUV6E_MXU.rows
+systolic_array_unit: TPUV6E_MXU
 dma_load_latency_cycles: N
 dma_load_ready_cycles: N
 dma_store_latency_cycles: N
