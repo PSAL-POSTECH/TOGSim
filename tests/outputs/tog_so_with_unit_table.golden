@@ -27,6 +27,8 @@ icnt_type: simple
 icnt_latency_cycles: N
 icnt_freq_mhz: N
 icnt_injection_ports_per_core: N
+compiler:
+  spad_scoped_kb_per_lane: N
 [info] [Config/Core] core_id: N, partition_id: N (no partition section)
 [info] [Config/Core] Core N: core_freq_mhz: N, systolic_arrays_per_core: N
 [info] [Config/DRAM] Ramulator2 config path: <path>
