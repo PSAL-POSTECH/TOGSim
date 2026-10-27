@@ -254,7 +254,7 @@ def test_the_second_pass_of_layernorm_and_global_avgpool_keeps_the_128_row_tile_
 
 def test_the_array_dimension_is_vpu_num_lanes_unless_sa_is_given(tmp_path):
     config = tmp_path / "machine.yml"
-    config.write_text("vpu_num_lanes: 8\nisa: [v, zvl256b]\nsystolic_array_unit: TPUV3_MXU.rows\n")
+    config.write_text("vpu_num_lanes: 8\nisa: [v, zvl256b]\nsystolic_array_unit: TPUV3_MXU\n")
     assert read_hardware(str(config)).sa == 8 and read_hardware(str(config), 16).sa == 16
 
 
@@ -275,7 +275,7 @@ def test_the_array_unit_is_the_configs_and_the_split_needs_one(tmp_path):
     ({"systolic_array_unit": ""}, "systolic_array_unit: '' is not a name"),
     ({"systolic_array_unit": None}, "systolic_array_unit: None is not a name"),
     ({"systolic_array_unit": 7}, "systolic_array_unit: 7 is not a name"),
-    ({"systolic_array_split": "none"}, "systolic_array_unit: TPUV6E_MXU.rows is ignored without systolic_array_split"),
+    ({"systolic_array_split": "none"}, "systolic_array_unit: TPUV6E_MXU is ignored without systolic_array_split"),
     ({"systolic_array_split": "sideways"}, r"systolic_array_split: sideways \(none \| round_robin\)"),
 ])
 def test_an_array_unit_or_split_togsim_refuses_is_refused(over, said, tmp_path):

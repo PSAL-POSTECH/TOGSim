@@ -103,10 +103,11 @@ SimulationConfig initialize_config(const YAML::Node& yaml,
     if (!unit.IsScalar() || unit.Scalar().empty())
       throw std::runtime_error(fmt::format("systolic_array_unit: {} is not a name, the unit table's name of the "
                                            "array unit", YAML::Dump(unit)));
-    parsed_config.systolic_array_unit = unit.Scalar();
+    // Stopgap: the config names the array's component (TPUV6E_MXU), and its unit is that component's rows counter.
+    parsed_config.systolic_array_unit = unit.Scalar() + ".rows";
     if (!parsed_config.systolic_array_split)
       throw std::runtime_error(fmt::format("systolic_array_unit: {} is ignored without systolic_array_split: "
-                                           "round_robin", parsed_config.systolic_array_unit));
+                                           "round_robin", unit.Scalar()));
   } else if (parsed_config.systolic_array_split) {
     throw std::runtime_error("systolic_array_split: round_robin (the default) needs systolic_array_unit, the unit "
                              "table's name of the array unit; systolic_array_split: none runs without it");

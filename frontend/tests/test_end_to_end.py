@@ -24,7 +24,7 @@ from togsim_frontend.onnx_frontend.onnx_ops import OPS
 pytestmark = pytest.mark.skipif(not paths.simulator().is_file() and not os.environ.get("TOGSIM_REQUIRE_SIMULATOR"),
                                 reason=f"{paths.simulator()} is absent: build the simulator first")
 CONFIG = paths.root() / "configs" / "tpuv3_8x8.yml"
-ARRAY = yaml.safe_load(CONFIG.read_text())["systolic_array_unit"]
+ARRAY = read_hardware(str(CONFIG)).array_unit
 MIB = 1 << 20
 TOTAL = re.compile(r"Total execution cycles: (\d+)")
 
