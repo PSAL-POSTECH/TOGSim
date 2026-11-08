@@ -2,6 +2,7 @@
 #include <fstream>
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <sstream>
 
 #include "Simulator.h"
@@ -9,6 +10,7 @@
 #include "togsim_loader.h"        // load a compiled TOG (.so) and replay it
 #include "togsim_trace_bridge.h"  // ... into a TileGraph
 #include "Result.h"
+#include "togsim_runtime.h"
 
 namespace fs = std::filesystem;
 
@@ -41,31 +43,95 @@ std::vector<std::shared_ptr<TensorTiling>> tog_tensor_tilings(const std::optiona
   return out;
 }
 
-// The TOG's tensor arguments back to back in argument order, each start aligned to 16 KiB (XLA's
-// program HBM alignment), from the byte sizes tog_tensors.txt lists beside tog.so; a tiled
-// tensor takes its padded footprint and learns its base.
+// One line of tog_tensor_addrs.txt, `name addr bytes align role`: where a tensor argument sits in DRAM.
+struct TensorAddr {
+  std::string name, role;
+  uint64_t addr, bytes, align;
+};
+
+// The lines of tog_tensor_addrs.txt in `dir`, one per tensor argument in order; none when it is absent.
+std::optional<std::vector<TensorAddr>> tog_tensor_addrs(const fs::path& dir) {
+  std::ifstream in(dir / "tog_tensor_addrs.txt");
+  if (!in.is_open()) return std::nullopt;
+  std::vector<TensorAddr> out;
+  std::string line;
+  while (std::getline(in, line)) {
+    if (line.find_first_not_of(" \t\r") == std::string::npos) continue;
+    std::istringstream words(line);
+    TensorAddr a;
+    std::string rest;
+    if (!(words >> a.name >> a.addr >> a.bytes >> a.align >> a.role) || (words >> rest)) {
+      spdlog::error("[TOGSim] {} line {}: \"{}\" is not `name addr bytes align role`",
+                    (dir / "tog_tensor_addrs.txt").string(), out.size() + 1, line);
+      exit(EXIT_FAILURE);
+    }
+    out.push_back(a);
+  }
+  return out;
+}
+
+// Warns once per launch when a tiled tensor's padded footprint reaches into another listed tensor that
+// its own bytes do not already overlap (arguments aliasing one storage overlap by their bytes: not this).
+void warn_tiles_past_their_tensor(const fs::path& dir, const std::vector<uint64_t>& bases,
+                                  const std::vector<uint64_t>& sizes,
+                                  const std::vector<std::shared_ptr<TensorTiling>>& tilings) {
+  auto meet = [](uint64_t a, uint64_t an, uint64_t b, uint64_t bn) { return a < b + bn && b < a + an; };
+  for (size_t i = 0; i < tilings.size(); i++) {
+    const uint64_t padded = std::max(sizes[i], tilings[i]->footprint());
+    for (size_t j = 0; j < bases.size(); j++) {
+      if (j == i || meet(bases[i], sizes[i], bases[j], sizes[j]) || !meet(bases[i], padded, bases[j], sizes[j]))
+        continue;
+      spdlog::warn("[TOGSim] {}: tensor {}'s tiles span {} bytes from {:#x} and reach tensor {} at {:#x}",
+                   dir.string(), i, padded, bases[i], j, bases[j]);
+      return;
+    }
+  }
+}
+
+// Each tensor argument's DRAM base: the address tog_tensor_addrs.txt beside tog.so gives, else back to back
+// from 0 in argument order at 16 KiB alignment (XLA's program HBM alignment), sized by tog_tensors.txt;
+// a tiled tensor takes its padded footprint and learns its base.
 std::vector<uint64_t> tog_tensor_bases(const fs::path& dir, const std::vector<std::shared_ptr<TensorTiling>>& tilings) {
   std::ifstream tt(dir / "tog_tensors.txt");
   if (!tt.is_open()) {
     spdlog::error("[TOGSim] {} is absent: the TOG's tensor arguments have no addresses", (dir / "tog_tensors.txt").string());
     exit(EXIT_FAILURE);
   }
-  const uint64_t align = 16 * 1024;
-  std::vector<uint64_t> bases;
-  uint64_t at = 0, bytes;
-  while (tt >> bytes) {
-    const size_t i = bases.size();
-    if (!tilings.empty() && i < tilings.size()) {
-      tilings[i]->base = at;
-      bytes = std::max(bytes, tilings[i]->footprint());
-    }
-    bases.push_back(at);
-    at = (at + bytes + align - 1) / align * align;
-  }
-  if (!tilings.empty() && tilings.size() != bases.size()) {
-    spdlog::error("[TOGSim] tog_tensors.txt lists {} tensors, tog_tensor_shapes.txt {}", bases.size(), tilings.size());
+  std::vector<uint64_t> sizes;
+  for (uint64_t bytes; tt >> bytes;) sizes.push_back(bytes);
+  if (!tilings.empty() && tilings.size() != sizes.size()) {
+    spdlog::error("[TOGSim] tog_tensors.txt lists {} tensors, tog_tensor_shapes.txt {}", sizes.size(), tilings.size());
     exit(EXIT_FAILURE);
   }
+  const auto given = tog_tensor_addrs(dir);
+  std::vector<uint64_t> bases, spans;
+  if (given) {
+    if (given->size() != sizes.size()) {
+      spdlog::error("[TOGSim] {} lists {} tensors, tog_tensors.txt {}", (dir / "tog_tensor_addrs.txt").string(),
+                    given->size(), sizes.size());
+      exit(EXIT_FAILURE);
+    }
+    for (size_t i = 0; i < sizes.size(); i++) {
+      if ((*given)[i].bytes != sizes[i]) {
+        spdlog::error("[TOGSim] {}: tensor {} ({}) is {} bytes there and {} in tog_tensors.txt",
+                      (dir / "tog_tensor_addrs.txt").string(), i, (*given)[i].name, (*given)[i].bytes, sizes[i]);
+        exit(EXIT_FAILURE);
+      }
+      bases.push_back((*given)[i].addr);
+    }
+    spdlog::info("[TOGSim] {}: {} tensors at the addresses tog_tensor_addrs.txt gives", dir.string(), bases.size());
+  } else {
+    const uint64_t align = 16 * 1024;
+    uint64_t at = 0;
+    for (size_t i = 0; i < sizes.size(); i++) {
+      const uint64_t span = i < tilings.size() ? std::max(sizes[i], tilings[i]->footprint()) : sizes[i];
+      bases.push_back(at);
+      at = (at + span + align - 1) / align * align;
+    }
+    spdlog::info("[TOGSim] {}: no tog_tensor_addrs.txt, {} tensors laid out from address 0", dir.string(), bases.size());
+  }
+  for (size_t i = 0; i < tilings.size(); i++) tilings[i]->base = bases[i];
+  if (given) warn_tiles_past_their_tensor(dir, bases, sizes, tilings);
   return bases;
 }
 
@@ -256,6 +322,10 @@ int main(int argc, char** argv) {
   
   // Check if help was requested
   cmd_parser.print_help_message_if_required();
+  if (cmd_parser.is_set("version")) {
+    std::cout << TOGSIM_VERSION_STRING << std::endl;
+    return 0;
+  }
 
   // Dump full command for copy-paste re-run
   std::ostringstream cmd_oss;

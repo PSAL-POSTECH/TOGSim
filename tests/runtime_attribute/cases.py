@@ -3,7 +3,7 @@ or a LAUNCH_KERNEL's attribute_path; a missing, stale or malformed record, and e
 import re
 from collections import Counter
 
-from togtest import MIB, Case, Failure, programs_bytes, record_bytes, write_table
+from togtest import MIB, VERSION, Case, Failure, programs_bytes, record_bytes, write_table
 
 KEY1 = 1 << 21
 OFFSETS = {(0, 0): 4096, (KEY1, 0): 20480}
@@ -105,10 +105,10 @@ LOADER = {
         saying="{dir} has no programs.bin: the functional run recorded no program"),
     "e04.programs_bin_of_abi_17": dict(
         make=broken_dir(write("programs.bin", programs_bytes([0, KEY1], abi=17))),
-        saying="{dir}/programs.bin was recorded at TOG ABI 17, TOGSim is version 1.0.0"),
+        saying="{dir}/programs.bin was recorded at TOG ABI 17, TOGSim is version " + VERSION),
     "e04.record_of_next_major": dict(
         make=broken_dir(write("attr_0_0.bin", record_bytes(0, 0, 4096, abi=0x20000))),
-        saying="{dir}/attr_0_0.bin was recorded at version 2.0.0, TOGSim is version 1.0.0"),
+        saying="{dir}/attr_0_0.bin was recorded at version 2.0.0, TOGSim is version " + VERSION),
     "e04.record_without_magic": dict(
         make=broken_dir(write("attr_0_0.bin", record_bytes(0, 0, 4096, magic=0))),
         saying="{dir}/attr_0_0.bin: not a runtime attribute file"),

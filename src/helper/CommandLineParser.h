@@ -20,6 +20,7 @@ class CommandLineParser {
      */
     CommandLineParser() noexcept {
         options_description.add_options()("help,h", "Prints help message");
+        options_description.add_options()("version", "Prints TOGSim's version (MAJOR.MINOR.PATCH) and exits");
     }
 
     /**
@@ -84,6 +85,11 @@ class CommandLineParser {
             *target_var = variables_map[arg_name].as<T>();
         }
     }
+
+    /**
+     * Whether the option `arg_name` was given on the command line.
+     */
+    bool is_set(const char *arg_name) const noexcept { return variables_map.count(arg_name) > 0; }
 
   private:
     /**

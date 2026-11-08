@@ -22,7 +22,7 @@ SCHEDULED = re.compile(r"TILE_SCHEDULED *\] spad=(\d+) max_dispatch=(\d+)")
 CORE_LINE = re.compile(r"\[(\d+)\]\[Core (\d+)\]\[(TILE_SCHEDULED) *\] (.*)$", re.M)
 SAID = re.compile(r"^(?:\[[^\]]*\] \[(?:error|critical)\] |\s*what\(\):\s*)(.*)$|^(togsim(?:\.hpp)?: .*)$", re.M)
 WARNED = re.compile(r"^\[[^\]]*\] \[warning\] (.*)$", re.M)
-VERSION, ENCODED_VERSION = "1.0.0", 0x10000
+VERSION, ENCODED_VERSION = "1.1.0", 0x10100
 PROGRAMS_MAGIC, RECORD_MAGIC = 0x50415354, 0x41525354
 _built, _locks, _guard = {}, {}, threading.Lock()
 

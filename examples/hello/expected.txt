@@ -56,6 +56,7 @@ systolic_array_split: none
 [info] [SimpleDRAM] no bandwidth cap (latency-only); dram_latency 10 cycles, dram_freq_mhz 1000 for tick alignment
 [info] [Config/Interconnect] interconnect_freq_mhz: 1000
 [info] [Config/Interconnect] Simple interconnect selected
+[info] [TOGSim] examples/hello: no tog_tensor_addrs.txt, 2 tensors laid out from address 0
 [info] ======Start Simulation=====
 [info] [Scheduler 0] Kernel 0 has completed - TOG path: kernel operation: kernel finished at cycle 1645
 [info] [Scheduler 0] Kernel 0 execution summary - Started at: 1 cycles, Total compute time: 1644 cycles

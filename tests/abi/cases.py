@@ -12,7 +12,7 @@ REFUSED = {
     "refused.next_major": dict(
         define="STATED_VERSION=0x20000", saying=f"it was built against version 2.0.0, {REBUILD}"),
     "refused.newer_minor": dict(
-        define="STATED_VERSION=0x10100", saying=f"it was built against version 1.1.0, {REBUILD}"),
+        define="STATED_VERSION=0x10200", saying=f"it was built against version 1.2.0, {REBUILD}"),
     "refused.symbol_of_abi_15": dict(
         define="OLD_SYMBOL", saying="it was built against TOG ABI 15 (it embeds togsim_producer_abi_version, the "
                                     f"symbol of ABI 15 and earlier), {REBUILD}"),
@@ -38,6 +38,13 @@ def this_version_replays(t):
         run.fail(f"expected the TOG's one compute of 100 cycles to finish, got {run.computes()}")
 
 
+def an_older_minor_replays(t):
+    """A TOG built against 1.0.0, before tog_tensor_addrs.txt, replays on this MINOR as on its own."""
+    run = replay(t, "STATED_VERSION=0x10000").expect_ok()
+    if [c.cycles for c in run.computes()] != [100]:
+        run.fail(f"expected the TOG's one compute of 100 cycles to finish, got {run.computes()}")
+
+
 def refused(define, saying):
     """The loader refuses the TOG on stderr with `saying`, and TOGSim exits 1."""
     return lambda t: replay(t, define).expect_refused(f"togsim: refusing TOG {t.work_dir}/tog.so: {saying}", exit=1)
@@ -58,7 +65,8 @@ def null_strides_replay_unstrided(t):
         run.fail(f"expected one load with stride=[], got {strides}")
 
 
-CASES = [Case("this_version_replays", this_version_replays)] + [
+CASES = [Case("this_version_replays", this_version_replays),
+         Case("an_older_minor_replays", an_older_minor_replays)] + [
     Case(name, refused(**how)) for name, how in REFUSED.items()] + [
     Case("refused.no_kernel_symbol", no_kernel_refused),
     Case("null_strides_replay_unstrided", null_strides_replay_unstrided)]
