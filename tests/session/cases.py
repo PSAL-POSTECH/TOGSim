@@ -10,13 +10,13 @@ def units(kernel_id, array="TPUV6E_MXU.rows"):
 
 
 def kernel(t, kernel_id, table=True, tog=True, array="TPUV6E_MXU.rows", items=2, defines=()):
-    """<work dir>/k<id>/: tog.so (of `items` work-items), tog_tensors.txt, tog_cycles.tsv and tog_units.tsv of
+    """<work dir>/k<id>/: tog.so (of `items` work-items), tog_tensor_bytes.txt, tog_tile_cycles.tsv and tog_unit_table.tsv of
     KERNELS[id] naming `array` (`table` may replace the unit table or, False, leave it out; `tog` False leaves tog.so
     out). Returns the directory."""
     home = t.tog("kernel_tog.cpp", (f"ITEMS={items}", *defines), tensors=(MIB, MIB), into=f"k{kernel_id}").parent
-    write_table(home / "tog_cycles.tsv", [(KERNELS[kernel_id]["cycles"], 0)])
+    write_table(home / "tog_tile_cycles.tsv", [(KERNELS[kernel_id]["cycles"], 0)])
     if table is not False:
-        write_table(home / "tog_units.tsv", units(kernel_id, array) if table is True else table)
+        write_table(home / "tog_unit_table.tsv", units(kernel_id, array) if table is True else table)
     if not tog:
         (home / "tog.so").unlink()
     return home
@@ -40,7 +40,7 @@ SYNC = "DEVICE_SYNC,0,0,0,-,-,0"
 def two_kernels_one_after_the_other(t):
     """On tpuv6e (2 arrays, 128 lanes) kernel 0 then kernel 1, a DEVICE_SYNC after each: both are enqueued from
     <dir>/tog.so, kernel 0's computes run 472 = 600 - 256 + 256/2, then kernel 1's run 644 = 900 - 512 + 512/2, which
-    only its own tog_units.tsv gives (kernel 0's 256 rows would leave 772); and the session's closing lines are
+    only its own tog_unit_table.tsv gives (kernel 0's 256 rows would leave 772); and the session's closing lines are
     printed."""
     homes = [kernel(t, 0), kernel(t, 1)]
     run = session(t, t.machine(), ["# two kernels", launch(homes[0], 0), SYNC, launch(homes[1], 1), SYNC]).expect_ok()
@@ -101,13 +101,13 @@ def second_kernel_runs_after_one_that_ends_at_once(t):
 
 def unit_table_flag_refused(t):
     home = kernel(t, 0)
-    session(t, t.machine(), [launch(home, 0), SYNC], "--unit_table", home / "tog_units.tsv").expect_refused(
+    session(t, t.machine(), [launch(home, 0), SYNC], "--unit_table", home / "tog_unit_table.tsv").expect_refused(
         "--unit_table is keyed by one TOG's tile_ids", exit=1)
 
 
 def kernel_without_unit_table_refused(t):
     session(t, t.machine(), [launch(kernel(t, 0, table=False), 0), SYNC]).expect_refused(
-        "no tog_units.tsv next to", exit=1)
+        "no tog_unit_table.tsv next to", exit=1)
 
 
 def kernel_without_tog_refused(t):
@@ -115,7 +115,7 @@ def kernel_without_tog_refused(t):
 
 
 def copy(t, kernel_id):
-    """<work dir>/k<id>/: a kernel that copies and computes nothing, with an empty tog_units.tsv."""
+    """<work dir>/k<id>/: a kernel that copies and computes nothing, with an empty tog_unit_table.tsv."""
     return kernel(t, kernel_id, table=[], defines=("NO_COMPUTE",))
 
 

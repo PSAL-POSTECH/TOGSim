@@ -90,7 +90,7 @@ def test_a_node_its_tile_does_not_divide_exits_0_with_a_line_for_the_short_tile(
     done = frontend(tmp_path, model(tmp_path, "Relu", shape=(128, 48)))
     assert done.returncode == status.EXIT_OK, done.stderr
     assert json.loads((tmp_path / "out" / "report.json").read_text())["nodes_run"] == 1
-    (table,) = (tmp_path / "out").glob("bias_act_*/tog_cycles.tsv")
+    (table,) = (tmp_path / "out").glob("bias_act_*/tog_tile_cycles.tsv")
     assert len([line for line in table.read_text().splitlines() if not line.startswith("#")]) == 2
 
 
@@ -100,7 +100,7 @@ def test_acs_exits_0_with_the_two_tables_written(args, tmp_path):
     """Every kernel with a node table, the two without a compute node among them, and a tile short of the array."""
     done = run(ACS, *args, "--config", CONFIG, "-o", tmp_path)
     assert done.returncode == status.EXIT_OK, done.stderr
-    assert (tmp_path / "tog_cycles.tsv").exists() and (tmp_path / "tog_units.tsv").exists()
+    assert (tmp_path / "tog_tile_cycles.tsv").exists() and (tmp_path / "tog_unit_table.tsv").exists()
 
 
 @pytest.mark.parametrize("module,args", [

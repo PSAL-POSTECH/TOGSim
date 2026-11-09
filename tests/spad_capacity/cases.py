@@ -35,7 +35,7 @@ def session(t, *spads):
     with stream.open("w") as commands:
         for i, spad in enumerate(spads):
             home = tog(t, spad, into=f"k{i}").parent
-            write_table(home / "tog_cycles.tsv", [(200, 0)])
+            write_table(home / "tog_tile_cycles.tsv", [(200, 0)])
             commands.write(f"LAUNCH_KERNEL,{i},0,0,{home}/kernel,{home}/attributes,0\n")
         commands.write("DEVICE_SYNC,0,0,0,-,-,0\n")
     machine = t.machine(**spad_per_lane(1), systolic_array_split="none")

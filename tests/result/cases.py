@@ -92,8 +92,8 @@ def session_of_two_kernels(t):
     homes = []
     for kernel_id, cycles in ((0, 600), (1, 900)):
         home = t.tog("../session/kernel_tog.cpp", ("ITEMS=2",), tensors=(MIB, MIB), into=f"k{kernel_id}").parent
-        write_table(home / "tog_cycles.tsv", [(cycles, 0)])
-        write_table(home / "tog_units.tsv", [(0, "TPUV6E_MXU.rows", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)])
+        write_table(home / "tog_tile_cycles.tsv", [(cycles, 0)])
+        write_table(home / "tog_unit_table.tsv", [(0, "TPUV6E_MXU.rows", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)])
         homes.append(home)
     stream = t.work_dir / "commands.txt"
     stream.write_text("".join(f"LAUNCH_KERNEL,{k},0,0,{h}/kernel,{h}/attributes,0\nDEVICE_SYNC,0,0,0,-,-,0\n"

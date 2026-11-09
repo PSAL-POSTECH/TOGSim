@@ -58,7 +58,7 @@ g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/tiles/tiles_tog.cpp -o examp
 sed -e "s#: \.\./configs/#: $PWD/configs/#" -e 's/^num_cores: .*/num_cores: 2/' \
   configs/tpuv6e.yml > build/two_cores.yml
 build/bin/Simulator --config build/two_cores.yml --tog_so examples/tiles/tog.so \
-  --cycle_table examples/tiles/tog_cycles.tsv --unit_table examples/tiles/tog_units.tsv | tail -n 1
+  --cycle_table examples/tiles/tog_tile_cycles.tsv --unit_table examples/tiles/tog_unit_table.tsv | tail -n 1
 ```
 
 ```text
@@ -75,7 +75,7 @@ for n in 1 2 4; do
   sed -e "s#: \.\./configs/#: $PWD/configs/#" -e "s/^num_cores: .*/num_cores: $n/" \
     configs/tpuv6e.yml > build/cores_$n.yml
   build/bin/Simulator --config build/cores_$n.yml --tog_so examples/tiles/tog.so \
-    --cycle_table examples/tiles/tog_cycles.tsv --unit_table examples/tiles/tog_units.tsv \
+    --cycle_table examples/tiles/tog_tile_cycles.tsv --unit_table examples/tiles/tog_unit_table.tsv \
     | awk -v n=$n '/Total execution cycles/ { print "num_cores", n, $NF }'
 done
 ```

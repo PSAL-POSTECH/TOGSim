@@ -177,7 +177,7 @@ struct BuildState {
       warn_once(fmt::format("[TOGSim] TOG {}: the unit table has no rows for tile ids {}, which its computes "
                             "name: those computes add nothing to the units", so_path, id_list(unitless)));
     if (!stray_args.empty())
-      warn_once(fmt::format("[TOGSim] TOG {}: its DMAs name arg_id {}, and tog_tensors.txt lists {} tensor(s): "
+      warn_once(fmt::format("[TOGSim] TOG {}: its DMAs name arg_id {}, and tog_tensor_bytes.txt lists {} tensor(s): "
                             "those DMAs are addressed from base 0", so_path, id_list(stray_args),
                             std::max(n_tensors, 0)));
     return true;

@@ -1,4 +1,4 @@
-"""`python -m togsim_frontend.acs <kernel>`: write tog_cycles.tsv and tog_units.tsv for one kernel of kernels/, its
+"""`python -m togsim_frontend.acs <kernel>`: write tog_tile_cycles.tsv and tog_unit_table.tsv for one kernel of kernels/, its
 whole tile: the tables of a shape the tile divides. The frontend adds the rows of the short last tiles of a shape.
 Its exit statuses are those of status.py; a kernel name without a node table is a usage error."""
 from __future__ import annotations
@@ -41,7 +41,7 @@ def main(argv=None) -> int:
                     help="kernel name, as in kernels/<name>_tog.cpp")
     ap.add_argument("--config", required=True)
     ap.add_argument("-o", "--out", default=".",
-                    help="directory for tog_cycles.tsv and tog_units.tsv (default: the current one)")
+                    help="directory for tog_tile_cycles.tsv and tog_unit_table.tsv (default: the current one)")
     ap.add_argument("--sa", type=int, default=None,
                     help="systolic array dimension; vpu_num_lanes by default")
     for name, what in (("rows", "rows"), ("elems", "element count"), ("depth", "reduction depth"),
@@ -63,8 +63,8 @@ def main(argv=None) -> int:
 
     costs = acs_cycles.costs(desc, tile, hw)
     os.makedirs(args.out, exist_ok=True)
-    table = os.path.join(args.out, "tog_cycles.tsv")
-    units = os.path.join(args.out, "tog_units.tsv")
+    table = os.path.join(args.out, "tog_tile_cycles.tsv")
+    units = os.path.join(args.out, "tog_unit_table.tsv")
     acs_cycles.write_table(acs_cycles.build_table(desc, tile, hw), table)
     acs_cycles.write_units(acs_cycles.build_units(desc, tile, hw), units)
 

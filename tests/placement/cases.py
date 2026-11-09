@@ -1,5 +1,5 @@
 """Where a launch's tensors sit: at the addresses tog_tensor_addrs.txt gives when it is beside tog.so, else back to
-back from 0 (each run says which); a file that disagrees with tog_tensors.txt is refused; --version prints 1.1.0."""
+back from 0 (each run says which); a file that disagrees with tog_tensor_bytes.txt is refused; --version prints 1.1.0."""
 import re
 
 from togtest import MIB, VERSION, Case, write_table
@@ -17,8 +17,8 @@ def kernel(t, k, addrs=None, tensors=(MIB, MIB, MIB)):
     """<work dir>/k<k>/: the chain's kernel `k` (loads argument k, stores argument k + 1) over three tensors, with
     `addrs` (lines of tog_tensor_addrs.txt) beside it when given. Returns the directory."""
     home = t.tog(TOG, (f"IN={k}",), tensors=tensors, into=f"k{k}").parent
-    write_table(home / "tog_cycles.tsv", [(600, 0)])
-    write_table(home / "tog_units.tsv", [(0, "TPUV6E_MXU.rows", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)])
+    write_table(home / "tog_tile_cycles.tsv", [(600, 0)])
+    write_table(home / "tog_unit_table.tsv", [(0, "TPUV6E_MXU.rows", "rows", 1, 256), (0, "Vpu", "cycles", 1, 100)])
     if addrs is not None:
         (home / ADDRS).write_text("".join(f"{line}\n" for line in addrs))
     return home
@@ -78,12 +78,20 @@ def refused(lines, saying):
 
 REFUSED = {
     "refused.fewer_lines": ([f"a {A} {MIB} 16384 in", f"x {X} {MIB} 16384 out"],
-                            f"{ADDRS} lists 2 tensors, tog_tensors.txt 3"),
+                            f"{ADDRS} lists 2 tensors, tog_tensor_bytes.txt 3"),
     "refused.other_bytes": ([f"a {A} {MIB} 16384 in", f"x {X} 4096 16384 out", f"u {UNUSED} {MIB} 16384 out"],
-                            f"tensor 1 (x) is 4096 bytes there and {MIB} in tog_tensors.txt"),
+                            f"tensor 1 (x) is 4096 bytes there and {MIB} in tog_tensor_bytes.txt"),
     "refused.malformed_line": ([f"a {A} {MIB} 16384 in", f"x {X} {MIB}", f"u {UNUSED} {MIB} 16384 out"],
                                f"line 2: \"x {X} {MIB}\" is not `name addr bytes align role`"),
 }
+
+
+def old_sidecar_name_refused(t):
+    """A TOG directory whose unit table still has its name before 1.1.0 (tog_units.tsv) is refused, naming the new
+    one. Breaks when TOGSim reads the old name, or runs without the table and says only that none is there."""
+    home = kernel(t, 0)
+    (home / "tog_unit_table.tsv").rename(home / "tog_units.tsv")
+    session(t, [home]).expect_refused("tog_units.tsv is named tog_unit_table.tsv since TOGSim 1.1.0", exit=1)
 
 
 def tiled(t, gap):
@@ -113,6 +121,7 @@ def version_printed(t):
 CASES = [Case("given_addresses_place_each_tensor", given_addresses_place_each_tensor),
          Case("absent_lays_out_from_0", absent_lays_out_from_0)] + [
     Case(name, refused(*how)) for name, how in REFUSED.items()] + [
+    Case("old_sidecar_name_refused", old_sidecar_name_refused),
     Case("tiles_reaching_the_next_tensor_warned", tiles_reaching_the_next_tensor_warned),
     Case("tiles_clear_of_the_next_tensor_quiet", tiles_clear_of_the_next_tensor_quiet),
     Case("version_printed", version_printed)]

@@ -39,9 +39,9 @@ def standalone(tog_dir, stem, macros=(), shape=None, tensors=(MIB,) * 8, cycles=
     subprocess.run(["g++", "-shared", "-fPIC", "-std=c++20", "-O1", "-I", str(paths.include_dir()),
                     *[f"-D{m}" for m in macros], str(paths.kernel_source(stem)), "-o", str(tog_dir / "tog.so")],
                    check=True)
-    (tog_dir / "tog_tensors.txt").write_text("".join(f"{b}\n" for b in tensors))
+    (tog_dir / "tog_tensor_bytes.txt").write_text("".join(f"{b}\n" for b in tensors))
     if shape is not None:
-        (tog_dir / "tog_shape.txt").write_text("".join(f"{v}\n" for v in shape))
+        (tog_dir / "tog_shape_args.txt").write_text("".join(f"{v}\n" for v in shape))
     (tog_dir / "cycles.tsv").write_text("".join(f"{c}\t0\n" for c in cycles))
     cmd = [str(paths.simulator()), "--config", str(config), "--tog_so", str(tog_dir / "tog.so"),
            "--cycle_table", str(tog_dir / "cycles.tsv"), "--log_level", log_level]
@@ -134,7 +134,7 @@ NODE = {
 
 @pytest.mark.parametrize("op", sorted(OPS))
 def test_a_node_of_each_mapped_operator_replays_without_a_togsim_warning(op, tmp_path):
-    """As the frontend lays the node out: its tog_tensors.txt lists every arg_id the kernel's DMAs name, and the
+    """As the frontend lays the node out: its tog_tensor_bytes.txt lists every arg_id the kernel's DMAs name, and the
     tables ACS wrote have unit rows for every tile id it computes. Either miss is a warning in TOGSim's log."""
     assert sorted(NODE) == sorted(OPS)
     shapes, attributes = NODE[op]
@@ -152,9 +152,9 @@ def test_a_run_with_a_tensor_or_a_unit_row_missing_is_seen_as_a_warning(tmp_path
     rows taken away, makes TOGSim log the two warnings."""
     node = helper.make_node("Relu", ["x"], ["y"], name="relu")
     tog_dir = frontend.prepare_node(node, OPS["Relu"][0], {"x": MATRIX}, read_hardware(str(CONFIG)), str(tmp_path))
-    tensors = (tmp_path / tog_dir / "tog_tensors.txt")
+    tensors = (tmp_path / tog_dir / "tog_tensor_bytes.txt")
     tensors.write_text("".join(tensors.read_text().splitlines(keepends=True)[:-1]))
-    (tmp_path / tog_dir / "tog_units.tsv").write_text(f"1\t{ARRAY}\trows\t1\t0\n")
+    (tmp_path / tog_dir / "tog_unit_table.tsv").write_text(f"1\t{ARRAY}\trows\t1\t0\n")
     frontend.simulate(tog_dir, str(CONFIG))
     said = warnings(tmp_path)
     assert len(said) == 2 and any("its DMAs name arg_id 2" in line for line in said)
@@ -299,7 +299,7 @@ def spad_per_lane(directory, kb):
 def togsim_runs(tog_dir, config):
     """Whether TOGSim replays the TOG laid out in `tog_dir` on `config` to the end: its exit status, 0."""
     return subprocess.run([str(paths.simulator()), "--config", str(config), "--tog_so", f"{tog_dir}/tog.so",
-                           "--cycle_table", f"{tog_dir}/tog_cycles.tsv", "--unit_table", f"{tog_dir}/tog_units.tsv"],
+                           "--cycle_table", f"{tog_dir}/tog_tile_cycles.tsv", "--unit_table", f"{tog_dir}/tog_unit_table.tsv"],
                           capture_output=True).returncode == 0
 
 
@@ -332,7 +332,7 @@ TENSOR_ALIGN = 16384
 
 def past_its_tensor(log, tensors):
     """The DMAs of a trace-level `log` that end past the tensor they start in, as (tensor, bytes past its end).
-    TOGSim lays the tensors of tog_tensors.txt back to back, each start 16 KiB aligned."""
+    TOGSim lays the tensors of tog_tensor_bytes.txt back to back, each start 16 KiB aligned."""
     bases, at = [], 0
     for size in tensors:
         bases.append(at)
@@ -394,7 +394,7 @@ def test_a_node_its_tile_does_not_divide_computes_the_tile_ids_predicted_and_sta
     issued = re.findall(r"INST_ISSUED *\]\[INST_ID=\d+\] COMP \(compute_type=0 compute_cycle=(\d+)", done.stdout)
     seen = {int(cycles) - 1001 for cycles in issued}
     assert sorted(seen) == predicted
-    tensors = [int(line) for line in (tog_dir / "tog_tensors.txt").read_text().split()]
+    tensors = [int(line) for line in (tog_dir / "tog_tensor_bytes.txt").read_text().split()]
     assert past_its_tensor(done.stdout, tensors) == []
 
 

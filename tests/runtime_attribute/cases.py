@@ -192,7 +192,7 @@ def session(t, tog, attributes):
     """--models_list: one LAUNCH_KERNEL of `tog` (its directory gets the cycle table) with `attributes` as its
     attribute_path ("-" when None), then a DEVICE_SYNC."""
     home = tog.parent
-    write_table(home / "tog_cycles.tsv", [(100, 0)])
+    write_table(home / "tog_tile_cycles.tsv", [(100, 0)])
     stream = t.work_dir / "commands.txt"
     stream.write_text(f"LAUNCH_KERNEL,0,0,0,{home}/kernel,{attributes or '-'},0\nDEVICE_SYNC,0,0,0,-,-,0\n")
     return t.execute("Simulator", ["--config", machine(t), "--models_list", stream, "--log_level", "trace"])

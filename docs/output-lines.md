@@ -22,11 +22,11 @@ The hello TOG on `examples/minimal.yml`, a machine small enough for its log to f
 
 ```bash
 build/bin/Simulator --config examples/minimal.yml --tog_so examples/hello/tog.so \
-  --cycle_table examples/hello/tog_cycles.tsv
+  --cycle_table examples/hello/tog_tile_cycles.tsv
 ```
 
 ```text
-[2026-10-12 13:22:43.516] [info] [TOGSim] Command line: build/bin/Simulator --config examples/minimal.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv
+[2026-10-12 13:22:43.516] [info] [TOGSim] Command line: build/bin/Simulator --config examples/minimal.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_tile_cycles.tsv
 [2026-10-12 13:22:43.516] [info] [LoadConfig] Loaded configuration file "examples/minimal.yml"
 [2026-10-12 13:22:43.516] [info] PyTorchSim config:
 num_cores: 1
@@ -138,7 +138,7 @@ per TOG, while the TOG is loaded, or per config key, and the run exits 0. They a
 | Line | Meaning |
 |---|---|
 | `[TOGSim] TOG <so>: the unit table has no rows for tile ids <ids>, which its computes name: those computes add nothing to the units` | Those computes count for no unit's utilization and are not split over the arrays. `<ids>` folds consecutive ids (`1, 3 to 5`). A run without a unit table says nothing. |
-| `[TOGSim] TOG <so>: its DMAs name arg_id <ids>, and tog_tensors.txt lists <n> tensor(s): those DMAs are addressed from base 0` | Those DMAs go to address 0 plus their offset, on top of tensor 0. |
+| `[TOGSim] TOG <so>: its DMAs name arg_id <ids>, and tog_tensor_bytes.txt lists <n> tensor(s): those DMAs are addressed from base 0` | Those DMAs go to address 0 plus their offset, on top of tensor 0. |
 | `[TOGSim] config <path>: key <key> is not read by TOGSim` | A key of the config that TOGSim does not read and no [other tool](config-keys.md) owns: a misspelling, most often. |
 | `[TOGSim] <so> uses the typed grouping (compute_type 1, 2 or 3), which is deprecated: ...` | See [compatibility.md](compatibility.md#deprecated-compute_type-1-2-and-3). |
 

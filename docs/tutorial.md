@@ -92,7 +92,7 @@ Read it from the top down:
   in the scratchpad at once, here IN and OUT, 2 x 16384 bytes over tpuv6e's 128 lanes, 256.
 - **`STEP`** is compute node 0 of 1. A compute takes row `id + count * variant` of the cycle
   table; with the default variant 0, row 0.
-- **`SRC`, `DST`** are DMA descriptors: tensor argument `ptr` (its line of `tog_tensors.txt`),
+- **`SRC`, `DST`** are DMA descriptors: tensor argument `ptr` (its line of `tog_tensor_bytes.txt`),
   64 x 64 `f32` elements from element 0, rows 64 apart: one contiguous block.
 - **`entry`** runs once and dispatches the one work-item, **`body`**, with its `.spad`: three instructions, a load
   into buffer 1, a compute from 1 into 2, a store of 2.
@@ -103,11 +103,11 @@ Three small files stand beside the source:
 
 | File | Contents | Meaning |
 |---|---|---|
-| `tog_tensors.txt` | `16384`<br>`16384` | The TOG has two tensor arguments of 16384 bytes each. |
-| `tog_cycles.tsv` | `600<TAB>0` | Compute tile 0 takes 600 cycles. |
-| `tog_units.tsv` | `0<TAB>TPUV6E_MXU.rows<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | During one run of compute tile 0 the `TPUV6E_MXU.rows` unit, the systolic array, took in 128 rows at 1 row per cycle, and the `Vpu` unit was busy for 100 cycles. |
+| `tog_tensor_bytes.txt` | `16384`<br>`16384` | The TOG has two tensor arguments of 16384 bytes each. |
+| `tog_tile_cycles.tsv` | `600<TAB>0` | Compute tile 0 takes 600 cycles. |
+| `tog_unit_table.tsv` | `0<TAB>TPUV6E_MXU.rows<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | During one run of compute tile 0 the `TPUV6E_MXU.rows` unit, the systolic array, took in 128 rows at 1 row per cycle, and the `Vpu` unit was busy for 100 cycles. |
 
-`tog_tensors.txt` must be in the directory of `tog.so` under that name. The two tables are named on
+`tog_tensor_bytes.txt` must be in the directory of `tog.so` under that name. The two tables are named on
 the command line: `--cycle_table` is always required, `--unit_table` on every shipped config.
 
 ```bash
@@ -120,7 +120,7 @@ The script echoes each command after `+`. Its first run is the Quick start's run
 ```text
 == hello
 + g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/hello/hello_tog.cpp -o examples/hello/tog.so
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv --log_level trace
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_tile_cycles.tsv --unit_table examples/hello/tog_unit_table.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad=256 max_dispatch=2
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false ...
 [trace] [1011][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
@@ -155,20 +155,20 @@ tab-separated, so `printf` is safer than an editor that turns tabs into spaces:
 ```bash
 mkdir -p my_kernel
 cp examples/hello/hello_tog.cpp my_kernel/my_tog.cpp
-printf '16384\n16384\n' > my_kernel/tog_tensors.txt
-printf '600\t0\n' > my_kernel/tog_cycles.tsv
-printf '0\tTPUV6E_MXU.rows\trows\t1\t128\n0\tVpu\tcycles\t1\t100\n' > my_kernel/tog_units.tsv
+printf '16384\n16384\n' > my_kernel/tog_tensor_bytes.txt
+printf '600\t0\n' > my_kernel/tog_tile_cycles.tsv
+printf '0\tTPUV6E_MXU.rows\trows\t1\t128\n0\tVpu\tcycles\t1\t100\n' > my_kernel/tog_unit_table.tsv
 g++ -std=c++20 -shared -fPIC -O1 -Iinclude my_kernel/my_tog.cpp -o my_kernel/tog.so
 build/bin/Simulator --config configs/tpuv6e.yml \
-  --tog_so my_kernel/tog.so --cycle_table my_kernel/tog_cycles.tsv \
-  --unit_table my_kernel/tog_units.tsv | tail -n 1
+  --tog_so my_kernel/tog.so --cycle_table my_kernel/tog_tile_cycles.tsv \
+  --unit_table my_kernel/tog_unit_table.tsv | tail -n 1
 ```
 
 ```text
 [2026-10-12 14:29:13.020] [info] Total execution cycles: 2437
 ```
 
-Change the 600 in `tog_cycles.tsv` to 1000 and the total becomes 2837.
+Change the 600 in `tog_tile_cycles.tsv` to 1000 and the total becomes 2837.
 
 ## 2. Asynchronous loads and a barrier
 
@@ -246,7 +246,7 @@ per cell of an M x N grid, in ordinary C++ loops:
 
 Three things are new:
 
-- **Shape arguments.** `shape<2>` reads the two integers of `tog_shape.txt`, a file beside
+- **Shape arguments.** `shape<2>` reads the two integers of `tog_shape_args.txt`, a file beside
   `tog.so`. Here it contains `2 4`, so the kernel dispatches eight work-items. The same `tog.so`
   serves another grid when the file changes. Without the file the shape is `.example`.
 - **Arguments.** `dispatch` copies the `Cell` (`int64_t` fields, its `.args`) for the body: the only way a body
@@ -325,8 +325,8 @@ Two `tile_id`s mean two rows in the cycle table and rows for both in the unit ta
 
 | File | Contents |
 |---|---|
-| `tog_cycles.tsv` | `600<TAB>0`<br>`150<TAB>0` |
-| `tog_units.tsv` | `0<TAB>TPUV6E_MXU.rows<TAB>rows<TAB>1<TAB>512`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>50`<br>`1<TAB>Vpu<TAB>cycles<TAB>1<TAB>150` |
+| `tog_tile_cycles.tsv` | `600<TAB>0`<br>`150<TAB>0` |
+| `tog_unit_table.tsv` | `0<TAB>TPUV6E_MXU.rows<TAB>rows<TAB>1<TAB>512`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>50`<br>`1<TAB>Vpu<TAB>cycles<TAB>1<TAB>150` |
 
 **Unit rows and the array split.** So far the unit table only fed the utilization lines. It also
 changes how long a compute takes. A row says what one hardware unit did during one run of a
@@ -373,7 +373,7 @@ array of 128 lanes, so nothing is spread and the compute keeps its 600 cycles; o
 
 `--models_list <file>` runs a command stream instead of one TOG. Each `LAUNCH_KERNEL` line
 names the `tog.so` of a kernel, and TOGSim reads the kernel's other files from the same directory
-under fixed names: `tog_tensors.txt`, `tog_cycles.tsv` and `tog_units.tsv`. `examples/session/`
+under fixed names: `tog_tensor_bytes.txt`, `tog_tile_cycles.tsv` and `tog_unit_table.tsv`. `examples/session/`
 has two kernel directories, `k0/` and `k1/`, both built from the hello TOG but with different
 tables. `examples/session/commands.txt`:
 
@@ -440,7 +440,7 @@ simulated. For example:
 
 ```text
 + g++ -std=c++20 -shared -fPIC -O1 -Iinclude -DTILE_PAST_TABLE examples/mistakes/refused_tog.cpp -o examples/mistakes/TILE_PAST_TABLE.so
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TILE_PAST_TABLE.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TILE_PAST_TABLE.so --cycle_table examples/mistakes/tog_tile_cycles.tsv --unit_table examples/mistakes/tog_unit_table.tsv
 [error] [TOGSim] TOG examples/mistakes/TILE_PAST_TABLE.so: work-item 0 (key 0) computes tile id 1, which the cycle table does not hold (it has 1 tile ids, 0 to 0)
 exit 1
 ```
@@ -454,19 +454,19 @@ takes 2437 cycles.
 
 | Mistake | Total | What happens | The warning |
 |---|---|---|---|
-| `TENSOR_PAST_LIST`: a `.ptr` `tog_tensors.txt` has no line for | 2437 | The tensor is placed at address 0, on top of tensor 0: `dram=0x0000000000000000` on the store's trace line. | `its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0` |
+| `TENSOR_PAST_LIST`: a `.ptr` `tog_tensor_bytes.txt` has no line for | 2437 | The tensor is placed at address 0, on top of tensor 0: `dram=0x0000000000000000` on the store's trace line. | `its DMAs name arg_id 2, and tog_tensor_bytes.txt lists 2 tensor(s): those DMAs are addressed from base 0` |
 | a unit table whose rows are all for `tile_id` 1, while the TOG computes `tile_id` 0 | 2437 | The compute adds nothing to any unit, and the array split leaves it whole: `TPUV6E_MXU.rows utilization(%): 0.00`. | `the unit table has no rows for tile ids 0, which its computes name: those computes add nothing to the units` |
 
 ```text
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TENSOR_PAST_LIST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
-[warning] [TOGSim] TOG examples/mistakes/TENSOR_PAST_LIST.so: its DMAs name arg_id 2, and tog_tensors.txt lists 2 tensor(s): those DMAs are addressed from base 0
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/TENSOR_PAST_LIST.so --cycle_table examples/mistakes/tog_tile_cycles.tsv --unit_table examples/mistakes/tog_unit_table.tsv --log_level trace
+[warning] [TOGSim] TOG examples/mistakes/TENSOR_PAST_LIST.so: its DMAs name arg_id 2, and tog_tensor_bytes.txt lists 2 tensor(s): those DMAs are addressed from base 0
 ```
 
 **Valid, with another meaning.** `CONSUMER_FIRST` calls the store before the compute that writes
 its buffer: the store follows nothing, is issued at cycle 3, and nothing names it.
 
 ```text
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_cycles.tsv --unit_table examples/mistakes/tog_units.tsv --log_level trace
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/CONSUMER_FIRST.so --cycle_table examples/mistakes/tog_tile_cycles.tsv --unit_table examples/mistakes/tog_unit_table.tsv --log_level trace
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
 [trace] [3][Core 0][INST_ISSUED    ][INST_ID=1] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
 [trace] [1016][Core 0][INST_ISSUED    ][INST_ID=2] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)

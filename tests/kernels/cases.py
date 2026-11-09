@@ -53,7 +53,7 @@ def insts(run):
 
 def expect_insts(run, expected):
     """The run finished with those (MOVIN, MOVOUT, COMP, MEMORY_BAR) counts and without a warning: its tables
-    and tog_tensors.txt cover every tile id and arg_id the kernel names."""
+    and tog_tensor_bytes.txt cover every tile id and arg_id the kernel names."""
     run.expect_no_warning("")
     if insts(run) != expected:
         run.fail(f"expected (MOVIN, MOVOUT, COMP, MEMORY_BAR) inst_count {expected}, got {insts(run)}")
@@ -61,7 +61,7 @@ def expect_insts(run, expected):
 
 
 def example(kernel):
-    """The kernel at its example shape (no tog_shape.txt) issues `insts`, its (MOVIN, MOVOUT, COMP, MEMORY_BAR)
+    """The kernel at its example shape (no tog_shape_args.txt) issues `insts`, its (MOVIN, MOVOUT, COMP, MEMORY_BAR)
     counts (the DMAs the original issued; one compute per tile for gemm, conv and attention), and replays to
     `total`, a golden. A typed TOG fails any case here."""
     how = EXAMPLE[kernel]
@@ -269,7 +269,7 @@ def attention_shares_a_kv_head(t):
 
 
 def refused(shape, saying, kernel="gemm"):
-    """`kernel` with `shape` in tog_shape.txt ends the run with exit 1 and `saying` on stderr, before any
+    """`kernel` with `shape` in tog_shape_args.txt ends the run with exit 1 and `saying` on stderr, before any
     work-item."""
     def case(t):
         how = EXAMPLE[kernel]
@@ -285,7 +285,7 @@ CASES = [Case(f"example.{kernel}", example(kernel)) for kernel in EXAMPLE] + [
     Case("conv_reads_its_shape_and_its_tile", conv_reads_its_shape_and_its_tile),
     Case("attention_shares_a_kv_head", attention_shares_a_kv_head),
     Case("refused.shape_argument_count", refused(
-        (100, 200), "kernel gemm: it takes 3 shape arguments (M K N), tog_shape.txt gives 2")),
+        (100, 200), "kernel gemm: it takes 3 shape arguments (M K N), tog_shape_args.txt gives 2")),
     Case("refused.shape_argument_below_one", refused(
         (128, 0, 256), "kernel gemm: shape argument 1 of (M K N) is 0, it must be at least 1")),
     Case("conv.stride_2", conv_moves((64, 32, 64, 64, 16, 32, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1), 148710)),

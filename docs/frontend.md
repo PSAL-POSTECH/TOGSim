@@ -6,7 +6,7 @@ own tests and its own CI job. Like the [kernel library](kernels.md), it comes fr
 #315. It has two parts.
 
 - **ACS** (`togsim_frontend.acs`), an analytic cycle model. For a kernel of `kernels/` and a
-  machine config it writes `tog_cycles.tsv` and `tog_units.tsv` from formulas, where a compiler
+  machine config it writes `tog_tile_cycles.tsv` and `tog_unit_table.tsv` from formulas, where a compiler
   would have measured them with gem5. **Its numbers are estimates: the formulas have not been
   calibrated against gem5, and no result built on them should be read as a measurement.** A vector
   tile costs `ceil(elements / (lanes * elements per lane))` cycles per elementwise instruction; a

@@ -34,7 +34,7 @@ and lines that start with `#` are skipped.
 | `attribute_path` | The directory of the kernel's [runtime attribute records](tog-abi.md#runtime-attributes); `-` for none. Required when its TOG declares attributes. | any text |
 | `timestamp` | The core cycle at which the kernel arrives; 0 means now. | any number |
 
-`LAUNCH_KERNEL` loads `tog.so`, `tog_cycles.tsv` and `tog_units.tsv` from the kernel's directory;
+`LAUNCH_KERNEL` loads `tog.so`, `tog_tile_cycles.tsv` and `tog_unit_table.tsv` from the kernel's directory;
 the first two are required, and the third unless the config sets `systolic_array_split: none`.
 `DEVICE_SYNC` simulates until all launched work is done. At the end of the file the simulation runs
 to completion as well. The kernels' unit tables are joined into one: a later table may add units,
@@ -102,7 +102,7 @@ line. The final statistics of the hello TOG on tpuv6e (the third run of `example
 
 **Warnings.** A `[warning]` line before the simulation starts names something that still runs and
 is probably a mistake: a compute whose `tile_id` has no unit-table rows, a DMA whose `arg_id`
-`tog_tensors.txt` does not list, a TOG that passes a
+`tog_tensor_bytes.txt` does not list, a TOG that passes a
 deprecated `compute_type`. Each is printed once per TOG. Grep a log for `\[warning\]` before you trust its
 total.
 
@@ -115,8 +115,8 @@ instruction, grep for its id:
 
 ```bash
 build/bin/Simulator --config configs/tpuv6e.yml \
-  --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv \
-  --unit_table examples/hello/tog_units.tsv --log_level trace | grep -F 'INST_ID=0]'
+  --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_tile_cycles.tsv \
+  --unit_table examples/hello/tog_unit_table.tsv --log_level trace | grep -F 'INST_ID=0]'
 ```
 
 ```text
@@ -155,7 +155,7 @@ A run that ends with a message: look the message up in the
 | A compute takes fewer cycles than the cycle table says | The array split shortened it. `compute_cycle` in the trace is the value after the split. |
 | The second kernel of a session behaves like the first | Its body function is not `static`. |
 | A changed config key has no effect | Misspelled keys are ignored. Compare with the echo at the top of the log. |
-| A DMA goes to a wrong address | `offset` is in elements, not bytes; an `arg_id` past `tog_tensors.txt` is placed at address 0, with a `[warning]` line. Read `dram=` on its trace line. |
+| A DMA goes to a wrong address | `offset` is in elements, not bytes; an `arg_id` past `tog_tensor_bytes.txt` is placed at address 0, with a `[warning]` line. Read `dram=` on its trace line. |
 | The log is thousands of lines | Read it through `tail -n 1` or `grep`. Most of a short log is Ramulator2's dump per DRAM channel, which no key turns off ([why](output-lines.md#periodic-and-final-statistics)). |
 | The binary does not start after the build tree was moved | It finds `build/lib/libramulator.so` by an absolute path. Build where you run. |
 

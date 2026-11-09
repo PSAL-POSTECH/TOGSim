@@ -36,8 +36,8 @@ def session(t, *kernels):
     with stream.open("w") as commands:
         for i, (cycles, units) in enumerate(kernels):
             home = t.tog(TOG, tensors=(MIB, MIB), into=f"k{i}").parent
-            write_table(home / "tog_cycles.tsv", [(10, 0), (cycles, 0)])
-            write_table(home / "tog_units.tsv", units)
+            write_table(home / "tog_tile_cycles.tsv", [(10, 0), (cycles, 0)])
+            write_table(home / "tog_unit_table.tsv", units)
             commands.write(f"LAUNCH_KERNEL,{i},0,0,{home}/kernel,{home}/attributes,0\n")
         commands.write("DEVICE_SYNC,0,0,0,-,-,0\n")
     return t.execute("Simulator", ["--config", t.machine(), "--models_list", stream, "--log_level", "trace"])

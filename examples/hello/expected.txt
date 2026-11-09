@@ -1,6 +1,6 @@
 == hello
 + g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/hello/hello_tog.cpp -o examples/hello/tog.so
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv --log_level trace
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_tile_cycles.tsv --unit_table examples/hello/tog_unit_table.tsv --log_level trace
 [trace] [1][Core 0][TILE_SCHEDULED ] spad=256 max_dispatch=2
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
 [trace] [1011][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
@@ -9,14 +9,14 @@
 [trace] [1613][Core 0][INST_ISSUED    ][INST_ID=2] MOVOUT (addr_name=tag1 dram=0x0000000000004000 rank=2 elem_bits=32 async=false indirect=false tag=0x0000000000000000 stride=[64,1] size=[64,64] tag_idx=[0] tile=0)
 [trace] [1653][Core 0][INST_FINISHED  ][INST_ID=2] MOVOUT (addr_name=tag1 tile=0)
 [info] Total execution cycles: 2437
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv --log_level trace
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_tile_cycles.tsv --unit_table examples/hello/tog_unit_table.tsv --log_level trace
 [trace] [2][Core 0][INST_ISSUED    ][INST_ID=0] MOVIN (addr_name=tag0 dram=0x0000000000000000 rank=2 size=[64,64] stride=[64,1] elem_bits=32 async=false indirect=false tag_id=[0x0000000000000000,0x0000000000000000])
 [trace] [2][Core 0][DMA_LATENCY    ][INST_ID=0] MOVIN (cycles=27 addr_name=tag0 tile=0)
 [trace] [29][Core 0][L2CACHE_STAT   ][INST_ID=0] dram=0x0000000000000000 cacheable=false
 [trace] [29][Core 0][DRAM_NUMA      ][INST_ID=0] core_id=0 subgraph_id=0 numa_id=0 addr_name=tag0 is_write=false
 [trace] [114][Core 0][DRAM_RESP_FIRST][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
 [trace] [1011][Core 0][INST_FINISHED  ][INST_ID=0] MOVIN (addr_name=tag0 tile=0)
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv --unit_table examples/hello/tog_units.tsv
++ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_tile_cycles.tsv --unit_table examples/hello/tog_unit_table.tsv
 [info] [DRAM] Per-channel average bandwidth
 [info] [DRAM] channel 0 | 1.35 GB/s avg., 2.63% of utilization | 16 reads, 16 writes
 [info] [DRAM] channels 0..31 combined | 43.09 GB/s aggregate, 2.63% of utilization (avg. per channel) | 512 reads, 512 writes
@@ -33,8 +33,8 @@
 [info] Core [0] : Total_cycles: 2437
 [info] Core [0] : computes held at least once by the core's compute in flight: 0
 [info] Total execution cycles: 2437
-+ build/bin/Simulator --config examples/minimal.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv
-[info] [TOGSim] Command line: build/bin/Simulator --config examples/minimal.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv
++ build/bin/Simulator --config examples/minimal.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_tile_cycles.tsv
+[info] [TOGSim] Command line: build/bin/Simulator --config examples/minimal.yml --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_tile_cycles.tsv
 [info] [LoadConfig] Loaded configuration file "examples/minimal.yml"
 [info] PyTorchSim config:
 num_cores: 1

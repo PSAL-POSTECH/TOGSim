@@ -30,7 +30,7 @@ def session_wrong_count_refused_at_sync(t):
     """--models_list: a work-item is built only when it runs, so the contract it breaks is the error of the
     DEVICE_SYNC that runs the kernel, with or without a spad size."""
     home = t.tog(TOG, ("WRONG_COUNT",), into="k").parent
-    write_table(home / "tog_cycles.tsv", [(200, 0)])
+    write_table(home / "tog_tile_cycles.tsv", [(200, 0)])
     stream = t.work_dir / "commands.txt"
     stream.write_text(f"LAUNCH_KERNEL,0,0,0,{home}/kernel,{home}/attributes,0\nDEVICE_SYNC,0,0,0,-,-,0\n")
     for spad in ({}, dict(vpu_spad_size_kb_per_lane=None)):

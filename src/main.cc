@@ -89,31 +89,31 @@ void warn_tiles_past_their_tensor(const fs::path& dir, const std::vector<uint64_
 }
 
 // Each tensor argument's DRAM base: the address tog_tensor_addrs.txt beside tog.so gives, else back to back
-// from 0 in argument order at 16 KiB alignment (XLA's program HBM alignment), sized by tog_tensors.txt;
+// from 0 in argument order at 16 KiB alignment (XLA's program HBM alignment), sized by tog_tensor_bytes.txt;
 // a tiled tensor takes its padded footprint and learns its base.
 std::vector<uint64_t> tog_tensor_bases(const fs::path& dir, const std::vector<std::shared_ptr<TensorTiling>>& tilings) {
-  std::ifstream tt(dir / "tog_tensors.txt");
+  std::ifstream tt(dir / "tog_tensor_bytes.txt");
   if (!tt.is_open()) {
-    spdlog::error("[TOGSim] {} is absent: the TOG's tensor arguments have no addresses", (dir / "tog_tensors.txt").string());
+    spdlog::error("[TOGSim] {} is absent: the TOG's tensor arguments have no addresses", (dir / "tog_tensor_bytes.txt").string());
     exit(EXIT_FAILURE);
   }
   std::vector<uint64_t> sizes;
   for (uint64_t bytes; tt >> bytes;) sizes.push_back(bytes);
   if (!tilings.empty() && tilings.size() != sizes.size()) {
-    spdlog::error("[TOGSim] tog_tensors.txt lists {} tensors, tog_tensor_shapes.txt {}", sizes.size(), tilings.size());
+    spdlog::error("[TOGSim] tog_tensor_bytes.txt lists {} tensors, tog_tensor_shapes.txt {}", sizes.size(), tilings.size());
     exit(EXIT_FAILURE);
   }
   const auto given = tog_tensor_addrs(dir);
   std::vector<uint64_t> bases, spans;
   if (given) {
     if (given->size() != sizes.size()) {
-      spdlog::error("[TOGSim] {} lists {} tensors, tog_tensors.txt {}", (dir / "tog_tensor_addrs.txt").string(),
+      spdlog::error("[TOGSim] {} lists {} tensors, tog_tensor_bytes.txt {}", (dir / "tog_tensor_addrs.txt").string(),
                     given->size(), sizes.size());
       exit(EXIT_FAILURE);
     }
     for (size_t i = 0; i < sizes.size(); i++) {
       if ((*given)[i].bytes != sizes[i]) {
-        spdlog::error("[TOGSim] {}: tensor {} ({}) is {} bytes there and {} in tog_tensors.txt",
+        spdlog::error("[TOGSim] {}: tensor {} ({}) is {} bytes there and {} in tog_tensor_bytes.txt",
                       (dir / "tog_tensor_addrs.txt").string(), i, (*given)[i].name, (*given)[i].bytes, sizes[i]);
         exit(EXIT_FAILURE);
       }
@@ -150,11 +150,25 @@ void load_cycle_table(const std::string& path, std::vector<int64_t>& cyc, std::v
 // Load a kernel's compiled TOG (.so) and bridge its replay to a TileGraph for `partition_id`, whose cores its
 // work-items round-robin over. The cycle table gives per-tile latency and must open; the runtime attribute records
 // are read from `attribute_path` (empty or "-": none).
+// Refuses a TOG directory that still carries a sidecar under its name before 1.1.0, naming the one TOGSim reads now.
+void refuse_renamed_sidecars(const fs::path& dir) {
+  static const std::pair<const char*, const char*> renamed[] = {{"tog_shape.txt", "tog_shape_args.txt"},
+                                                                {"tog_tensors.txt", "tog_tensor_bytes.txt"},
+                                                                {"tog_cycles.tsv", "tog_tile_cycles.tsv"},
+                                                                {"tog_units.tsv", "tog_unit_table.tsv"}};
+  for (const auto& [old_name, new_name] : renamed)
+    if (fs::exists(dir / old_name) && !fs::exists(dir / new_name)) {
+      spdlog::error("[TOGSim] {}: {} is named {} since TOGSim 1.1.0; rename it", dir.string(), old_name, new_name);
+      exit(EXIT_FAILURE);
+    }
+}
+
 std::unique_ptr<TileGraph> build_tog_tilegraph(Simulator* simulator,
                                                const std::string& tog_so_path,
                                                const std::string& cycle_table_path,
                                                const std::string& attribute_path,
                                                int partition_id, int64_t unit_tile_base = 0) {
+  refuse_renamed_sidecars(fs::path(tog_so_path).parent_path());
   const int num_cores = simulator->get_config().num_cores;
   std::vector<int32_t> partition_cores;
   for (int c = 0; c < num_cores; c++)
@@ -169,7 +183,7 @@ std::unique_ptr<TileGraph> build_tog_tilegraph(Simulator* simulator,
   // -- absent means the TOG carries its own constants.
   std::vector<int64_t> shape;
   {
-    std::ifstream sh(fs::path(tog_so_path).parent_path() / "tog_shape.txt");
+    std::ifstream sh(fs::path(tog_so_path).parent_path() / "tog_shape_args.txt");
     int64_t v;
     while (sh >> v) shape.push_back(v);
   }
@@ -186,20 +200,21 @@ std::unique_ptr<TileGraph> build_tog_tilegraph(Simulator* simulator,
 }
 
 void launchKernel(Simulator* simulator, unsigned int kernel_id, std::string onnx_path, std::string attribute_path, const YAML::Node& config_yaml, cycle_type request_time=0, int partition_id=0, int device_id=0) {
-  // The kernel's tog.so / tog_cycles.tsv sit in the directory of the handle it is launched with.
+  // The kernel's tog.so / tog_tile_cycles.tsv sit in the directory of the handle it is launched with.
   std::string dir = fs::path(onnx_path).parent_path().string();
+  refuse_renamed_sidecars(dir);
   std::string tog_so = dir + "/tog.so";
-  std::string cycle_tsv = dir + "/tog_cycles.tsv";
+  std::string cycle_tsv = dir + "/tog_tile_cycles.tsv";
   if (!fs::exists(tog_so))
     throw std::runtime_error("[TOGSim] no tog.so next to " + onnx_path);
   // Its unit table, when gem5 left one beside it, joins the simulator's: systolic_array_split reads it.
-  std::string units_tsv = dir + "/tog_units.tsv";
+  std::string units_tsv = dir + "/tog_unit_table.tsv";
   int64_t unit_tile_base = 0;
   if (fs::exists(units_tsv))
     unit_tile_base = simulator->add_kernel_unit_table(units_tsv);
   else if (simulator->get_config().systolic_array_split)
     throw std::runtime_error("[TOGSim] systolic_array_split (on by default) reads each tile's " +
-                             simulator->get_config().systolic_array_unit + " rows; no tog_units.tsv next to " +
+                             simulator->get_config().systolic_array_unit + " rows; no tog_unit_table.tsv next to " +
                              onnx_path + " (or set systolic_array_split: none)");
   std::unique_ptr<TileGraph> tile_graph =
       build_tog_tilegraph(simulator, tog_so, cycle_tsv, attribute_path, partition_id, unit_tile_base);
@@ -406,7 +421,7 @@ int main(int argc, char** argv) {
   cmd_parser.set_if_defined("unit_table", &unit_table_path);
   if (!unit_table_path.empty()) {
     spdlog::error("[TOGSim] --unit_table is keyed by one TOG's tile_ids; use it with --tog_so "
-                  "(a launched kernel brings its own tog_units.tsv)");
+                  "(a launched kernel brings its own tog_unit_table.tsv)");
     exit(1);
   }
   std::string attribute_path;
