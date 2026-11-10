@@ -37,6 +37,7 @@ compiler:
 [info] [Config/L2Cache] Total Size: N KB, Partition Size: N KB, Set: N, Assoc: N, Line Size: NB Sector Size: NB
 [info] [Config/Interconnect] interconnect_freq_mhz: N
 [info] [Config/Interconnect] Simple interconnect selected
+[info] [TOGSim] <path>: no tog_tensor_addrs.txt, N tensors laid out from address N
 [info] ======Start Simulation=====
 # during the run, sorted
 [info] ========= Core stat =========

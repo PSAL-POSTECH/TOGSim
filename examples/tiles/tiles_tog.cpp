@@ -1,4 +1,4 @@
-// A tiled kernel: an M x N grid of work-items, M and N read from tog_shape.txt. Work-item (m, n) loads its own
+// A tiled kernel: an M x N grid of work-items, M and N read from tog_shape_args.txt. Work-item (m, n) loads its own
 // 64x64 tile of tensor 0, computes on it (every work-item runs tile 0 of the cycle table) and stores it to tensor 1.
 // Each states its spad: IN and OUT, 2 x 16384 bytes over tpuv6e's 128 lanes.
 #include "togsim.hpp"

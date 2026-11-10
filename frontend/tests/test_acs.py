@@ -37,10 +37,10 @@ def test_a_kernel_without_a_compute_still_names_the_array_unit():
 
 def test_the_tables_are_written_as_togsim_reads_them(tmp_path):
     desc = lookup("gemm")
-    acs_cycles.write_table(acs_cycles.build_table(desc, GEMM_TILE, HW), str(tmp_path / "tog_cycles.tsv"))
-    acs_cycles.write_units(acs_cycles.build_units(desc, GEMM_TILE, HW), str(tmp_path / "tog_units.tsv"))
-    assert (tmp_path / "tog_cycles.tsv").read_text() == "128\t0\n8206\t0\n# origins: acs\n"
-    lines = (tmp_path / "tog_units.tsv").read_text().splitlines()
+    acs_cycles.write_table(acs_cycles.build_table(desc, GEMM_TILE, HW), str(tmp_path / "tog_tile_cycles.tsv"))
+    acs_cycles.write_units(acs_cycles.build_units(desc, GEMM_TILE, HW), str(tmp_path / "tog_unit_table.tsv"))
+    assert (tmp_path / "tog_tile_cycles.tsv").read_text() == "128\t0\n8206\t0\n# origins: acs\n"
+    lines = (tmp_path / "tog_unit_table.tsv").read_text().splitlines()
     assert lines[2] == "1\tTPUV3_MXU.rows\trows\t1\t8192" and all(len(line.split("\t")) == 5 for line in lines)
 
 

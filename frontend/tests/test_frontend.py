@@ -110,8 +110,8 @@ def test_a_tog_directory_holds_the_sidecars_togsim_reads(tmp_path):
     so.write_bytes(b"\x7fELF")
     tog = emit.write_tog_dir(str(tmp_path / "run"), str(so), [128, 256], [131072, 1024, 131072])
     assert tog == str(tmp_path / "run" / "tog.so")
-    assert (tmp_path / "run" / "tog_shape.txt").read_text().split() == ["128", "256"]
-    assert (tmp_path / "run" / "tog_tensors.txt").read_text().split() == ["131072", "1024", "131072"]
+    assert (tmp_path / "run" / "tog_shape_args.txt").read_text().split() == ["128", "256"]
+    assert (tmp_path / "run" / "tog_tensor_bytes.txt").read_text().split() == ["131072", "1024", "131072"]
 
 
 def test_a_node_whose_tile_ids_the_tables_miss_is_refused_by_name(tmp_path, monkeypatch):
@@ -120,11 +120,11 @@ def test_a_node_whose_tile_ids_the_tables_miss_is_refused_by_name(tmp_path, monk
     relu = helper.make_node("Relu", ["x"], ["y"], name="relu_7")
     shapes = {"x": [64, 256], "y": [64, 256]}
     tog_dir = frontend.prepare_node(relu, OPS["Relu"][0], shapes, HW, str(tmp_path / "covered"))
-    assert os.path.exists(os.path.join(tog_dir, "tog_units.tsv"))
+    assert os.path.exists(os.path.join(tog_dir, "tog_unit_table.tsv"))
     monkeypatch.setattr(acs_cycles, "build_units", lambda desc, tile, hw: [])
     with pytest.raises(ValueError, match=r"node 'relu_7': kernel bias_act names tile ids \[0\]"):
         frontend.prepare_node(relu, OPS["Relu"][0], shapes, HW, str(tmp_path / "missed"))
-    assert not list((tmp_path / "missed").rglob("tog_units.tsv"))
+    assert not list((tmp_path / "missed").rglob("tog_unit_table.tsv"))
 
 
 @pytest.mark.parametrize("op,kernels", sorted(OPS.items()))

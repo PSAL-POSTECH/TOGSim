@@ -1,5 +1,5 @@
 """What TOGSim keeps running and says once, at warn level: a compute whose tile id the unit table has no rows for,
-a DMA whose arg_id tog_tensors.txt does not list, a config key TOGSim does not read."""
+a DMA whose arg_id tog_tensor_bytes.txt does not list, a config key TOGSim does not read."""
 from togtest import MIB, Case, write_table
 
 TOG = "names_ids_tog.cpp"
@@ -16,17 +16,17 @@ def rows(*tile_ids):
 
 def replay(t, units, *defines, tensors=(MIB, MIB)):
     """--tog_so: the TOG against a five-line cycle table and `units` (None: no unit table), without the array split;
-    tog_tensors.txt lists `tensors`."""
+    tog_tensor_bytes.txt lists `tensors`."""
     return t.simulate(t.tog(TOG, defines, tensors=tensors), t.machine(systolic_array_split="none"), CYCLES, units)
 
 
 def session(t, units, *defines, launches=1):
-    """--models_list: `launches` LAUNCH_KERNELs of the TOG from <work dir>/k/, `units` as its tog_units.tsv (None:
+    """--models_list: `launches` LAUNCH_KERNELs of the TOG from <work dir>/k/, `units` as its tog_unit_table.tsv (None:
     the directory has none)."""
     home = t.tog(TOG, defines, tensors=(MIB, MIB), into="k").parent
-    write_table(home / "tog_cycles.tsv", [(c, 0) for c in CYCLES])
+    write_table(home / "tog_tile_cycles.tsv", [(c, 0) for c in CYCLES])
     if units is not None:
-        write_table(home / "tog_units.tsv", units)
+        write_table(home / "tog_unit_table.tsv", units)
     stream = t.work_dir / "commands.txt"
     stream.write_text("".join(f"LAUNCH_KERNEL,{k},0,0,{home}/kernel,{home}/attributes,0\nDEVICE_SYNC,0,0,0,-,-,0\n"
                               for k in range(launches)))
@@ -61,7 +61,7 @@ def without_a_unit_table_is_quiet(t):
 
 
 def session_tile_without_unit_rows_warned_once(t):
-    """A launched kernel is checked against its own tog_units.tsv, and launching it again repeats nothing."""
+    """A launched kernel is checked against its own tog_unit_table.tsv, and launching it again repeats nothing."""
     session(t, rows(0), launches=2).expect_warned_once(no_rows(t.work_dir / "k" / "tog.so", "1"))
 
 
@@ -75,7 +75,7 @@ def session_every_tile_with_unit_rows_is_quiet(t):
 
 def stray_arg(tog, ids, held):
     """The warning that the DMAs of `tog` name the arg_ids `ids` (as the line lists them) against `held` tensors."""
-    return (f"[TOGSim] TOG {tog}: {STRAY_ARG} {ids}, and tog_tensors.txt lists {held} tensor(s): those DMAs are "
+    return (f"[TOGSim] TOG {tog}: {STRAY_ARG} {ids}, and tog_tensor_bytes.txt lists {held} tensor(s): those DMAs are "
             f"addressed from base 0")
 
 
@@ -99,7 +99,7 @@ def negative_arg_id_warned_with_the_others(t):
 
 
 def no_tensor_listed_warns_for_every_arg_id(t):
-    """An empty tog_tensors.txt lists no tensor: arg_ids 0 and 1 are both beyond it."""
+    """An empty tog_tensor_bytes.txt lists no tensor: arg_ids 0 and 1 are both beyond it."""
     replay(t, None, tensors=()).expect_warned_once(stray_arg(t.work_dir / "tog.so", "0 to 1", 0))
 
 
@@ -108,7 +108,7 @@ def every_arg_id_listed_is_quiet(t):
 
 
 def session_arg_id_at_tensor_count_warned_once(t):
-    """A launched kernel is checked against its own tog_tensors.txt, and launching it again repeats nothing."""
+    """A launched kernel is checked against its own tog_tensor_bytes.txt, and launching it again repeats nothing."""
     session(t, None, "STORE_ARG=2", launches=2).expect_warned_once(stray_arg(t.work_dir / "k" / "tog.so", "2", 2))
 
 

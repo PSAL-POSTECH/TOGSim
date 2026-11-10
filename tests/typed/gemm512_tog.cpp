@@ -1,6 +1,6 @@
 // DEPRECATED typed grouping (compute_type 1 matmul, 2 preload). The TOG the compiler emitted for its gemm 512 b512
 // kernel, kept as a fixed input: per work-item four trips of two async loads, their waits, a preload and a
-// matmul, then one store. Its two shape arguments (tog_shape.txt) are the work-item grid.
+// matmul, then one store. Its two shape arguments (tog_shape_args.txt) are the work-item grid.
 #include <cstddef>
 #include <cstdint>
 using std::size_t;

@@ -145,15 +145,15 @@ TOGSim reads these from the directory of the TOG, by fixed name:
 
 | File | Required | Format | Example |
 |---|---|---|---|
-| `tog_tensors.txt` | always | One byte size per tensor argument, whitespace-separated, in `ptr` order. | `16384`<br>`16384` |
-| `tog_shape.txt` | no | The kernel's shape arguments, read by `shape<N>`. | `2 4` |
+| `tog_tensor_bytes.txt` | always | One byte size per tensor argument, whitespace-separated, in `ptr` order. | `16384`<br>`16384` |
+| `tog_shape_args.txt` | no | The kernel's shape arguments, read by `shape<N>`. | `2 4` |
 | `tog_tensor_shapes.txt` | only if the config sets `tog_tensor_tile` | `rows cols elem_bytes` per tensor argument. | `256 256 4` |
 
 The [runtime attribute records](#runtime-attributes) are not read from beside `tog.so`: their
 directory is always named, by `--attribute_path` or the `LAUNCH_KERNEL`.
 
 Tensors are placed in DRAM back to back from address 0 in `ptr` order, each start rounded up to
-16 KiB. An empty `tog_tensors.txt` is fine for a TOG without DMAs; a missing one is refused. A DMA
+16 KiB. An empty `tog_tensor_bytes.txt` is fine for a TOG without DMAs; a missing one is refused. A DMA
 whose `ptr` the file does not list still runs, addressed from base 0, and TOGSim says so once
 per TOG in a `[warning]` line ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)).
 
@@ -181,7 +181,7 @@ deprecated and has no effect on timing: write 0.
 150	0
 ```
 
-`--cycle_table <file>` names it; in a session it is `tog_cycles.tsv` in the kernel's directory.
+`--cycle_table <file>` names it; in a session it is `tog_tile_cycles.tsv` in the kernel's directory.
 There is no default table. Give it no header line or comments: the reader takes numbers in pairs
 until one fails to parse, so a header leaves it without a row. A table without a row suits a TOG
 that has no compute.
@@ -206,7 +206,7 @@ tile_id	unit	unit_of_work	capacity_per_cycle	admitted
 At most one row per `tile_id` and unit. A compute whose `tile_id` has no rows at all still runs:
 it adds nothing to any unit, the array split leaves it whole, and TOGSim says so once per TOG in a
 `[warning]` line ([tutorial step 6](tutorial.md#6-mistakes-what-togsim-refuses-and-what-it-does-not)). Rows of a `tile_id` that no compute names are ignored.
-`--unit_table <file>` names the table; in a session it is `tog_units.tsv` in the kernel's
+`--unit_table <file>` names the table; in a session it is `tog_unit_table.tsv` in the kernel's
 directory.
 
 The table does two things.
@@ -270,7 +270,7 @@ needs a unit table that has rows of its array unit**. To run without one, set
 | `[TOGSim] --unit_table <file> line 1: expected 5 tab-separated fields (...), got 1` | 1 | The line is separated by spaces, or is a comment. | Use tabs and nothing else. |
 | `[TOGSim] --unit_table <file> line 1: tile_id 'tile_id' is not a non-negative integer` | 1 | The table has a header line. | Remove it. |
 | `[TOGSim] systolic_array_split: the unit table has no array unit TPUV6E_MXU.rows` | 1 | The first unit table that has rows has none for the array unit. | Add a row of it, or turn the split off. |
-| `[TOGSim] <dir>/tog_tensors.txt is absent: the TOG's tensor arguments have no addresses` | 1 | No `tog_tensors.txt` beside `tog.so`. | Create it. |
+| `[TOGSim] <dir>/tog_tensor_bytes.txt is absent: the TOG's tensor arguments have no addresses` | 1 | No `tog_tensor_bytes.txt` beside `tog.so`. | Create it. |
 | `togsim: dlopen failed: valid.so: cannot open shared object file: No such file or directory` | 1 | `--tog_so` has no `/` in it, so the loader searches the library path, not the current directory. | Write `./valid.so`. |
 | `what():  core_spad_size_kb: a work-item states its spad per lane, so the spad is stated by vpu_spad_size_kb_per_lane (and vpu_num_lanes)` | 134 | The config states the spad by `core_spad_size_kb` alone. | State `vpu_spad_size_kb_per_lane` ([keys](config-keys.md)). |
 | `Config file <path>/configs/ramulator2_configs/HBM3_TPUv6e.yaml does not exist!` | 255 | A shipped config was copied out of `configs/`; its `../configs/...` path no longer resolves. | Make the path absolute ([how](machine.md#changing-the-machine)). |
@@ -300,8 +300,8 @@ symbol, semaphore counts, `ndim`, a negative `.spad`) are ones a TOG built on to
 | `TOG <so>: work-item <n> (key <k>) computes tile id <id>, whose unit table row admits 128 rows to TPUV6E_MXU.rows, and the unit takes 100 in the tile's 100 cycles (1 per cycle)` | A row of that compute tile admits more than the unit takes in [the tile's cycles](#the-unit-table-and-the-array-split). With the array split the line ends `(1 per cycle on each of 2 arrays; the array split leaves 256 of the cycle table's 512 cycles)`. |
 | `exceeds capacity`, then `[TOGSim] --unit_table: a unit ...` | During the run a unit took in more than its capacity allows in the cycles it had, in one statistics interval or in the whole run: a check on the sum of the computes that ran, which the tiles that fit their cycles do not reach. |
 | `--unit_table is keyed by one TOG's tile_ids` | `--unit_table` was given with `--models_list`. |
-| `no tog.so next to <tog_path>`, `no tog_units.tsv next to <tog_path>`, `cycle table <dir>/tog_cycles.tsv cannot be opened` | A `LAUNCH_KERNEL` whose directory lacks the file. |
-| `tog_tensor_tile ...`, `tensor argument <n> is ..., which no tile holds`, `tog_tensors.txt lists <n> tensors, tog_tensor_shapes.txt <m>` | The config sets `tog_tensor_tile` and the layout files do not fit it. |
+| `no tog.so next to <tog_path>`, `no tog_unit_table.tsv next to <tog_path>`, `cycle table <dir>/tog_tile_cycles.tsv cannot be opened` | A `LAUNCH_KERNEL` whose directory lacks the file. |
+| `tog_tensor_tile ...`, `tensor argument <n> is ..., which no tile holds`, `tog_tensor_bytes.txt lists <n> tensors, tog_tensor_shapes.txt <m>` | The config sets `tog_tensor_tile` and the layout files do not fit it. |
 
 ## Checklist for a TOG generator
 

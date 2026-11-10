@@ -36,7 +36,7 @@ buffers{...}`, an optional `static constexpr std::array attributes{...}` and a
 | `Elem` | `.bits`, `.kind` | An element type: `u8 i8 i16 f16 bf16 i32 f32 i64 f64`. The ABI sees only `bits`; `kind` tells f16 from bf16 and i32 from f32. `f32(64, 64)` is the bytes of 64 x 64 of them. |
 | `Buf` | `.id` | A buffer: an id below 1024 that orders the calls naming it. It has no size. A list of buffers is written `{A, B}`. |
 | `Dims` | | One to four extents or strides: `{64, 64}`, or `Dims(64, 64)`, the form generated code builds. |
-| `Desc` | `.ptr`, `.type`, `.offset`, `.dims`, `.strides`, `.gather` | A DMA descriptor: `dims` elements of `type` from kernel argument `ptr` (its line of `tog_tensors.txt`), `strides` elements apart, from `offset` elements in. `gather` (default none) makes it a gather or scatter. |
+| `Desc` | `.ptr`, `.type`, `.offset`, `.dims`, `.strides`, `.gather` | A DMA descriptor: `dims` elements of `type` from kernel argument `ptr` (its line of `tog_tensor_bytes.txt`), `strides` elements apart, from `offset` elements in. `gather` (default none) makes it a gather or scatter. |
 | `Attribute` | `.id`, `.rank` | A [runtime attribute](#runtime-attributes): an `int64_t` scalar (`rank` 0) or array the functional run recorded per work-item key. Its extents are in each record, not here. |
 | `Gather` | `.attribute`, `.at`, `.axis`, `.scale` | Where each element of a gather or scatter moves: by `scale` times an entry of `attribute`'s row `at` (a `Dims` of leading indices, default none); `axis` 0 or above: one entry per position on that dim of the tile, `-1` (the default): one per element. `Gather()` names no attribute: a dense tile. |
 | `Node` | `.id`, `.count` | A compute node: node `id` of the kernel's `count`. |
@@ -60,7 +60,7 @@ buffers{...}`, an optional `static constexpr std::array attributes{...}` and a
 | `dispatch<&X::f>(k, {.spad = n, .args = Args{...}})`, `{.spad = n}` | `togsim_dispatch` | One work-item stating `n` bytes per lane of spad, under the next key: 0, 1, ... A negative `n` is refused. |
 | `dispatch<&X::f>(k, {.key = key, .spad = n, .args = Args{...}})`, `{.key = key, .spad = n}` | `togsim_dispatch` | One work-item under `key`. A kernel uses keyed or counted dispatch, not both. |
 | `per_lane(bytes, lanes)` | | `bytes` spread over `lanes` lanes, rounded up: a `.spad` from a byte count. |
-| `shape<N>(k, {.kernel, .names, .example, .extents})` | | The kernel's `N` shape arguments from `tog_shape.txt`, else `example`, as a `std::array<int64_t, N>`. The first `.extents` (default `N`) must be at least 1, the rest at least 0. `.kernel` and `.names` name them in messages. |
+| `shape<N>(k, {.kernel, .names, .example, .extents})` | | The kernel's `N` shape arguments from `tog_shape_args.txt`, else `example`, as a `std::array<int64_t, N>`. The first `.extents` (default `N`) must be at least 1, the rest at least 0. `.kernel` and `.names` name them in messages. |
 | `extent({.dim, .at, .tile})` | | What is left of a `tile`-long step at `at` on an axis `dim` long. |
 | `short_axis({.axis, .extent, .tile})` | | Bit `axis` of a variant: set when the step is short of its tile. |
 | `int64_t v = scalar(w, A)` | `togsim_runtime_attribute` | The value of scalar attribute `A` (rank 0) recorded for `w`'s key. |

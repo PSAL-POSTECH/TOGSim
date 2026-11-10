@@ -22,7 +22,7 @@ SCHEDULED = re.compile(r"TILE_SCHEDULED *\] spad=(\d+) max_dispatch=(\d+)")
 CORE_LINE = re.compile(r"\[(\d+)\]\[Core (\d+)\]\[(TILE_SCHEDULED) *\] (.*)$", re.M)
 SAID = re.compile(r"^(?:\[[^\]]*\] \[(?:error|critical)\] |\s*what\(\):\s*)(.*)$|^(togsim(?:\.hpp)?: .*)$", re.M)
 WARNED = re.compile(r"^\[[^\]]*\] \[warning\] (.*)$", re.M)
-VERSION, ENCODED_VERSION = "1.0.0", 0x10000
+VERSION, ENCODED_VERSION = "1.1.0", 0x10100
 PROGRAMS_MAGIC, RECORD_MAGIC = 0x50415354, 0x41525354
 _built, _locks, _guard = {}, {}, threading.Lock()
 
@@ -251,16 +251,16 @@ class Ctx:
 
     def tog(self, source, defines=(), tensors=(MIB, MIB, MIB), shape=None, into=""):
         """`source` (beside cases.py) compiled with -D<define> each to <work dir>/<into>/tog.so, with the sidecars
-        TOGSim reads beside it: tog_tensors.txt (bytes per tensor argument) and, given `shape`, tog_shape.txt."""
+        TOGSim reads beside it: tog_tensor_bytes.txt (bytes per tensor argument) and, given `shape`, tog_shape_args.txt."""
         built = _compile(self.source_dir / source, defines, self.tog_cache)
         if isinstance(built, Failure):
             raise built
         tog_dir = self.work_dir / into
         tog_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(built, tog_dir / "tog.so")
-        (tog_dir / "tog_tensors.txt").write_text("".join(f"{b}\n" for b in tensors))
+        (tog_dir / "tog_tensor_bytes.txt").write_text("".join(f"{b}\n" for b in tensors))
         if shape is not None:
-            (tog_dir / "tog_shape.txt").write_text("".join(f"{v}\n" for v in shape))
+            (tog_dir / "tog_shape_args.txt").write_text("".join(f"{v}\n" for v in shape))
         return tog_dir / "tog.so"
 
     def machine(self, base=TPUV6E, **keys):

@@ -35,8 +35,8 @@ def simulate(tog_dir: str, config: str) -> int:
     tog_dir = os.path.abspath(tog_dir)
     cmd = [str(paths.simulator()), "--config", config,
            "--tog_so", os.path.join(tog_dir, "tog.so"),
-           "--cycle_table", os.path.join(tog_dir, "tog_cycles.tsv"),
-           "--unit_table", os.path.join(tog_dir, "tog_units.tsv")]
+           "--cycle_table", os.path.join(tog_dir, "tog_tile_cycles.tsv"),
+           "--unit_table", os.path.join(tog_dir, "tog_unit_table.tsv")]
     try:
         res = subprocess.run(cmd, capture_output=True)
     except OSError as exc:
@@ -84,8 +84,8 @@ def prepare_node(node, kernel, shp, hw, out_dir) -> str:
         raise ValueError(f"node {node.name!r}: kernel {kernel.stem} names tile ids {missing} and the tables ACS "
                          f"wrote have {len(table)} cycle lines and unit rows for tile ids "
                          f"{sorted({row[0] for row in units})}")
-    acs_cycles.write_table(table, os.path.join(tog_dir, "tog_cycles.tsv"))
-    acs_cycles.write_units(units, os.path.join(tog_dir, "tog_units.tsv"))
+    acs_cycles.write_table(table, os.path.join(tog_dir, "tog_tile_cycles.tsv"))
+    acs_cycles.write_units(units, os.path.join(tog_dir, "tog_unit_table.tsv"))
     return tog_dir
 
 

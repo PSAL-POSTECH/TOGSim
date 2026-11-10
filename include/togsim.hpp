@@ -99,7 +99,7 @@ struct Gather {
   int64_t scale = 1;
 };
 
-// What a DMA moves: `dims` elements of kernel argument `ptr` (its line of tog_tensors.txt), of type `type`,
+// What a DMA moves: `dims` elements of kernel argument `ptr` (its line of tog_tensor_bytes.txt), of type `type`,
 // `strides` elements apart, from `offset` elements into it, each element further moved by `gather` when it names an
 // attribute (the index buffer still goes in Load.after or Store.also).
 struct Desc {
@@ -422,7 +422,7 @@ inline void compute(Item& w, const Compute& c) {
                  writes.empty() ? nullptr : writes.data(), (int32_t)writes.size());
 }
 
-// The kernel's shape: tog_shape.txt's N values, else `example`. The first `extents` (default all) must be at least
+// The kernel's shape: tog_shape_args.txt's N values, else `example`. The first `extents` (default all) must be at least
 // 1, the rest at least 0.
 template <int N>
 struct ShapeOf {
@@ -435,7 +435,7 @@ template <int N>
 std::array<int64_t, N> shape(const Kernel& k, const ShapeOf<N>& s) {
   const int32_t given = Ops_::n_shape(k);
   if (given != 0 && given != N) {
-    std::fprintf(stderr, "kernel %s: it takes %d shape arguments (%s), tog_shape.txt gives %d\n", s.kernel, (int)N,
+    std::fprintf(stderr, "kernel %s: it takes %d shape arguments (%s), tog_shape_args.txt gives %d\n", s.kernel, (int)N,
                  s.names, (int)given);
     std::exit(1);
   }

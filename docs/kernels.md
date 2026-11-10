@@ -9,8 +9,8 @@
 them; neither the simulator nor its build needs them.
 
 - **Shape.** A kernel's dimensions are its shape arguments (`shape<N>`), which TOGSim reads
-  from `tog_shape.txt` beside the TOG. The comment at the head of each file names them in order
-  (`gemm`: `M K N`). Without a `tog_shape.txt` a kernel runs its example shape; another count
+  from `tog_shape_args.txt` beside the TOG. The comment at the head of each file names them in order
+  (`gemm`: `M K N`). Without a `tog_shape_args.txt` a kernel runs its example shape; another count
   than its own, or a dimension below 1, ends the run with exit `1` and a `kernel <name>: ...` line
   on stderr.
 - **Convolution.** `conv` takes sixteen: `I_C I_H I_W O_C O_H O_W K_H K_W`, the strides `S_H S_W`,
@@ -57,15 +57,15 @@ them; neither the simulator nor its build needs them.
 
 ## Running a kernel by hand
 
-Compile it, put `tog_tensors.txt` beside it (one byte size per tensor
+Compile it, put `tog_tensor_bytes.txt` beside it (one byte size per tensor
 argument) and give the simulator a cycle table and a unit table with a row per tile id it computes
 (two at a shape the tile divides, as here; the ids of the short variants as well at another):
 
 ```bash
 mkdir -p /tmp/gemm && g++ -std=c++20 -shared -fPIC -Iinclude kernels/gemm_tog.cpp -o /tmp/gemm/tog.so
-printf '131072\n262144\n131072\n' > /tmp/gemm/tog_tensors.txt        # A 128x256, B 256x256, C 128x256
-printf '128\t0\n8206\t0\n' > /tmp/gemm/tog_cycles.tsv                # tile 0 accumulator init, tile 1 a block
-printf '0\tTPUV6E_MXU.rows\trows\t1\t0\n1\tTPUV6E_MXU.rows\trows\t1\t8192\n' > /tmp/gemm/tog_units.tsv
+printf '131072\n262144\n131072\n' > /tmp/gemm/tog_tensor_bytes.txt        # A 128x256, B 256x256, C 128x256
+printf '128\t0\n8206\t0\n' > /tmp/gemm/tog_tile_cycles.tsv                # tile 0 accumulator init, tile 1 a block
+printf '0\tTPUV6E_MXU.rows\trows\t1\t0\n1\tTPUV6E_MXU.rows\trows\t1\t8192\n' > /tmp/gemm/tog_unit_table.tsv
 build/bin/Simulator --config configs/tpuv6e.yml \
-  --tog_so /tmp/gemm/tog.so --cycle_table /tmp/gemm/tog_cycles.tsv --unit_table /tmp/gemm/tog_units.tsv
+  --tog_so /tmp/gemm/tog.so --cycle_table /tmp/gemm/tog_tile_cycles.tsv --unit_table /tmp/gemm/tog_unit_table.tsv
 ```

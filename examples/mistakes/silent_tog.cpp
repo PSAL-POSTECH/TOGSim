@@ -1,5 +1,5 @@
 // A valid TOG (a load, a compute, a store) that one -D<NAME> breaks in a way TOGSim does NOT refuse: the run exits
-// 0. TENSOR_PAST_LIST stores to a tensor tog_tensors.txt lacks, which a warning names. CONSUMER_FIRST stores OUT
+// 0. TENSOR_PAST_LIST stores to a tensor tog_tensor_bytes.txt lacks, which a warning names. CONSUMER_FIRST stores OUT
 // before the compute that writes it: the store follows nothing, and nothing names it.
 #include "togsim.hpp"
 using namespace togsim;

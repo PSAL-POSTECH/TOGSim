@@ -15,9 +15,9 @@ The calls are the nodes of the graph, and the scratchpad buffers they read and w
             |
             v
   tog.so            the TOG: calls only
-  tog_tensors.txt   bytes of each tensor argument  --+
-  tog_cycles.tsv    cycles of each kind of compute   +-->  build/bin/Simulator  -->  Total execution cycles: N
-  tog_units.tsv     what each unit did per compute --+            ^                  per-core unit utilization
+  tog_tensor_bytes.txt   bytes of each tensor argument  --+
+  tog_tile_cycles.tsv    cycles of each kind of compute   +-->  build/bin/Simulator  -->  Total execution cycles: N
+  tog_unit_table.tsv     what each unit did per compute --+            ^                  per-core unit utilization
                                                                   |                  DMA and DRAM bandwidth
                                                    machine config (configs/*.yml)
 ```
@@ -56,8 +56,8 @@ simulate it:
 ```bash
 g++ -std=c++20 -shared -fPIC -O1 -Iinclude examples/hello/hello_tog.cpp -o examples/hello/tog.so
 build/bin/Simulator --config configs/tpuv6e.yml \
-  --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_cycles.tsv \
-  --unit_table examples/hello/tog_units.tsv | tail -n 1
+  --tog_so examples/hello/tog.so --cycle_table examples/hello/tog_tile_cycles.tsv \
+  --unit_table examples/hello/tog_unit_table.tsv | tail -n 1
 ```
 
 ```text
@@ -106,9 +106,9 @@ Three files go with it:
 
 | File | Contents | Meaning |
 |---|---|---|
-| `tog_tensors.txt`, beside `tog.so` | `16384`<br>`16384` | The byte size of each tensor argument. |
-| `tog_cycles.tsv`, `--cycle_table` | `600<TAB>0` | Row 0 (`STEP`, node 0) takes 600 cycles. |
-| `tog_units.tsv`, `--unit_table` | `0<TAB>TPUV6E_MXU.rows<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | What each hardware unit did during one run of row 0. |
+| `tog_tensor_bytes.txt`, beside `tog.so` | `16384`<br>`16384` | The byte size of each tensor argument. |
+| `tog_tile_cycles.tsv`, `--cycle_table` | `600<TAB>0` | Row 0 (`STEP`, node 0) takes 600 cycles. |
+| `tog_unit_table.tsv`, `--unit_table` | `0<TAB>TPUV6E_MXU.rows<TAB>rows<TAB>1<TAB>128`<br>`0<TAB>Vpu<TAB>cycles<TAB>1<TAB>100` | What each hardware unit did during one run of row 0. |
 
 [docs/tutorial.md](docs/tutorial.md) reads this TOG and its trace line by line, then builds up to
 asynchronous loads, many work-items, the array split and sessions.

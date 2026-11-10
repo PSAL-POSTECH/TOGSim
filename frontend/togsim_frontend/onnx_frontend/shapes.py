@@ -215,7 +215,7 @@ INDEX_BYTES = 8
 
 
 def tensor_bytes(kernel: KernelRef, v: dict[str, int]) -> list[int]:
-    """The byte size of each tensor argument of `kernel`, in arg_id order: what tog_tensors.txt lists."""
+    """The byte size of each tensor argument of `kernel`, in arg_id order: what tog_tensor_bytes.txt lists."""
     e = ELEM_BYTES
     if kernel.stem == "gemm":
         return [v["M"] * v["K"] * e, v["K"] * v["N"] * e, v["M"] * v["N"] * e]

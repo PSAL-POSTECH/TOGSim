@@ -1,5 +1,5 @@
 """Specialise a kernel of kernels/ without touching its source: its tile and hardware constants are -D macros
-at compile time, its dimensions the shape arguments TOGSim hands togsim_kernel from tog_shape.txt."""
+at compile time, its dimensions the shape arguments TOGSim hands togsim_kernel from tog_shape_args.txt."""
 from __future__ import annotations
 
 import os
@@ -40,12 +40,12 @@ def compile_so(cpp_path: str, include_dir: str, out_so: str, macros: list[str] =
 
 
 def write_tog_dir(tog_dir: str, so: str, shape: list[int], tensors: list[int]) -> str:
-    """Lay out one kernel run as TOGSim reads it: tog.so with tog_shape.txt and tog_tensors.txt beside it."""
+    """Lay out one kernel run as TOGSim reads it: tog.so with tog_shape_args.txt and tog_tensor_bytes.txt beside it."""
     os.makedirs(tog_dir, exist_ok=True)
     tog = os.path.join(tog_dir, "tog.so")
     shutil.copyfile(so, tog)
-    with open(os.path.join(tog_dir, "tog_shape.txt"), "w") as fh:
+    with open(os.path.join(tog_dir, "tog_shape_args.txt"), "w") as fh:
         fh.write("".join(f"{v}\n" for v in shape))
-    with open(os.path.join(tog_dir, "tog_tensors.txt"), "w") as fh:
+    with open(os.path.join(tog_dir, "tog_tensor_bytes.txt"), "w") as fh:
         fh.write("".join(f"{b}\n" for b in tensors))
     return tog

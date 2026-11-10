@@ -13,7 +13,7 @@ extern "C" {
 // as TOGSIM_VERSION (TOGSim's TUs, TOGSIM_HOST, only declare it); MAJOR << 16 | MINOR << 8 | PATCH is at least
 // 0x10000, so it never equals the integer ABIs 1..17 of before, and LazyTog::open refuses those by name.
 #define TOGSIM_VERSION_MAJOR 1
-#define TOGSIM_VERSION_MINOR 0
+#define TOGSIM_VERSION_MINOR 1
 #define TOGSIM_VERSION_PATCH 0
 #define TOGSIM_VERSION ((TOGSIM_VERSION_MAJOR << 16) | (TOGSIM_VERSION_MINOR << 8) | TOGSIM_VERSION_PATCH)
 #define TOGSIM_VERSION_TEXT_(a, b, c) #a "." #b "." #c

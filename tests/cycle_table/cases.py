@@ -18,13 +18,13 @@ def replay(t, cycles, *defines, units=None, **machine):
 
 
 def session(t, cycles, *defines, link=None):
-    """--models_list: one LAUNCH_KERNEL of the TOG from <work dir>/k/, `cycles` as its tog_cycles.tsv (None: the
-    directory has none), or tog_cycles.tsv a symlink to `link`."""
+    """--models_list: one LAUNCH_KERNEL of the TOG from <work dir>/k/, `cycles` as its tog_tile_cycles.tsv (None: the
+    directory has none), or tog_tile_cycles.tsv a symlink to `link`."""
     home = t.tog(TOG, defines, tensors=(MIB, MIB), into="k").parent
     if link is not None:
-        (home / "tog_cycles.tsv").symlink_to(link)
+        (home / "tog_tile_cycles.tsv").symlink_to(link)
     elif cycles is not None:
-        write_table(home / "tog_cycles.tsv", [(c, 0) for c in cycles])
+        write_table(home / "tog_tile_cycles.tsv", [(c, 0) for c in cycles])
     stream = t.work_dir / "commands.txt"
     stream.write_text(f"LAUNCH_KERNEL,0,0,0,{home}/kernel,{home}/attributes,0\nDEVICE_SYNC,0,0,0,-,-,0\n")
     return t.execute("Simulator", ["--config", t.machine(systolic_array_split="none"), "--models_list", stream,
@@ -101,14 +101,14 @@ def cycle_table_that_cannot_be_opened_refused(t):
 
 
 def session_no_tog_cycles_refused(t):
-    """A launched kernel whose directory has no tog_cycles.tsv: the launch is refused, naming the path it wants."""
-    expect_refused_before_the_run(session(t, None), unopenable(t.work_dir / "k" / "tog_cycles.tsv"))
+    """A launched kernel whose directory has no tog_tile_cycles.tsv: the launch is refused, naming the path it wants."""
+    expect_refused_before_the_run(session(t, None), unopenable(t.work_dir / "k" / "tog_tile_cycles.tsv"))
 
 
 def session_tog_cycles_that_cannot_be_opened_refused(t):
-    """A tog_cycles.tsv that is there and does not open (a symlink to nothing) is refused the same way."""
+    """A tog_tile_cycles.tsv that is there and does not open (a symlink to nothing) is refused the same way."""
     expect_refused_before_the_run(session(t, None, link=t.work_dir / "absent.tsv"),
-                                  unopenable(t.work_dir / "k" / "tog_cycles.tsv"))
+                                  unopenable(t.work_dir / "k" / "tog_tile_cycles.tsv"))
 
 
 def empty_table_holds_no_tile_id(t):
