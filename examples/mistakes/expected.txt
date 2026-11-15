@@ -33,7 +33,8 @@ exit 1
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/cycles_header.gen.tsv --unit_table examples/mistakes/tog_unit_table.tsv
 [error] [TOGSim] TOG examples/mistakes/valid.so: work-item 0 (key 0) computes tile id 0, which the cycle table does not hold (it has no line)
 exit 1
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_tile_cycles.tsv
+# examples/mistakes/split.gen.yml: configs/tpuv6e.yml with systolic_array_split: round_robin, systolic_array_unit: TPUV6E_MXU
++ build/bin/Simulator --config examples/mistakes/split.gen.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_tile_cycles.tsv
 [error] [TOGSim] systolic_array_split (on by default) reads each tile's TPUV6E_MXU.rows rows; give --unit_table, or set systolic_array_split: none
 exit 1
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_tile_cycles.tsv --unit_table examples/mistakes/spaces.gen.tsv
@@ -42,7 +43,7 @@ exit 1
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_tile_cycles.tsv --unit_table examples/mistakes/header.gen.tsv
 [error] [TOGSim] --unit_table examples/mistakes/header.gen.tsv line 1: tile_id 'tile_id' is not a non-negative integer
 exit 1
-+ build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_tile_cycles.tsv --unit_table examples/mistakes/no_array_unit.gen.tsv
++ build/bin/Simulator --config examples/mistakes/split.gen.yml --tog_so examples/mistakes/valid.so --cycle_table examples/mistakes/tog_tile_cycles.tsv --unit_table examples/mistakes/no_array_unit.gen.tsv
 [error] [TOGSim] systolic_array_split: the unit table has no array unit TPUV6E_MXU.rows
 exit 1
 + build/bin/Simulator --config configs/tpuv6e.yml --tog_so examples/mistakes/no_tensors/tog.so --cycle_table examples/mistakes/tog_tile_cycles.tsv --unit_table examples/mistakes/tog_unit_table.tsv

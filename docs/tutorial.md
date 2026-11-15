@@ -335,9 +335,12 @@ array, at one row per cycle, so 512 of its 600 cycles are array work; `Vpu`, the
 busy for 50 cycles.
 
 A core can have several systolic arrays (`num_systolic_array_per_core`, 2 on tpuv6e), and one
-array takes `vpu_num_lanes` rows (128 on tpuv6e) before a compute tile is split. With 512 rows
-TOGSim spreads the array work over both arrays, 256 rows each, and the compute takes
-600 - 512 + 256 = 344 cycles ([the formula](tog-abi.md#the-unit-table-and-the-array-split)).
+array takes `vpu_num_lanes` rows (128 on tpuv6e) before a compute tile is split. Under the array
+split (`systolic_array_split: round_robin`), for a table measured on one array, TOGSim spreads 512
+rows over both arrays, 256 rows each, and the compute takes 600 - 512 + 256 = 344 cycles
+([the formula](tog-abi.md#the-unit-table-and-the-array-split)). tpuv6e as shipped has the split
+off: its gem5 times both arrays (`vcix` `tpu_mxu_units: 2`), so a tile's cycles already hold them.
+This table is one array's rows, so the script runs it on a copy of tpuv6e with the split on.
 
 ```bash
 examples/run.sh gemm
@@ -347,11 +350,11 @@ The script runs that, then changes one thing at a time:
 
 | Run | Compute tile 0 | Compute tile 1 | `Total execution cycles` |
 |---|---|---|---|
-| 512 rows, 2 arrays, 128 lanes (as shipped) | 600 - 512 + 256 = 344 | 150 | 2719 |
+| 512 rows, 2 arrays, 128 lanes (the split copy) | 600 - 512 + 256 = 344 | 150 | 2719 |
 | `tog_units_128_rows.tsv`: 128 rows | 600 | 150 | 3231 |
 | 512 rows, `num_systolic_array_per_core: 1` | 600 | 150 | 3231 |
 | 128 rows, `vpu_num_lanes: 64` | 600 - 128 + 64 = 536 | 150 | 3103 |
-| `systolic_array_split: none`, no unit table | 600 | 150 | 3231 |
+| tpuv6e as shipped (`systolic_array_split: none`), no unit table | 600 | 150 | 3231 |
 
 The first run:
 
@@ -402,13 +405,14 @@ examples/run.sh session
 ```
 
 ```text
-+ build/bin/Simulator --config configs/tpuv6e.yml --models_list examples/session/commands.txt --log_level trace
+# examples/session/split.gen.yml: configs/tpuv6e.yml with systolic_array_split: round_robin, systolic_array_unit: TPUV6E_MXU
++ build/bin/Simulator --config examples/session/split.gen.yml --models_list examples/session/commands.txt --log_level trace
 [info] [Scheduler 0] Enqueued kernel_id: 0, tog_path: examples/session/k0/tog.so, operation: kernel, request_time_cycles: 0
 [trace] [1012][Core 0][INST_ISSUED    ][INST_ID=1] COMP (compute_type=0 compute_cycle=600 overlapping_cycle=0 sa=-1 tile=0)
 [info] [Scheduler 0] Enqueued kernel_id: 1, tog_path: examples/session/k1/tog.so, operation: kernel, request_time_cycles: 0
 [trace] [3447][Core 0][INST_ISSUED    ][INST_ID=4] COMP (compute_type=0 compute_cycle=644 overlapping_cycle=0 sa=-1 tile=0)
 [info] Total execution cycles: 4916
-# examples/session/two_partitions.gen.yml: configs/tpuv6e.yml with num_cores: 2, num_partition: 2, partition: {core_0: 0, core_1: 1}
+# examples/session/two_partitions.gen.yml: examples/session/split.gen.yml with num_cores: 2, num_partition: 2, partition: {core_0: 0, core_1: 1}
 + build/bin/Simulator --config examples/session/two_partitions.gen.yml --models_list examples/session/commands_two_partitions.txt --log_level trace
 [info] [Scheduler 0] Enqueued kernel_id: 0, tog_path: examples/session/k0/tog.so, operation: kernel, request_time_cycles: 0
 [info] [Scheduler 1] Enqueued kernel_id: 1, tog_path: examples/session/k1/tog.so, operation: kernel, request_time_cycles: 0
@@ -417,7 +421,8 @@ examples/run.sh session
 [info] Total execution cycles: 2483
 ```
 
-- **First run, one partition.** Kernel 1 starts after kernel 0 is done, and each kernel's compute
+- **First run, one partition**, on tpuv6e with the array split, as the tables are one array's.
+  Kernel 1 starts after kernel 0 is done, and each kernel's compute
   follows its own tables: 600 cycles and 128 rows for `k0`, which fit one array of tpuv6e, so 600;
   900 cycles and 512 rows for `k1`, so 900 - 512 + 256 = 644.
 - **Second run, two partitions.** A copy of tpuv6e with two cores, one in each partition
