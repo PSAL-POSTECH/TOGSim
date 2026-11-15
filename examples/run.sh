@@ -99,20 +99,20 @@ tiles() {
   done
 }
 
-# What the unit table does to a compute: 512 rows over two arrays, 256 rows, one array, 256 rows on 128 lanes, and
-# no array split.
+# What the unit table does to a compute under the array split (its table one array's rows, as gem5 measured before
+# tpu_mxu_units): 512 rows over two arrays, 256 rows, one array, 256 rows on 128 lanes; then tpuv6e as shipped, no split.
 gemm() {
   local dir=examples/gemm
   local run="--tog_so $dir/tog.so --cycle_table $dir/tog_tile_cycles.tsv --log_level trace"
   tog $dir/gemm_tog.cpp -o $dir/tog.so
-  sim result --config $V6E $run --unit_table $dir/tog_unit_table.tsv
-  sim result --config $V6E $run --unit_table $dir/tog_units_128_rows.tsv
-  machine $dir/one_array.gen.yml $V6E "num_systolic_array_per_core: 1"
+  machine $dir/split.gen.yml $V6E "systolic_array_split: round_robin" "systolic_array_unit: TPUV6E_MXU"
+  sim result --config $dir/split.gen.yml $run --unit_table $dir/tog_unit_table.tsv
+  sim result --config $dir/split.gen.yml $run --unit_table $dir/tog_units_128_rows.tsv
+  machine $dir/one_array.gen.yml $dir/split.gen.yml "num_systolic_array_per_core: 1"
   sim result --config $dir/one_array.gen.yml $run --unit_table $dir/tog_unit_table.tsv
-  machine $dir/64_lanes.gen.yml $V6E "vpu_num_lanes: 64"
+  machine $dir/64_lanes.gen.yml $dir/split.gen.yml "vpu_num_lanes: 64"
   sim result --config $dir/64_lanes.gen.yml $run --unit_table $dir/tog_units_128_rows.tsv
-  machine $dir/no_split.gen.yml $V6E "systolic_array_split: none" "no systolic_array_unit"
-  sim result --config $dir/no_split.gen.yml $run
+  sim result --config $V6E $run
 }
 
 # Two kernels from one command stream: one after the other on one partition, then side by side on two.
@@ -121,8 +121,9 @@ session() {
   for kernel in k0 k1; do
     tog examples/hello/hello_tog.cpp -o $dir/$kernel/tog.so
   done
-  sim kernels --config $V6E --models_list $dir/commands.txt --log_level trace
-  machine $dir/two_partitions.gen.yml $V6E "num_cores: 2" "num_partition: 2" "partition: {core_0: 0, core_1: 1}"
+  machine $dir/split.gen.yml $V6E "systolic_array_split: round_robin" "systolic_array_unit: TPUV6E_MXU"
+  sim kernels --config $dir/split.gen.yml --models_list $dir/commands.txt --log_level trace
+  machine $dir/two_partitions.gen.yml $dir/split.gen.yml "num_cores: 2" "num_partition: 2" "partition: {core_0: 0, core_1: 1}"
   sim kernels --config $dir/two_partitions.gen.yml --models_list $dir/commands_two_partitions.txt --log_level trace
 }
 
@@ -142,13 +143,14 @@ mistakes() {
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_cycle.tsv --unit_table $dir/tog_unit_table.tsv
   printf 'cycle\toverlapping\n600\t0\n' > $dir/cycles_header.gen.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/cycles_header.gen.tsv --unit_table $dir/tog_unit_table.tsv
-  sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_tile_cycles.tsv
+  machine $dir/split.gen.yml $V6E "systolic_array_split: round_robin" "systolic_array_unit: TPUV6E_MXU"
+  sim first_error --config $dir/split.gen.yml --tog_so $dir/valid.so --cycle_table $dir/tog_tile_cycles.tsv
   printf '0 TPUV6E_MXU.rows rows 1 128\n' > $dir/spaces.gen.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_tile_cycles.tsv --unit_table $dir/spaces.gen.tsv
   printf 'tile_id\tunit\tunit_of_work\tcapacity_per_cycle\tadmitted\n0\tTPUV6E_MXU.rows\trows\t1\t128\n' > $dir/header.gen.tsv
   sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_tile_cycles.tsv --unit_table $dir/header.gen.tsv
   printf '0\tVpu\tcycles\t1\t100\n' > $dir/no_array_unit.gen.tsv
-  sim first_error --config $V6E --tog_so $dir/valid.so --cycle_table $dir/tog_tile_cycles.tsv --unit_table $dir/no_array_unit.gen.tsv
+  sim first_error --config $dir/split.gen.yml --tog_so $dir/valid.so --cycle_table $dir/tog_tile_cycles.tsv --unit_table $dir/no_array_unit.gen.tsv
   mkdir -p $dir/no_tensors && cp $dir/valid.so $dir/no_tensors/tog.so
   sim first_error --config $V6E --tog_so $dir/no_tensors/tog.so $tables
   echo "+ cd $dir"

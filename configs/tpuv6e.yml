@@ -5,8 +5,7 @@ num_cores: 1
 core_freq_mhz: 1751
 core_stats_print_period_cycles: 200
 num_systolic_array_per_core: 2
-systolic_array_split: round_robin
-systolic_array_unit: TPUV6E_MXU
+systolic_array_split: none
 # A load's fixed cost, from tpu-perf-archive data/v6e/dma/pallas.csv (one v6e, 4 KiB f32 loads). Loads started
 # together and waited once grow 17.8 ns (31.1 cycles) a load from 1 to 16 (par 572..839 ns), so most of the cost is a
 # wait loads in flight pay together, not a hold of the engine. Each key is that measurement less what this
@@ -38,7 +37,7 @@ isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvfp8, zvl256b, pytorchsim_tpuv6e, spad-
 # The XLU's stages: a lane reduce's push -> pop is 137 cycles and a lane permute's 123 (tpu-perf-archive
 # runs/v6e/xlu_chain/2026-10-19_pallas and runs/v6e/xlu_permute/2026-10-23_pallas: dependent chains step 142 and
 # 127.9 cycles, libtpu's critical paths 142 and 128 with those push -> pop distances). A move's tile takes the move key.
-vcix: {tpu_mxu_queue_entries: 512, tpu_mxu_delay_cycles: 187, tpu_mxu_registers: 2, tpu_mxu_issue_slots: 2, tpu_mxu_word_a_cycle: 1, tpu_mxu_int8_macs_per_pe: 2, tpu_xlu_queue_entries: 256, tpu_xlu_latency_cycles: 137, tpu_xlu_move_latency_cycles: 123, tpu_xlu_elements_per_cycle: 16, tpu_xlu_issue_per_cycle: 2, tpu_sfu_latency_cycles: 10, tpu_sfu_queue_registers: 16}
+vcix: {tpu_mxu_queue_entries: 512, tpu_mxu_delay_cycles: 187, tpu_mxu_registers: 2, tpu_mxu_issue_slots: 2, tpu_mxu_word_a_cycle: 1, tpu_mxu_int8_macs_per_pe: 2, tpu_mxu_units: 2, tpu_xlu_queue_entries: 256, tpu_xlu_latency_cycles: 137, tpu_xlu_move_latency_cycles: 123, tpu_xlu_elements_per_cycle: 16, tpu_xlu_issue_per_cycle: 2, tpu_sfu_latency_cycles: 10, tpu_sfu_queue_registers: 16}
 
 address_map: {spad_vaddr: 0x40000000, dram_base: 0x80000000, dram_size: 107374182400}
 

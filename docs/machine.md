@@ -32,7 +32,7 @@ default, and all 7 configs.
 | How many cores, and how are kernels spread over them? | `num_cores`; `num_partition`, `partition: {core_<i>: <id>}` | A kernel's work-items go round-robin over the cores of its partition. All cores are in partition 0 unless `partition` says otherwise. |
 | How fast is the core clock? | `core_freq_mhz` | Totals are in cycles of this clock. DRAM and the interconnect tick at their own `dram_freq_mhz` and `icnt_freq_mhz`. |
 | How many systolic arrays, how wide? | `num_systolic_array_per_core` (default 1), `vpu_num_lanes` | Used by the array split: how many arrays a compute tile's rows can be spread over, and how many rows one array takes before the compute is split. |
-| Is the array split on? | `systolic_array_split`: `round_robin` (default) or `none`; `systolic_array_unit` (required with the split: `TPUV3_MXU`, `TPUV4_MXU`, `TPUV6E_MXU` on the shipped configs; the unit is that name and `.rows`) | With `round_robin` a unit table is required and computes get shorter ([tutorial step 4](tutorial.md#4-two-kinds-of-compute-unit-rows-and-the-array-split)). |
+| Is the array split on? | `systolic_array_split`: `round_robin` (default) or `none`; `systolic_array_unit` (required with the split: `TPUV3_MXU`, `TPUV4_MXU`, `TPUV6E_MXU` on the shipped configs; the unit is that name and `.rows`) | With `round_robin` a unit table is required and computes get shorter ([tutorial step 4](tutorial.md#4-two-kinds-of-compute-unit-rows-and-the-array-split)): for tables measured on one array. `tpuv6e.yml` ships `none`, its gem5 timing both arrays (`vcix` `tpu_mxu_units: 2`). |
 | How large is the scratchpad? | `vpu_spad_size_kb_per_lane` (none: unlimited) | Refuses a dispatch whose `.spad` is more, and decides whether one or two work-items are in flight. |
 | Which DRAM model? | `dram_type`: `ramulator2` with `ramulator_config_path`, or `simple` with `dram_latency`; `dram_channels` | Ramulator2 models the device its file describes. `simple` answers every request after a fixed latency, optionally under a bandwidth cap. |
 | Is there an L2 cache in front of DRAM? | `l2d_type`: `nocache` (default) or `datacache` with `l2d_config` | A TOG marks no address cacheable. The totals of the hello, tiles, gemm and async_barrier examples on tpuv6e are the same with either value. |
@@ -66,7 +66,7 @@ build/bin/Simulator --config build/two_cores.yml --tog_so examples/tiles/tog.so 
 ```
 
 The `sed` changes a key the base config has. A key it lacks, such as `systolic_array_split` on
-every shipped config, is appended instead: `echo 'systolic_array_split: none' >> build/my.yml`.
+every shipped config but tpuv6e, is appended instead: `echo 'systolic_array_split: none' >> build/my.yml`.
 
 **Sweeping a knob** is the same command in a loop. The tiles kernel on one, two and four cores:
 
@@ -86,7 +86,8 @@ num_cores 2 4824
 num_cores 4 3086
 ```
 
-Before and after, for the knobs the examples turn (all on tpuv6e, one key changed):
+Before and after, for the knobs the examples turn (all on tpuv6e, gemm on its copy with the array split, one key
+changed):
 
 | Example | Key changed | Before | After | What the trace shows |
 |---|---|---|---|---|

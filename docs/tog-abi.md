@@ -246,8 +246,9 @@ A TOG with a compute whose `tile_id` has a row above that is
 Under the split a tile needs about `cc >= B_sys`: 512 rows fit a `cc` of 512 (the compute then
 runs 256 cycles, 256 rows on each of two arrays) and 513 rows do not.
 
-Because the split is on by default and no shipped config turns it off, **every shipped config
-needs a unit table that has rows of its array unit**. To run without one, set
+The split is on by default, for tables measured on one array. tpuv6e turns it off: its gem5 times
+both arrays (`vcix` `tpu_mxu_units: 2`), and its array unit's capacity counts both. **Every other
+shipped config needs a unit table that has rows of its array unit.** To run without one, set
 `systolic_array_split: none` in the machine config (`examples/minimal.yml` does).
 
 ## What gets a run refused

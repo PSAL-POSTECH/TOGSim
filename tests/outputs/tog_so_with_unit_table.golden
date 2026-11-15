@@ -7,7 +7,6 @@ core_freq_mhz: N
 core_stats_print_period_cycles: N
 num_systolic_array_per_core: N
 systolic_array_split: round_robin
-systolic_array_unit: TPUV6E_MXU
 dma_load_latency_cycles: N
 dma_load_ready_cycles: N
 dma_store_latency_cycles: N
@@ -15,7 +14,7 @@ dma_store_ready_cycles: N
 vpu_num_lanes: N
 vpu_spad_size_kb_per_lane: N
 isa: [m, a, f, d, c, v, zvfh, zvfbfmin, zvl256b, pytorchsim_tpuv6e, spad-vector-memory]
-vcix: {tpu_mxu_queue_entries: N, tpu_mxu_delay_cycles: N, tpu_mxu_registers: N, tpu_mxu_issue_slots: N, tpu_mxu_word_a_cycle: N, tpu_mxu_int8_macs_per_pe: N, tpu_xlu_queue_entries: N, tpu_xlu_latency_cycles: N, tpu_xlu_move_latency_cycles: N, tpu_xlu_elements_per_cycle: N, tpu_xlu_issue_per_cycle: N, tpu_sfu_latency_cycles: N, tpu_sfu_queue_registers: N}
+vcix: {tpu_mxu_queue_entries: N, tpu_mxu_delay_cycles: N, tpu_mxu_registers: N, tpu_mxu_issue_slots: N, tpu_mxu_word_a_cycle: N, tpu_mxu_int8_macs_per_pe: N, tpu_mxu_units: N, tpu_xlu_queue_entries: N, tpu_xlu_latency_cycles: N, tpu_xlu_move_latency_cycles: N, tpu_xlu_elements_per_cycle: N, tpu_xlu_issue_per_cycle: N, tpu_sfu_latency_cycles: N, tpu_sfu_queue_registers: N}
 address_map: {spad_vaddr: <hex>, dram_base: <hex>, dram_size: N}
 dram_type: ramulator2
 dram_channels: N
@@ -29,6 +28,7 @@ icnt_freq_mhz: N
 icnt_injection_ports_per_core: N
 compiler:
   spad_scoped_kb_per_lane: N
+systolic_array_unit: TPUV6E_MXU
 [info] [Config/Core] core_id: N, partition_id: N (no partition section)
 [info] [Config/Core] Core N: core_freq_mhz: N, systolic_arrays_per_core: N
 [info] [Config/DRAM] Ramulator2 config path: <path>

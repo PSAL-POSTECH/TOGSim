@@ -265,13 +265,18 @@ class Ctx:
 
     def machine(self, base=TPUV6E, **keys):
         """<work dir>/machine.yml: configs/<base> with each of `keys` set (in place, else appended; None: left out),
-        the DRAM / BookSim2 paths made absolute, and no DMA hold or ready wait unless `keys` states one. systolic_array_split="none"
-        also leaves out systolic_array_unit, which TOGSim refuses without the split."""
+        the DRAM / BookSim2 paths made absolute, and no DMA hold or ready wait unless `keys` states one. The array split
+        is on unless `keys` says systolic_array_split="none" (which also leaves out systolic_array_unit, refused without
+        it): a test's unit table is one array's rows, as gem5 measured before tpu_mxu_units, whatever <base> ships."""
         src = REPO / "configs" / base
         lines, left = [], dict(dma_load_latency_cycles=0, dma_store_latency_cycles=0, dma_load_ready_cycles=0,
-                                 dma_store_ready_cycles=0) | keys
+                                 dma_store_ready_cycles=0, systolic_array_split="round_robin") | keys
         if left.get("systolic_array_split") == "none":
             left.setdefault("systolic_array_unit", None)
+        else:
+            accel = next(e for e in re.search(r"^isa:\s*\[(.*)\]", src.read_text(), re.M)[1].replace(" ", "").split(",")
+                         if e.startswith("pytorchsim_"))
+            left.setdefault("systolic_array_unit", accel[len("pytorchsim_"):].upper() + "_MXU")
         for line in src.read_text().splitlines():
             m = re.match(r"([A-Za-z_]\w*):\s*(.*)$", line)
             if m and m[1] in left and left[m[1]] is None:
